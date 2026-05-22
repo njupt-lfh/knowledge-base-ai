@@ -1,0 +1,20 @@
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import AppLayout from '../components/Layout/AppLayout'
+import KnowledgeList from '../pages/KnowledgeList'
+import KnowledgeDetail from '../pages/KnowledgeDetail'
+import ChatAgent from '../pages/ChatAgent'
+
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <AppLayout />,
+    children: [
+      { index: true, element: <Navigate to="/knowledge-bases" replace /> },
+      { path: 'knowledge-bases', element: <KnowledgeList /> },
+      { path: 'knowledge-bases/:kbId', element: <KnowledgeDetail /> },
+      { path: 'knowledge-bases/:kbId/chat', element: <ChatAgent /> },
+    ],
+  },
+])
+
+export default router
