@@ -51,33 +51,30 @@ export default function ChatAgent() {
     try {
       for await (const event of chatApi.sendMessage(conversation.id, input)) {
         if (event.type === 'text') {
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.content += event.content
-            }
-            return updated
-          })
+          setMessages((prev) =>
+            prev.map((msg, i) =>
+              i === prev.length - 1 && msg.role === 'assistant'
+                ? { ...msg, content: msg.content + event.content }
+                : msg,
+            ),
+          )
           scrollToBottom()
         } else if (event.type === 'sources') {
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.sources = event.sources
-            }
-            return updated
-          })
+          setMessages((prev) =>
+            prev.map((msg, i) =>
+              i === prev.length - 1 && msg.role === 'assistant'
+                ? { ...msg, sources: event.sources }
+                : msg,
+            ),
+          )
         } else if (event.type === 'done') {
-          setMessages((prev) => {
-            const updated = [...prev]
-            const last = updated[updated.length - 1]
-            if (last.role === 'assistant') {
-              last.isStreaming = false
-            }
-            return updated
-          })
+          setMessages((prev) =>
+            prev.map((msg, i) =>
+              i === prev.length - 1 && msg.role === 'assistant'
+                ? { ...msg, isStreaming: false }
+                : msg,
+            ),
+          )
         }
       }
     } catch {
