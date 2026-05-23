@@ -42,16 +42,11 @@ class ChatService:
 
     async def chat_stream(self, conv_id: str, message: str):
         """SSE 流式对话（Mock 或真实 RAG）"""
-        # 保存用户消息
-        user_msg = Message(conversation_id=conv_id, role="user", content=message)
-        self.db.add(user_msg)
-        await self.db.commit()
-
         # 获取对话关联的知识库
         conv = await self.db.get(Conversation, conv_id)
         kb_id = conv.knowledge_base_id if conv else ""
 
-        # 获取历史消息
+        # 先获取历史消息（不包含当前用户消息）
         history_result = await self.db.execute(
             select(Message)
             .where(Message.conversation_id == conv_id)
@@ -61,6 +56,11 @@ class ChatService:
             {"role": m.role, "content": m.content}
             for m in history_result.scalars().all()
         ]
+
+        # 保存用户消息（在历史查询之后）
+        user_msg = Message(conversation_id=conv_id, role="user", content=message)
+        self.db.add(user_msg)
+        await self.db.commit()
 
         # 收集完整回复
         full_answer = ""
