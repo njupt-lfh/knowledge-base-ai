@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Table, Button, Space, Upload, message, Tabs, Input, Switch, Popconfirm } from 'antd'
 import { UploadOutlined, PlusOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons'
@@ -16,15 +16,15 @@ export default function KnowledgeDetail() {
   const [manualTitle, setManualTitle] = useState('')
   const [manualContent, setManualContent] = useState('')
 
-  const fetchKb = async () => {
+  const fetchKb = useCallback(async () => {
     if (!kbId) return
     try {
       const res = await knowledgeApi.getById(kbId)
       setKb(res.data)
     } catch { message.error('获取知识库详情失败') }
-  }
+  }, [kbId])
 
-  const fetchDocs = async () => {
+  const fetchDocs = useCallback(async () => {
     if (!kbId) return
     setLoading(true)
     try {
@@ -32,9 +32,11 @@ export default function KnowledgeDetail() {
       setDocs(res.data.items)
     } catch { message.error('获取文档列表失败') }
     setLoading(false)
-  }
+  }, [kbId])
 
-  useEffect(() => { fetchKb(); fetchDocs() }, [kbId])
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => { fetchKb(); fetchDocs() }, [fetchKb, fetchDocs])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleUpload = async (file: File) => {
     if (!kbId) return

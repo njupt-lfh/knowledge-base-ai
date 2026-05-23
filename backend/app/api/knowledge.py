@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import get_db
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
-    KnowledgeBaseUpdate,
-    KnowledgeBaseResponse,
     KnowledgeBaseListResponse,
+    KnowledgeBaseResponse,
+    KnowledgeBaseUpdate,
 )
 from ..services.knowledge_service import KnowledgeService
 

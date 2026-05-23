@@ -1,11 +1,10 @@
 """文档解析与分块服务"""
 
-from typing import List
 import re
-from pathlib import Path
+from typing import List
 
-from pypdf import PdfReader
 import markdown
+from pypdf import PdfReader
 
 
 class DocumentParser:

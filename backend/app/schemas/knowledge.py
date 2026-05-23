@@ -1,6 +1,7 @@
 """知识库 Schema"""
 
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 

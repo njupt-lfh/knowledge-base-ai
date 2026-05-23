@@ -1,11 +1,11 @@
 """RAG 检索增强生成服务"""
 
 import json
-from typing import AsyncGenerator, List, Dict
+from typing import AsyncGenerator, Dict, List
 
+from ..core.chroma_client import get_collection
 from .embedding_service import EmbeddingService
 from .llm_service import LLMService
-from ..core.chroma_client import get_collection
 
 
 class RAGService:

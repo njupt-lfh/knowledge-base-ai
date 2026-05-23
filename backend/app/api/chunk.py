@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
-from ..schemas.chunk import ChunkUpdate, ChunkResponse, SearchRequest, SearchResponse
+from ..schemas.chunk import ChunkResponse, ChunkUpdate, SearchRequest, SearchResponse
 from ..services.chunk_service import ChunkService
 
 router = APIRouter(tags=["知识块"])

@@ -1,40 +1,37 @@
-"""LLM 调用服务"""
+"""LLM 调用服务 — 火山引擎豆包 Chat API"""
 
 import json
-from typing import AsyncGenerator, List, Dict
+from typing import AsyncGenerator, Dict, List
+
+import httpx
 
 from ..core.config import settings
 
 
 class LLMService:
-    """大模型调用服务 — 基于火山引擎豆包 Chat API"""
-
-    MODEL_NAME = "doubao-seed-1-6-flash-250828"
-    BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-
     def __init__(self):
         self.api_key = settings.VOLCENGINE_API_KEY
+        self.base_url = settings.VOLCENGINE_BASE_URL
+        self.model_name = settings.VOLCENGINE_LLM_MODEL
         self.mock_mode = settings.LLM_MOCK_MODE
 
     async def chat_stream(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
         if self.mock_mode:
-            mock_reply = "Mock 模式已启用。请在 .env 中设置 LLM_MOCK_MODE=false 并填写 VOLCENGINE_API_KEY 以启用真实 AI 对话。"
+            mock_reply = "Mock 模式已启用。请在 .env 中设置 LLM_MOCK_MODE=false"
             yield f"data: {json.dumps({'type': 'text', 'content': mock_reply})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             return
 
-        # TODO: 接入火山引擎流式 API
-        import httpx
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
                 "POST",
-                f"{self.BASE_URL}/chat/completions",
+                f"{self.base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": self.MODEL_NAME,
+                    "model": self.model_name,
                     "messages": messages,
                     "stream": True,
                     "temperature": 0.7,

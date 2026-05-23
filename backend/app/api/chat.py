@@ -1,12 +1,16 @@
 """对话 API 路由"""
 
-import json
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
-from ..schemas.chat import ChatRequest, ConversationResponse, MessageResponse, ShareResponse
+from ..schemas.chat import (
+    ChatRequest,
+    ConversationResponse,
+    MessageResponse,
+    ShareResponse,
+)
 from ..services.chat_service import ChatService
 
 router = APIRouter(tags=["对话"])

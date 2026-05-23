@@ -3,22 +3,22 @@
 import json
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
+from ..core.config import settings
 from ..models.conversation import Conversation, Message
 from ..schemas.chat import ConversationResponse, MessageResponse, ShareResponse
+from .rag_service import RAGService
 
 
 class ChatService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.rag_svc = RAGService()
 
     async def create_conversation(self, kb_id: str) -> ConversationResponse:
-        conv = Conversation(
-            knowledge_base_id=kb_id,
-            title="新对话",
-        )
+        conv = Conversation(knowledge_base_id=kb_id, title="新对话")
         self.db.add(conv)
         await self.db.commit()
         await self.db.refresh(conv)
@@ -41,48 +41,71 @@ class ChatService:
         return [MessageResponse.model_validate(m) for m in result.scalars().all()]
 
     async def chat_stream(self, conv_id: str, message: str):
-        """SSE 流式对话（Mock 模式）"""
+        """SSE 流式对话（Mock 或真实 RAG）"""
         # 保存用户消息
-        user_msg = Message(
-            conversation_id=conv_id,
-            role="user",
-            content=message,
-        )
+        user_msg = Message(conversation_id=conv_id, role="user", content=message)
         self.db.add(user_msg)
         await self.db.commit()
 
-        # 模拟流式返回
-        mock_reply = f"您好！您的问题是：「{message}」。\n\n目前系统处于 Mock 模式（LLM_MOCK_MODE=true），AI 对话功能将在接入火山引擎 API 后正式启用。\n\n请确保以下配置正确：\n- .env 中 VOLCENGINE_API_KEY 已填写\n- LLM_MOCK_MODE=false"
+        # 获取对话关联的知识库
+        conv = await self.db.get(Conversation, conv_id)
+        kb_id = conv.knowledge_base_id if conv else ""
 
-        yield "data: {\"type\": \"thinking\", \"content\": \"正在检索相关知识...\"}\n\n"
+        # 获取历史消息
+        history_result = await self.db.execute(
+            select(Message)
+            .where(Message.conversation_id == conv_id)
+            .order_by(Message.created_at)
+        )
+        history = [
+            {"role": m.role, "content": m.content}
+            for m in history_result.scalars().all()
+        ]
 
-        # 逐字输出
-        for char in mock_reply:
-            yield f"data: {{\"type\": \"text\", \"content\": {json.dumps(char)}}}\n\n"
+        # 收集完整回复
+        full_answer = ""
 
-        yield "data: {\"type\": \"sources\", \"sources\": []}\n\n"
-        yield "data: {\"type\": \"done\"}\n\n"
+        if settings.LLM_MOCK_MODE:
+            mock_reply = f"Mock 模式: 您的问题是「{message}」。请在 .env 设置 LLM_MOCK_MODE=false"
+            for char in mock_reply:
+                full_answer += char
+                yield f"data: {json.dumps({'type': 'text', 'content': char})}\n\n"
+            yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        else:
+            try:
+                async for event_str in self.rag_svc.generate(kb_id, message, history):
+                    yield event_str
+                    try:
+                        parsed = json.loads(event_str.replace("data: ", ""))
+                        if parsed.get("type") == "text":
+                            full_answer += parsed.get("content", "")
+                    except Exception:
+                        pass
+            except Exception as e:
+                error_msg = f"AI 服务调用失败: {str(e)}"
+                full_answer = error_msg
+                yield f"data: {json.dumps({'type': 'text', 'content': error_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         # 保存助手消息
         assistant_msg = Message(
             conversation_id=conv_id,
             role="assistant",
-            content=mock_reply,
+            content=full_answer,
         )
         self.db.add(assistant_msg)
         await self.db.commit()
 
     async def create_share(self, conv_id: str) -> ShareResponse:
         conv = await self.db.get(Conversation, conv_id)
-        if not conv:
-            conv.share_token = str(uuid.uuid4())
-        share_token = conv.share_token or str(uuid.uuid4())
         if not conv.share_token:
-            conv.share_token = share_token
+            conv.share_token = str(uuid.uuid4())
             await self.db.commit()
+            await self.db.refresh(conv)
         return ShareResponse(
-            share_token=share_token,
-            share_url=f"/share/{share_token}",
+            share_token=conv.share_token,
+            share_url=f"/share/{conv.share_token}",
         )
 
     async def get_by_share_token(self, share_token: str) -> ConversationResponse | None:

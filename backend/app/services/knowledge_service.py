@@ -1,12 +1,16 @@
 """知识库服务"""
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
 
-from ..models.knowledge_base import KnowledgeBase
-from ..models.document import Document
-from ..schemas.knowledge import KnowledgeBaseCreate, KnowledgeBaseUpdate, KnowledgeBaseResponse
 from ..core.chroma_client import delete_collection
+from ..models.document import Document
+from ..models.knowledge_base import KnowledgeBase
+from ..schemas.knowledge import (
+    KnowledgeBaseCreate,
+    KnowledgeBaseResponse,
+    KnowledgeBaseUpdate,
+)
 
 
 class KnowledgeService:

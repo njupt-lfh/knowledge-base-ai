@@ -1,10 +1,22 @@
 """文档 API 路由"""
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
-from ..schemas.document import DocumentResponse, DocumentListResponse, ManualDocumentCreate
+from ..schemas.document import (
+    DocumentListResponse,
+    DocumentResponse,
+    ManualDocumentCreate,
+)
 from ..services.document_service import DocumentService
 
 router = APIRouter(prefix="/api/knowledge-bases/{kb_id}/documents", tags=["文档"])

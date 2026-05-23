@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Input, Button, Space, Typography, List, Tag, message } from 'antd'
+import { Card, Input, Button, Space, Typography, Tag, message } from 'antd'
 import { SendOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
 import type { Conversation } from '../types'
@@ -21,16 +21,18 @@ export default function ChatAgent() {
   const [sending, setSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (kbId) initConversation()
-  }, [kbId])
-
-  const initConversation = async () => {
+  const initConversation = useCallback(async () => {
     try {
       const res = await chatApi.createConversation(kbId!)
       setConversation(res.data)
     } catch { message.error('创建对话失败') }
-  }
+  }, [kbId])
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (kbId) initConversation()
+  }, [kbId, initConversation])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const scrollToBottom = () => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)

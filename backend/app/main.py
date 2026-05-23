@@ -5,9 +5,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api import chat, chunk, document, knowledge
 from .core.config import settings
 from .core.database import init_db
-from .api import knowledge, document, chunk, chat
 
 
 @asynccontextmanager

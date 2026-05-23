@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, Button, Table, Space, Modal, Form, Input, InputNumber, message, Popconfirm } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
@@ -13,7 +13,7 @@ export default function KnowledgeList() {
   const [editingKb, setEditingKb] = useState<KnowledgeBase | null>(null)
   const [form] = Form.useForm()
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const res = await knowledgeApi.list()
@@ -22,9 +22,11 @@ export default function KnowledgeList() {
       message.error('获取知识库列表失败')
     }
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { fetchData() }, [])
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => { fetchData() }, [fetchData])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleCreate = async (values: Record<string, unknown>) => {
     try {

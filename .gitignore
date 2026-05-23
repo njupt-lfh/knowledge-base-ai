@@ -25,12 +25,14 @@ frontend/dist/
 # Uploads
 uploads/*
 !uploads/.gitkeep
+backend/uploads/*
 
 # Data
 data/*
 !data/.gitkeep
 chroma_data/*
 !chroma_data/.gitkeep
+backend/chroma_data/*
 
 # OS
 .DS_Store

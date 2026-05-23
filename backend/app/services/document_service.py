@@ -1,19 +1,19 @@
 """文档服务"""
 
-import uuid
 import shutil
+import uuid
 from pathlib import Path
-from datetime import datetime
 
-from fastapi import UploadFile, BackgroundTasks
+from fastapi import BackgroundTasks, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
 from ..core.config import settings
+from ..core.database import async_session
+from ..core.chroma_client import get_collection
 from ..models.document import Document
 from ..models.chunk import Chunk
 from ..schemas.document import DocumentResponse, ManualDocumentCreate
-from ..core.chroma_client import get_collection
 
 
 class DocumentService:
@@ -59,7 +59,7 @@ class DocumentService:
         await self.db.commit()
         await self.db.refresh(doc)
 
-        background_tasks.add_task(self._process_document, doc_id, kb_id, file_type, str(file_path))
+        background_tasks.add_task(_process_document, doc_id, kb_id, file_type, str(file_path))
         return DocumentResponse.model_validate(doc)
 
     async def create_manual(self, kb_id: str, data: ManualDocumentCreate, background_tasks: BackgroundTasks) -> DocumentResponse:
@@ -75,7 +75,7 @@ class DocumentService:
         await self.db.commit()
         await self.db.refresh(doc)
 
-        background_tasks.add_task(self._process_manual, doc_id, kb_id, data.title, data.content)
+        background_tasks.add_task(_process_manual, doc_id, kb_id, data.title, data.content)
         return DocumentResponse.model_validate(doc)
 
     async def get_by_id(self, doc_id: str) -> DocumentResponse | None:
@@ -100,14 +100,138 @@ class DocumentService:
         await self.db.refresh(doc)
         return DocumentResponse.model_validate(doc)
 
-    async def _process_document(self, doc_id: str, kb_id: str, file_type: str, file_path: str):
-        """后台处理上传的文档：解析 + 分块 + 向量化"""
-        from .chunking_service import DocumentParser, TextChunker
-        from .embedding_service import EmbeddingService
 
-        async with self.db.bind.begin() as conn:
-            pass  # 在同步上下文中创建新的session比较复杂，这里留到后续完善
+async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: str):
+    """后台处理上传的文档：解析 → 分块 → 向量化 → Chroma 写入"""
+    from .chunking_service import DocumentParser, TextChunker
+    from .embedding_service import EmbeddingService
 
-    async def _process_manual(self, doc_id: str, kb_id: str, title: str, content: str):
-        """后台处理手动录入的知识"""
-        pass  # 后续完善
+    async with async_session() as db:
+        try:
+            # 1. 解析文件提取文本
+            text = DocumentParser.parse(file_path, file_type)
+
+            # 2. 获取知识库的分块配置
+            from ..models.knowledge_base import KnowledgeBase
+            kb_result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
+            kb = kb_result.scalar_one_or_none()
+            chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
+            chunk_overlap = kb.chunk_overlap if kb else settings.DEFAULT_CHUNK_OVERLAP
+
+            # 3. 分块
+            chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            chunks = chunker.split(text)
+
+            if not chunks:
+                raise ValueError("未能从文件中提取有效文本")
+
+            # 4. 向量化
+            embed_svc = EmbeddingService()
+            embeddings = embed_svc.embed_documents(chunks)
+
+            # 5. 写入 Chunk 表
+            chunk_records = []
+            for i, content in enumerate(chunks):
+                chunk_records.append(Chunk(
+                    id=str(uuid.uuid4()),
+                    document_id=doc_id,
+                    knowledge_base_id=kb_id,
+                    content=content,
+                    chunk_index=i,
+                    char_count=len(content),
+                ))
+            db.add_all(chunk_records)
+
+            # 6. 写入 Chroma 向量库
+            try:
+                collection = get_collection(kb_id)
+                collection.add(
+                    ids=[c.id for c in chunk_records],
+                    embeddings=embeddings,
+                    documents=[c.content for c in chunk_records],
+                    metadatas=[{"document_id": doc_id, "chunk_index": i} for i in range(len(chunk_records))],
+                )
+            except Exception as e:
+                raise RuntimeError(f"Chroma 写入失败: {e}")
+
+            # 7. 更新文档状态
+            doc = await db.get(Document, doc_id)
+            if doc:
+                doc.status = "completed"
+                doc.chunk_count = len(chunks)
+                doc.char_count = sum(len(c) for c in chunks)
+
+            await db.commit()
+
+        except Exception as e:
+            doc = await db.get(Document, doc_id)
+            if doc:
+                doc.status = "error"
+            await db.commit()
+            raise e
+
+
+async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
+    """后台处理手动录入的知识"""
+    from .chunking_service import TextChunker
+    from .embedding_service import EmbeddingService
+
+    async with async_session() as db:
+        try:
+            # 1. 获取分块配置
+            from ..models.knowledge_base import KnowledgeBase
+            kb_result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
+            kb = kb_result.scalar_one_or_none()
+            chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
+            chunk_overlap = kb.chunk_overlap if kb else settings.DEFAULT_CHUNK_OVERLAP
+
+            # 2. 分块
+            chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            chunks = chunker.split(content)
+            if not chunks:
+                chunks = [content]
+
+            # 3. 向量化
+            embed_svc = EmbeddingService()
+            embeddings = embed_svc.embed_documents(chunks)
+
+            # 4. 写入 Chunk 表
+            chunk_records = []
+            for i, text in enumerate(chunks):
+                chunk_records.append(Chunk(
+                    id=str(uuid.uuid4()),
+                    document_id=doc_id,
+                    knowledge_base_id=kb_id,
+                    content=text,
+                    chunk_index=i,
+                    char_count=len(text),
+                ))
+            db.add_all(chunk_records)
+
+            # 5. 写入 Chroma
+            try:
+                collection = get_collection(kb_id)
+                collection.add(
+                    ids=[c.id for c in chunk_records],
+                    embeddings=embeddings,
+                    documents=[c.content for c in chunk_records],
+                    metadatas=[{"document_id": doc_id, "chunk_index": i} for i in range(len(chunk_records))],
+                )
+            except Exception as e:
+                raise RuntimeError(f"Chroma 写入失败: {e}")
+
+            # 6. 更新文档状态
+            doc = await db.get(Document, doc_id)
+            if doc:
+                doc.status = "completed"
+                doc.chunk_count = len(chunks)
+                doc.char_count = sum(len(c) for c in chunks)
+
+            await db.commit()
+
+        except Exception as e:
+            doc = await db.get(Document, doc_id)
+            if doc:
+                doc.status = "error"
+            await db.commit()
+            raise e

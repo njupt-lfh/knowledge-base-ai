@@ -1,15 +1,18 @@
 """知识块服务"""
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.chroma_client import get_collection
+from .embedding_service import EmbeddingService
 from ..models.chunk import Chunk
-from ..schemas.chunk import ChunkUpdate, ChunkResponse, SearchResultItem
+from ..schemas.chunk import ChunkResponse, ChunkUpdate, SearchResultItem
 
 
 class ChunkService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.embed_svc = EmbeddingService()
 
     async def list_by_document(self, doc_id: str) -> list[ChunkResponse]:
         result = await self.db.execute(
@@ -38,7 +41,30 @@ class ChunkService:
         await self.db.refresh(chunk)
         return ChunkResponse.model_validate(chunk)
 
-    async def search(self, kb_id: str, query: str, top_k: int) -> list[SearchResultItem]:
-        """知识检索 - 目前返回空（需要向量化服务）"""
-        # TODO: 接入 EmbeddingService 和 Chroma
-        return []
+    async def search(self, kb_id: str, query: str, top_k: int = 5) -> list[SearchResultItem]:
+        """知识检索：向量相似度搜索"""
+        try:
+            query_embedding = self.embed_svc.embed_query(query)
+            collection = get_collection(kb_id)
+
+            results = collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k,
+            )
+
+            items = []
+            if results.get("ids") and len(results["ids"][0]) > 0:
+                for i, chunk_id in enumerate(results["ids"][0]):
+                    distance = results["distances"][0][i] if results.get("distances") else 0
+                    score = 1 - distance
+                    if score > 0.3:
+                        items.append(SearchResultItem(
+                            chunk_id=chunk_id,
+                            content=results["documents"][0][i][:200],
+                            score=round(score, 4),
+                            document_id=results["metadatas"][0][i].get("document_id", ""),
+                            chunk_index=results["metadatas"][0][i].get("chunk_index", 0),
+                        ))
+            return items
+        except Exception:
+            return []
