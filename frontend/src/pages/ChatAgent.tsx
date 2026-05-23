@@ -39,7 +39,7 @@ export default function ChatAgent() {
   }
 
   const handleSend = async () => {
-    if (!input.trim() || !conversation) return
+    if (sending || !input.trim() || !conversation) return
     const userMsg: ChatMessage = { role: 'user', content: input }
     const assistantMsg: ChatMessage = { role: 'assistant', content: '', isStreaming: true }
 
@@ -154,7 +154,7 @@ export default function ChatAgent() {
             placeholder="输入您的问题..."
             disabled={sending}
           />
-          <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending}>
+          <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending} disabled={sending}>
             发送
           </Button>
         </Space.Compact>
