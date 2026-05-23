@@ -8,11 +8,11 @@ from fastapi import BackgroundTasks, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.chroma_client import get_collection
 from ..core.config import settings
 from ..core.database import async_session
-from ..core.chroma_client import get_collection
-from ..models.document import Document
 from ..models.chunk import Chunk
+from ..models.document import Document
 from ..schemas.document import DocumentResponse, ManualDocumentCreate
 
 
