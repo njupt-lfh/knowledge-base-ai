@@ -62,8 +62,9 @@ class ChatService:
         self.db.add(user_msg)
         await self.db.commit()
 
-        # 收集完整回复
+        # 收集完整回复与来源
         full_answer = ""
+        sources_data = []
 
         if settings.LLM_MOCK_MODE:
             mock_reply = f"Mock 模式: 您的问题是「{message}」。请在 .env 设置 LLM_MOCK_MODE=false"
@@ -74,12 +75,14 @@ class ChatService:
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         else:
             try:
-                async for event_str in self.rag_svc.generate(kb_id, message, history):
+                async for event_str in self.rag_svc.generate(kb_id, message, history, db=self.db):
                     yield event_str
                     try:
                         parsed = json.loads(event_str.replace("data: ", ""))
                         if parsed.get("type") == "text":
                             full_answer += parsed.get("content", "")
+                        elif parsed.get("type") == "sources":
+                            sources_data = parsed.get("sources", [])
                     except Exception:
                         pass
             except Exception as e:
@@ -88,11 +91,12 @@ class ChatService:
                 yield f"data: {json.dumps({'type': 'text', 'content': error_msg})}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-        # 保存助手消息
+        # 保存助手消息（含来源引用）
         assistant_msg = Message(
             conversation_id=conv_id,
             role="assistant",
             content=full_answer,
+            sources=sources_data if sources_data else None,
         )
         self.db.add(assistant_msg)
         await self.db.commit()

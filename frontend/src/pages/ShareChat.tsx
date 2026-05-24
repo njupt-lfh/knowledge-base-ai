@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Input, Button, Space, Typography, message } from 'antd'
+import { Card, Input, Button, Space, Typography, Tag, message } from 'antd'
 import { SendOutlined, RobotOutlined } from '@ant-design/icons'
 import type { Conversation, Message } from '../types'
 
@@ -33,7 +33,9 @@ async function* streamChat(convId: string, msg: string) {
 export default function ShareChat() {
   const { token } = useParams<{ token: string }>()
   const [conv, setConv] = useState<Conversation | null>(null)
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([])
+  const [messages, setMessages] = useState<
+    { role: string; content: string; sources?: { chunk_id: string; content: string; score: number }[] }[]
+  >([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -77,6 +79,10 @@ export default function ShareChat() {
             i === assistantIdx ? { ...m, content: m.content + evt.content } : m,
           ))
           scrollToBottom()
+        } else if (evt.type === 'sources') {
+          setMessages((prev) => prev.map((m, i) =>
+            i === assistantIdx ? { ...m, sources: evt.sources } : m,
+          ))
         }
       }
     } catch { message.error('发送失败') }
@@ -125,6 +131,14 @@ export default function ShareChat() {
                   </Typography.Text>
                 </div>
               </div>
+              {msg.sources && msg.sources.length > 0 && (
+                <div style={{ marginTop: 8, marginLeft: 8 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>引用来源：</Typography.Text>
+                  {msg.sources.map((s, si) => (
+                    <Tag key={si} color="blue" style={{ marginTop: 4 }}>[{s.score.toFixed(2)}] {s.content.slice(0, 60)}...</Tag>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
           <div ref={messagesEndRef} />

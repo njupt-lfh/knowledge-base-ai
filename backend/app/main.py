@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .api import chat, chunk, document, knowledge, tag
 from .core.config import settings
-from .core.database import async_session, get_db, init_db
+from .core.database import get_db, init_db
 
 
 class BatchStatusBody(BaseModel):
@@ -63,11 +63,29 @@ async def batch_toggle_status(kb_id: str, body: BatchStatusBody, db: AsyncSessio
 
 @app.delete("/api/knowledge-bases/{kb_id}/documents/batch")
 async def batch_delete_documents(kb_id: str, body: BatchDeleteBody, db: AsyncSession = Depends(get_db)):
+    from .core.chroma_client import get_collection
+    from .models.chunk import Chunk
     from .models.document import Document
 
     for doc_id in body.doc_ids:
         doc = await db.get(Document, doc_id)
         if doc:
+            # 清理 Chroma 向量
+            try:
+                result = await db.execute(select(Chunk.id).where(Chunk.document_id == doc_id))
+                chunk_ids = [r[0] for r in result.all()]
+                if chunk_ids:
+                    collection = get_collection(kb_id)
+                    collection.delete(ids=chunk_ids)
+            except Exception:
+                pass
+            # 清理上传文件
+            if doc.file_path:
+                from pathlib import Path
+                try:
+                    Path(doc.file_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
             await db.delete(doc)
     await db.commit()
     return {"ok": True, "count": len(body.doc_ids)}
@@ -107,9 +125,10 @@ async def health_check():
 
 @app.get("/api/knowledge-bases/{kb_id}/stats")
 async def knowledge_stats(kb_id: str, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import desc, func
+
     from .models.chunk import Chunk
     from .models.document import Document
-    from sqlalchemy import func, desc
 
     doc_total = (await db.execute(
         select(func.count(Document.id)).where(Document.knowledge_base_id == kb_id)
@@ -151,10 +170,11 @@ async def knowledge_stats(kb_id: str, db: AsyncSession = Depends(get_db)):
 
 @app.get("/api/stats/overview")
 async def stats_overview(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import desc, func
+
     from .models.chunk import Chunk
     from .models.document import Document
     from .models.knowledge_base import KnowledgeBase
-    from sqlalchemy import func, desc
 
     kb_count = (await db.execute(select(func.count(KnowledgeBase.id)))).scalar() or 0
     doc_count = (await db.execute(select(func.count(Document.id)))).scalar() or 0

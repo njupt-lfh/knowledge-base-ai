@@ -92,9 +92,10 @@ class DocumentService:
                     pass
             # 清理 Chroma 中该文档的所有向量
             try:
+                from sqlalchemy import select as _select
+
                 from ..core.chroma_client import get_collection
                 from ..models.chunk import Chunk
-                from sqlalchemy import select as _select
                 chunk_ids = (await self.db.execute(
                     _select(Chunk.id).where(Chunk.document_id == doc_id)
                 )).scalars().all()
@@ -111,6 +112,33 @@ class DocumentService:
         doc.is_active = is_active
         await self.db.commit()
         await self.db.refresh(doc)
+
+        # 同步 Chroma：禁用时删除所有向量，启用时重新向量化
+        from ..core.chroma_client import get_collection
+        from ..models.chunk import Chunk
+        from .embedding_service import EmbeddingService
+
+        result = await self.db.execute(select(Chunk).where(Chunk.document_id == doc_id))
+        chunks = result.scalars().all()
+        if chunks:
+            collection = get_collection(doc.knowledge_base_id)
+            if is_active:
+                embed_svc = EmbeddingService()
+                for chunk in chunks:
+                    chunk.is_active = True
+                    embedding = embed_svc.embed_query(chunk.content)
+                    collection.upsert(
+                        ids=[chunk.id],
+                        embeddings=[embedding],
+                        documents=[chunk.content],
+                        metadatas=[{"document_id": doc_id, "chunk_index": chunk.chunk_index}],
+                    )
+            else:
+                for chunk in chunks:
+                    chunk.is_active = False
+                collection.delete(ids=[c.id for c in chunks])
+            await self.db.commit()
+
         return DocumentResponse.model_validate(doc)
 
 

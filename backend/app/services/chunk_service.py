@@ -77,53 +77,67 @@ class ChunkService:
             pass
 
     async def search(self, kb_id: str, query: str, top_k: int = 5) -> list[SearchResultItem]:
-        """知识检索：向量相似度搜索（过滤已禁用的块）"""
+        """混合检索：向量相似度 + 关键词匹配（过滤已禁用的块）"""
         try:
+            # —— 1. 向量检索 ——
             query_embedding = self.embed_svc.embed_query(query)
             collection = get_collection(kb_id)
-
-            # 多取一些结果，留出过滤空间
             results = collection.query(
                 query_embeddings=[query_embedding],
-                n_results=top_k * 3,
+                n_results=top_k * 2,
             )
 
-            items = []
+            result_map: dict[str, SearchResultItem] = {}
+            active_map: dict[str, bool] = {}
+
             if results.get("ids") and len(results["ids"][0]) > 0:
-                # 批量查询 chunk 状态
                 chunk_ids = results["ids"][0]
-                active_map = {}
                 db_result = await self.db.execute(
                     select(Chunk.id, Chunk.is_active).where(Chunk.id.in_(chunk_ids))
                 )
                 for row in db_result:
                     active_map[row.id] = row.is_active
 
-                count = 0
                 for i, chunk_id in enumerate(chunk_ids):
                     if not active_map.get(chunk_id, True):
                         continue
                     distance = results["distances"][0][i] if results.get("distances") else 0
-                    score = 1 - distance
-                    if score > 0.3:
-                        items.append(SearchResultItem(
+                    score = 0.7 * (1 - distance)  # 向量权重 0.7
+                    if score > 0.2:
+                        result_map[chunk_id] = SearchResultItem(
                             chunk_id=chunk_id,
                             content=results["documents"][0][i][:200],
                             score=round(score, 4),
                             document_id=results["metadatas"][0][i].get("document_id", ""),
                             chunk_index=results["metadatas"][0][i].get("chunk_index", 0),
-                        ))
-                        count += 1
-                        if count >= top_k:
-                            break
+                        )
+
+            # —— 2. 关键词检索 ——
+            keywords = [w.strip() for w in query.replace(",", " ").replace(".", " ").split() if len(w.strip()) > 1]
+            if keywords:
+                kw_conditions = [Chunk.content.contains(kw) for kw in keywords[:5]]
+                kw_result = await self.db.execute(
+                    select(Chunk)
+                    .where(Chunk.knowledge_base_id == kb_id, Chunk.is_active.is_(True), *kw_conditions)
+                    .limit(top_k)
+                )
+                for chunk in kw_result.scalars().all():
+                    if chunk.id not in result_map:
+                        result_map[chunk.id] = SearchResultItem(
+                            chunk_id=chunk.id,
+                            content=chunk.content[:200],
+                            score=round(0.5, 4),  # 关键词匹配固定 0.5
+                            document_id=chunk.document_id,
+                            chunk_index=chunk.chunk_index,
+                        )
+
+            # 按分数排序，取 top_k
+            items = sorted(result_map.values(), key=lambda x: x.score, reverse=True)[:top_k]
 
             # 热度统计：递增命中次数
             if items:
                 try:
                     hit_ids = [it.chunk_id for it in items]
-                    await self.db.execute(
-                        select(Chunk).where(Chunk.id.in_(hit_ids))
-                    )
                     for chunk_id in hit_ids:
                         chunk = await self.db.get(Chunk, chunk_id)
                         if chunk:

@@ -95,9 +95,12 @@ async def extract_knowledge(
     db: AsyncSession = Depends(get_db),
 ):
     """从最近一轮对话中提炼知识（T6.5）"""
-    from ..models.conversation import Conversation, Message
+    import json
+
+    import httpx
     from sqlalchemy import select
-    import httpx, json
+
+    from ..models.conversation import Conversation, Message
 
     conv = await db.get(Conversation, conv_id)
     if not conv:
