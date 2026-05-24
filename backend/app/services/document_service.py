@@ -90,6 +90,19 @@ class DocumentService:
                     Path(doc.file_path).unlink(missing_ok=True)
                 except Exception:
                     pass
+            # 清理 Chroma 中该文档的所有向量
+            try:
+                from ..core.chroma_client import get_collection
+                from ..models.chunk import Chunk
+                from sqlalchemy import select as _select
+                chunk_ids = (await self.db.execute(
+                    _select(Chunk.id).where(Chunk.document_id == doc_id)
+                )).scalars().all()
+                if chunk_ids:
+                    collection = get_collection(doc.knowledge_base_id)
+                    collection.delete(ids=list(chunk_ids))
+            except Exception:
+                pass
             await self.db.delete(doc)
             await self.db.commit()
 

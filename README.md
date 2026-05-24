@@ -5,70 +5,89 @@
 ## 技术栈
 
 - **前端**: React 18 + TypeScript + Ant Design 5 + Vite
-- **后端**: Python FastAPI + SQLAlchemy 2.0 + Chroma
-- **AI**: 火山引擎豆包 API (Chat + Embedding)
-- **数据库**: SQLite (开发) / PostgreSQL (生产可选)
+- **后端**: Python 3.11 + FastAPI + SQLAlchemy 2.0 + Chroma
+- **AI**: 火山引擎豆包 API (Doubao-Seed-1.8 Chat + Doubao-embedding-vision)
+- **数据库**: SQLite (异步 aiosqlite 驱动)
+
+## 功能特性
+
+### 知识生产
+- 拖拽上传 PDF / Markdown / TXT 文件，自动解析分块向量化
+- 手动录入文本知识
+- AI 对话中自动提炼新知识（加分项）
+
+### 知识管理
+- 知识库 CRUD + 自定义分块参数
+- 文档启用/禁用、批量操作
+- 知识块查看、编辑、状态切换
+- 标签分类管理
+
+### 知识消费
+- RAG 专家对话（SSE 流式输出 + 来源引用）
+- 多轮对话历史
+- 一键生成分享链接（无需登录访问）
+
+### 统计分析
+- 知识热度排行（命中次数统计）
+- 全局/知识库级数据概览
 
 ## 快速启动
 
 ### 1. 环境准备
-
 - Node.js >= 18
 - Python >= 3.11
 
 ### 2. 配置
-
 ```bash
 cp .env.example .env
-# 编辑 .env，填入 VOLCENGINE_API_KEY
+# 编辑 .env:
+#   VOLCENGINE_API_KEY=你的API Key
+#   VOLCENGINE_LLM_MODEL=你的对话接入点ID
+#   VOLCENGINE_EMBEDDING_MODEL=你的嵌入接入点ID
+#   LLM_MOCK_MODE=false
 ```
 
 ### 3. 启动后端
-
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8080
+# API 文档: http://localhost:8080/docs
 ```
 
-API 文档: http://localhost:8000/docs
-
 ### 4. 启动前端
-
 ```bash
 cd frontend
 npm install
 npm run dev
+# 访问: http://localhost:5173
 ```
-
-访问: http://localhost:5173
 
 ## 项目结构
 
 ```
 knowledge-base-ai/
-├── frontend/          # React 前端
-├── backend/           # Python 后端
-├── docs/              # 文档
-├── scripts/           # 脚本
-├── uploads/           # 上传文件
-├── data/              # 数据库文件
-└── chroma_data/       # 向量存储
+├── frontend/              # React 前端
+│   └── src/
+│       ├── api/           # API 调用层
+│       ├── components/    # 通用组件
+│       ├── pages/         # 页面组件
+│       ├── router/        # 路由配置
+│       └── types/         # TypeScript 类型
+├── backend/               # Python 后端
+│   └── app/
+│       ├── api/           # 路由层
+│       ├── models/        # SQLAlchemy 模型
+│       ├── schemas/       # Pydantic 模型
+│       ├── services/      # 业务逻辑
+│       └── core/          # 配置/数据库/Chroma
+├── docs/                  # 文档
+└── data/                  # 数据存储
 ```
 
 ## 架构说明
 
 详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-
-## 团队分工
-
-| 角色 | 职责 |
-|------|------|
-| 后端核心 | 数据库设计、知识库/文档 CRUD API、Chroma 集成 |
-| AI 与对话 | 火山引擎 API、RAG 管道、SSE 流式 |
-| 前端开发 | 管理界面、文档上传、对话页面 |
 
 ## 开发文档
 
