@@ -11,7 +11,9 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.config import settings
 from ..core.database import get_db
+from ..models.document import Document
 from ..schemas.document import (
     DocumentListResponse,
     DocumentResponse,
@@ -41,6 +43,8 @@ async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
+    if file.size and file.size > settings.MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({settings.MAX_UPLOAD_SIZE // 1048576}MB)")
     service = DocumentService(db)
     return await service.upload(kb_id, file, background_tasks)
 
@@ -88,3 +92,23 @@ async def toggle_document_status(
 ):
     service = DocumentService(db)
     return await service.toggle_status(doc_id, is_active)
+
+
+@router.post("/{doc_id}/reindex", response_model=DocumentResponse)
+async def reindex_document(
+    kb_id: str,
+    doc_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """重新向量化文档"""
+    from ..services.document_service import _process_document
+    doc = await db.get(Document, doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    if not doc.file_path:
+        raise HTTPException(status_code=400, detail="仅文件上传文档支持 reindex")
+    doc.status = "processing"
+    await db.commit()
+    background_tasks.add_task(_process_document, doc_id, kb_id, doc.file_type, doc.file_path)
+    return DocumentResponse.model_validate(doc)

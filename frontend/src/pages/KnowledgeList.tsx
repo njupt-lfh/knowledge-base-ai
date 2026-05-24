@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, Button, Table, Space, Modal, Form, Input, InputNumber, message, Popconfirm } from 'antd'
-import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import { knowledgeApi } from '../api/knowledge'
 import type { KnowledgeBase } from '../types'
 
@@ -12,17 +12,20 @@ export default function KnowledgeList() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKb, setEditingKb] = useState<KnowledgeBase | null>(null)
   const [form] = Form.useForm()
+  const [searchText, setSearchText] = useState('')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await knowledgeApi.list()
+      const params: Record<string, unknown> = {}
+      if (searchText) params.search = searchText
+      const res = await knowledgeApi.list(params)
       setData(res.data.items)
     } catch {
       message.error('获取知识库列表失败')
     }
     setLoading(false)
-  }, [])
+  }, [searchText])
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => { fetchData() }, [fetchData])
@@ -118,6 +121,15 @@ export default function KnowledgeList() {
         </Button>
       }
     >
+      <Space style={{ marginBottom: 16 }}>
+        <Input.Search
+          placeholder="搜索知识库..."
+          allowClear
+          onSearch={(v) => setSearchText(v)}
+          style={{ width: 300 }}
+          prefix={<SearchOutlined />}
+        />
+      </Space>
       <Table rowKey="id" columns={columns} dataSource={data} loading={loading} />
 
       <Modal

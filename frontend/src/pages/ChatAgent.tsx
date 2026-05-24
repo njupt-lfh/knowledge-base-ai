@@ -21,18 +21,35 @@ export default function ChatAgent() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [convList, setConvList] = useState<Conversation[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+
+  const loadConvList = useCallback(async () => {
+    if (!kbId) return
+    try { setConvList((await chatApi.listConversations(kbId)).data) } catch { /* ok */ }
+  }, [kbId])
 
   const initConversation = useCallback(async () => {
     try {
       const res = await chatApi.createConversation(kbId!)
       setConversation(res.data)
+      loadConvList()
     } catch { message.error('创建对话失败') }
-  }, [kbId])
+  }, [kbId, loadConvList])
+
+  const switchConversation = async (conv: Conversation) => {
+    setConversation(conv)
+    setShowHistory(false)
+    try {
+      const msgs = (await chatApi.getMessages(conv.id)).data
+      setMessages(msgs.map((m: Message) => ({ role: m.role, content: m.content, sources: m.sources as ChatMessage['sources'] })))
+    } catch { message.error('加载消息失败') }
+  }
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (kbId) initConversation()
-  }, [kbId, initConversation])
+    if (kbId) { initConversation(); loadConvList() }
+  }, [kbId, initConversation, loadConvList])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const scrollToBottom = () => {
@@ -131,6 +148,7 @@ export default function ChatAgent() {
       title="AI 专家对话"
       extra={
         <Space>
+          <Button onClick={() => { setShowHistory(!showHistory); loadConvList() }}>历史</Button>
           <Button icon={<BulbOutlined />} onClick={handleExtract} loading={extracting}>提炼知识</Button>
           <Button icon={<ShareAltOutlined />} onClick={handleShare}>分享</Button>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/knowledge-bases')}>返回</Button>
@@ -138,6 +156,24 @@ export default function ChatAgent() {
       }
     >
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        {showHistory && (
+          <Card size="small" title="对话历史" style={{ marginBottom: 16 }}
+            extra={<Button size="small" type="link" onClick={() => { setShowHistory(false) }}>关闭</Button>}>
+            {convList.map((c) => (
+              <div key={c.id} style={{
+                padding: '8px 12px', cursor: 'pointer', borderRadius: 6,
+                background: c.id === conversation?.id ? '#e6f4ff' : 'transparent',
+                marginBottom: 4,
+              }} onClick={() => switchConversation(c)}>
+                <Typography.Text>{c.title || '新对话'}</Typography.Text>
+                <Typography.Text type="secondary" style={{ float: 'right', fontSize: 12 }}>
+                  {new Date(c.created_at).toLocaleDateString('zh-CN')}
+                </Typography.Text>
+              </div>
+            ))}
+            {convList.length === 0 && <Typography.Text type="secondary">暂无历史对话</Typography.Text>}
+          </Card>
+        )}
         <div style={{
           height: 500,
           overflowY: 'auto',

@@ -37,6 +37,9 @@ export default function KnowledgeDetail() {
   const [tagDocId, setTagDocId] = useState<string | null>(null)
   const [tagDocTags, setTagDocTags] = useState<string[]>([])
   const [newTagName, setNewTagName] = useState('')
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [editingChunk, setEditingChunk] = useState<Chunk | null>(null)
+  const [editChunkContent, setEditChunkContent] = useState('')
 
   const fetchKb = useCallback(async () => {
     if (!kbId) return
@@ -248,6 +251,14 @@ export default function KnowledgeDetail() {
                   <p className="ant-upload-hint">PDF / Markdown / TXT</p>
                 </Dragger>
                 <Button icon={<PlusOutlined />} onClick={() => setManualModal(true)}>手动录入</Button>
+                <Select
+                  allowClear
+                  placeholder="按标签筛选"
+                  style={{ width: 160 }}
+                  value={tagFilter}
+                  onChange={(v) => setTagFilter(v || null)}
+                  options={tags.map((t) => ({ value: t.name, label: t.name }))}
+                />
                 {selectedRowKeys.length > 0 && (
                   <Space>
                     <Button size="small" onClick={() => handleBatchToggle(true)}>批量启用</Button>
@@ -268,6 +279,7 @@ export default function KnowledgeDetail() {
                   selectedRowKeys,
                   onChange: (keys) => setSelectedRowKeys(keys),
                 }}
+                dataSource={tagFilter ? docs.filter((d) => (docTags[d.id] || []).includes(tagFilter)) : docs}
               />
 
               <Modal title="手动录入知识" open={manualModal} onCancel={() => setManualModal(false)} onOk={handleManualCreate} okText="提交" cancelText="取消">
@@ -296,10 +308,29 @@ export default function KnowledgeDetail() {
 
               <Drawer title={`知识块: ${chunksDocName}`} open={chunksDrawer} onClose={() => setChunksDrawer(false)} width={700}>
                 <List dataSource={chunks} renderItem={(chunk) => (
-                  <List.Item actions={[<Switch size="small" checked={chunk.is_active} onChange={() => handleChunkToggle(chunk)} />]}>
+                  <List.Item actions={[
+                    <Switch size="small" checked={chunk.is_active} onChange={() => handleChunkToggle(chunk)} />,
+                    <Button size="small" onClick={() => { setEditingChunk(chunk); setEditChunkContent(chunk.content) }}>编辑</Button>,
+                  ]}>
                     <List.Item.Meta
                       title={<Space><Tag color="blue">#{chunk.chunk_index}</Tag><Typography.Text type="secondary">{chunk.char_count} 字符 | 命中 {chunk.hit_count} 次</Typography.Text></Space>}
-                      description={<Typography.Paragraph ellipsis={{ rows: 3, expandable: true, symbol: '展开' }} style={{ whiteSpace: 'pre-wrap' }}>{chunk.content}</Typography.Paragraph>}
+                      description={
+                        editingChunk?.id === chunk.id ? (
+                          <Space direction="vertical" style={{ width: '100%' }}>
+                            <Input.TextArea rows={4} value={editChunkContent} onChange={(e) => setEditChunkContent(e.target.value)} />
+                            <Space>
+                              <Button size="small" type="primary" onClick={async () => {
+                                await request.put(`/api/chunks/${chunk.id}`, { content: editChunkContent })
+                                setChunks((prev) => prev.map((c) => c.id === chunk.id ? { ...c, content: editChunkContent, char_count: editChunkContent.length } : c))
+                                setEditingChunk(null); message.success('已更新')
+                              }}>保存</Button>
+                              <Button size="small" onClick={() => setEditingChunk(null)}>取消</Button>
+                            </Space>
+                          </Space>
+                        ) : (
+                          <Typography.Paragraph ellipsis={{ rows: 3, expandable: true, symbol: '展开' }} style={{ whiteSpace: 'pre-wrap' }}>{chunk.content}</Typography.Paragraph>
+                        )
+                      }
                     />
                   </List.Item>
                 )} />
