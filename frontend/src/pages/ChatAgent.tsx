@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Input, Button, Space, Typography, Tag, message } from 'antd'
-import { SendOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { Card, Input, Button, Space, Typography, Tag, message, Modal } from 'antd'
+import { SendOutlined, ArrowLeftOutlined, ShareAltOutlined, BulbOutlined } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
+import request from '../api/request'
 import type { Conversation } from '../types'
 
 interface ChatMessage {
@@ -83,13 +84,57 @@ export default function ChatAgent() {
     setSending(false)
   }
 
+  const [extractModal, setExtractModal] = useState(false)
+  const [extractData, setExtractData] = useState<{ title: string; content: string; kb_id: string } | null>(null)
+  const [extracting, setExtracting] = useState(false)
+
+  const handleExtract = async () => {
+    if (!conversation) return
+    setExtracting(true)
+    try {
+      const res = await request.post(`/api/conversations/${conversation.id}/extract-knowledge`)
+      if (res.data.has_knowledge) {
+        setExtractData(res.data)
+        setExtractModal(true)
+      } else {
+        message.info('当前对话未检测到新知识点')
+      }
+    } catch { message.error('知识提炼失败') }
+    setExtracting(false)
+  }
+
+  const confirmExtract = async () => {
+    if (!extractData || !conversation) return
+    try {
+      await request.post(`/api/knowledge-bases/${extractData.kb_id}/documents/manual`, {
+        title: extractData.title,
+        content: extractData.content,
+      })
+      message.success('知识已录入知识库！')
+      setExtractModal(false)
+      setExtractData(null)
+    } catch { message.error('录入失败') }
+  }
+
+  const handleShare = async () => {
+    if (!conversation) return
+    try {
+      const res = await chatApi.share(conversation.id)
+      const url = `${window.location.origin}/share/${res.data.share_token}`
+      await navigator.clipboard.writeText(url)
+      message.success('分享链接已复制到剪贴板！')
+    } catch { message.error('生成分享链接失败') }
+  }
+
   return (
     <Card
       title="AI 专家对话"
       extra={
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/knowledge-bases')}>
-          返回
-        </Button>
+        <Space>
+          <Button icon={<BulbOutlined />} onClick={handleExtract} loading={extracting}>提炼知识</Button>
+          <Button icon={<ShareAltOutlined />} onClick={handleShare}>分享</Button>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/knowledge-bases')}>返回</Button>
+        </Space>
       }
     >
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
@@ -155,6 +200,27 @@ export default function ChatAgent() {
             发送
           </Button>
         </Space.Compact>
+
+        <Modal
+          title="提炼为知识"
+          open={extractModal}
+          onOk={confirmExtract}
+          onCancel={() => { setExtractModal(false); setExtractData(null) }}
+          okText="确认录入"
+          cancelText="取消"
+        >
+          {extractData && (
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Typography.Text strong>标题：{extractData.title}</Typography.Text>
+              <Typography.Paragraph
+                ellipsis={{ rows: 6, expandable: true }}
+                style={{ whiteSpace: 'pre-wrap', background: '#fafafa', padding: 12, borderRadius: 8 }}
+              >
+                {extractData.content}
+              </Typography.Paragraph>
+            </Space>
+          )}
+        </Modal>
       </div>
     </Card>
   )

@@ -101,3 +101,78 @@ app.include_router(document.router)
 async def health_check():
     return {"status": "ok", "version": settings.APP_VERSION}
 
+
+# ——— 统计端点（T6.1）———
+
+
+@app.get("/api/knowledge-bases/{kb_id}/stats")
+async def knowledge_stats(kb_id: str, db: AsyncSession = Depends(get_db)):
+    from .models.chunk import Chunk
+    from .models.document import Document
+    from sqlalchemy import func, desc
+
+    doc_total = (await db.execute(
+        select(func.count(Document.id)).where(Document.knowledge_base_id == kb_id)
+    )).scalar() or 0
+
+    chunk_total = (await db.execute(
+        select(func.count(Chunk.id)).where(Chunk.knowledge_base_id == kb_id)
+    )).scalar() or 0
+
+    total_hits = (await db.execute(
+        select(func.sum(Chunk.hit_count)).where(Chunk.knowledge_base_id == kb_id)
+    )).scalar() or 0
+
+    top_chunks = (await db.execute(
+        select(Chunk.id, Chunk.content, Chunk.hit_count, Chunk.chunk_index, Chunk.document_id)
+        .where(Chunk.knowledge_base_id == kb_id, Chunk.hit_count > 0)
+        .order_by(desc(Chunk.hit_count))
+        .limit(10)
+    )).all()
+
+    hot_items = [
+        {
+            "chunk_id": r.id,
+            "content": r.content[:100],
+            "hit_count": r.hit_count,
+            "chunk_index": r.chunk_index,
+            "document_id": r.document_id,
+        }
+        for r in top_chunks
+    ]
+
+    return {
+        "document_count": doc_total,
+        "chunk_count": chunk_total,
+        "total_hits": total_hits,
+        "hot_items": hot_items,
+    }
+
+
+@app.get("/api/stats/overview")
+async def stats_overview(db: AsyncSession = Depends(get_db)):
+    from .models.chunk import Chunk
+    from .models.document import Document
+    from .models.knowledge_base import KnowledgeBase
+    from sqlalchemy import func, desc
+
+    kb_count = (await db.execute(select(func.count(KnowledgeBase.id)))).scalar() or 0
+    doc_count = (await db.execute(select(func.count(Document.id)))).scalar() or 0
+    chunk_count = (await db.execute(select(func.count(Chunk.id)))).scalar() or 0
+    total_hits = (await db.execute(select(func.sum(Chunk.hit_count)))).scalar() or 0
+
+    top = (await db.execute(
+        select(Chunk.content, Chunk.hit_count, Chunk.knowledge_base_id)
+        .where(Chunk.hit_count > 0)
+        .order_by(desc(Chunk.hit_count))
+        .limit(5)
+    )).all()
+
+    return {
+        "kb_count": kb_count,
+        "doc_count": doc_count,
+        "chunk_count": chunk_count,
+        "total_hits": total_hits,
+        "top_chunks": [{"content": r.content[:80], "hits": r.hit_count} for r in top],
+    }
+

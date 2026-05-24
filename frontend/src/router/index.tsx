@@ -3,6 +3,8 @@ import AppLayout from '../components/Layout/AppLayout'
 import KnowledgeList from '../pages/KnowledgeList'
 import KnowledgeDetail from '../pages/KnowledgeDetail'
 import ChatAgent from '../pages/ChatAgent'
+import Stats from '../pages/Stats'
+import ShareChat from '../pages/ShareChat'
 
 const router = createBrowserRouter([
   {
@@ -13,8 +15,10 @@ const router = createBrowserRouter([
       { path: 'knowledge-bases', element: <KnowledgeList /> },
       { path: 'knowledge-bases/:kbId', element: <KnowledgeDetail /> },
       { path: 'knowledge-bases/:kbId/chat', element: <ChatAgent /> },
+      { path: 'stats', element: <Stats /> },
     ],
   },
+  { path: '/share/:token', element: <ShareChat /> },
 ])
 
 export default router

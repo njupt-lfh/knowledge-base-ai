@@ -12,7 +12,7 @@ export const chatApi = {
     request.get<Message[]>(`/api/conversations/${convId}/messages`),
 
   sendMessage: async function* (convId: string, message: string) {
-    const response = await fetch(`http://localhost:8000/api/conversations/${convId}/chat`, {
+    const response = await fetch(`http://localhost:8080/api/conversations/${convId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, knowledge_base_id: '' }),

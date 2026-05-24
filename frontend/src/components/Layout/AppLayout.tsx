@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, Typography } from 'antd'
-import { BookOutlined, DatabaseOutlined } from '@ant-design/icons'
+import { BookOutlined, DatabaseOutlined, BarChartOutlined } from '@ant-design/icons'
 
 const { Sider, Content, Header } = Layout
 
 const menuItems = [
   { key: '/knowledge-bases', icon: <DatabaseOutlined />, label: '知识库管理' },
+  { key: '/stats', icon: <BarChartOutlined />, label: '统计面板' },
 ]
 
 export default function AppLayout() {

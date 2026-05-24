@@ -116,6 +116,22 @@ class ChunkService:
                         count += 1
                         if count >= top_k:
                             break
+
+            # 热度统计：递增命中次数
+            if items:
+                try:
+                    hit_ids = [it.chunk_id for it in items]
+                    await self.db.execute(
+                        select(Chunk).where(Chunk.id.in_(hit_ids))
+                    )
+                    for chunk_id in hit_ids:
+                        chunk = await self.db.get(Chunk, chunk_id)
+                        if chunk:
+                            chunk.hit_count = (chunk.hit_count or 0) + 1
+                    await self.db.commit()
+                except Exception:
+                    pass
+
             return items
         except Exception:
             return []
