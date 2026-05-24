@@ -51,12 +51,35 @@ app.include_router(tag.router)
 # 否则 PUT /{doc_id}/status 会抢先匹配 /batch/status
 @app.put("/api/knowledge-bases/{kb_id}/documents/batch/status")
 async def batch_toggle_status(kb_id: str, body: BatchStatusBody, db: AsyncSession = Depends(get_db)):
+    from .core.chroma_client import get_collection
+    from .models.chunk import Chunk
     from .models.document import Document
+    from .services.embedding_service import EmbeddingService
 
     for doc_id in body.doc_ids:
         doc = await db.get(Document, doc_id)
         if doc:
             doc.is_active = body.is_active
+            # 同步 Chroma
+            try:
+                result = await db.execute(select(Chunk).where(Chunk.document_id == doc_id))
+                chunks = result.scalars().all()
+                if chunks:
+                    collection = get_collection(kb_id)
+                    embed_svc = EmbeddingService()
+                    for chunk in chunks:
+                        chunk.is_active = body.is_active
+                        if body.is_active:
+                            embedding = embed_svc.embed_query(chunk.content)
+                            collection.upsert(
+                                ids=[chunk.id], embeddings=[embedding],
+                                documents=[chunk.content],
+                                metadatas=[{"document_id": doc_id, "chunk_index": chunk.chunk_index}],
+                            )
+                        else:
+                            collection.delete(ids=[chunk.id])
+            except Exception:
+                pass
     await db.commit()
     return {"ok": True, "count": len(body.doc_ids)}
 

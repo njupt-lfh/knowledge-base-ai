@@ -31,23 +31,23 @@ class RAGService:
     async def retrieve(
         self, knowledge_base_id: str, query: str, top_k: int = 5, db: AsyncSession = None
     ) -> List[Dict]:
-        """检索相关知识块（过滤已禁用的块）"""
+        """混合检索：向量相似度 + 关键词匹配（过滤已禁用的块）"""
+        result_map: dict[str, dict] = {}
+        active_map: dict[str, bool] = {}
+
+        # —— 向量检索 ——
         query_embedding = self.embedding_service.embed_query(query)
         try:
             collection = get_collection(knowledge_base_id)
             results = collection.query(
                 query_embeddings=[query_embedding],
-                n_results=top_k * 3,
+                n_results=top_k * 2,
             )
         except Exception:
-            return []
+            results = None
 
-        sources = []
-        if results.get("ids") and len(results["ids"][0]) > 0:
+        if results and results.get("ids") and len(results["ids"][0]) > 0:
             chunk_ids = results["ids"][0]
-
-            # 过滤已禁用的块
-            active_map = {}
             if db:
                 db_result = await db.execute(
                     select(Chunk.id, Chunk.is_active).where(Chunk.id.in_(chunk_ids))
@@ -55,35 +55,53 @@ class RAGService:
                 for row in db_result:
                     active_map[row.id] = row.is_active
 
-            count = 0
             for i, chunk_id in enumerate(chunk_ids):
                 if not active_map.get(chunk_id, True):
                     continue
                 distance = results["distances"][0][i] if results.get("distances") else 0
-                score = 1 - distance
-                if score > 0.3:
-                    sources.append({
+                score = 0.7 * (1 - distance)
+                if score > 0.2:
+                    result_map[chunk_id] = {
                         "chunk_id": chunk_id,
                         "content": results["documents"][0][i],
                         "score": round(score, 4),
                         "chunk_index": results["metadatas"][0][i].get("chunk_index", 0),
                         "document_id": results["metadatas"][0][i].get("document_id", ""),
-                    })
-                    count += 1
-                    if count >= top_k:
-                        break
+                    }
 
-            # 热度统计：递增命中次数
-            if sources and db:
-                try:
-                    hit_ids = [s["chunk_id"] for s in sources]
-                    for chunk_id in hit_ids:
-                        chunk = await db.get(Chunk, chunk_id)
-                        if chunk:
-                            chunk.hit_count = (chunk.hit_count or 0) + 1
-                    await db.commit()
-                except Exception:
-                    pass
+        # —— 关键词检索 ——
+        if db and query:
+            keywords = [w.strip() for w in query.replace(",", " ").replace(".", " ").split() if len(w.strip()) > 1]
+            if keywords:
+                from sqlalchemy import or_
+                kw_conditions = [Chunk.content.contains(kw) for kw in keywords[:5]]
+                kw_result = await db.execute(
+                    select(Chunk)
+                    .where(Chunk.knowledge_base_id == knowledge_base_id, Chunk.is_active.is_(True), or_(*kw_conditions))
+                    .limit(top_k)
+                )
+                for chunk in kw_result.scalars().all():
+                    if chunk.id not in result_map:
+                        result_map[chunk.id] = {
+                            "chunk_id": chunk.id,
+                            "content": chunk.content,
+                            "score": 0.5,
+                            "chunk_index": chunk.chunk_index,
+                            "document_id": chunk.document_id,
+                        }
+
+        sources = sorted(result_map.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+
+        # 热度统计
+        if sources and db:
+            try:
+                for s in sources:
+                    chunk = await db.get(Chunk, s["chunk_id"])
+                    if chunk:
+                        chunk.hit_count = (chunk.hit_count or 0) + 1
+                await db.commit()
+            except Exception:
+                pass
 
         return sources
 

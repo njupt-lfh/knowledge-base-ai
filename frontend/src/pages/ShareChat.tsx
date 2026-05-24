@@ -52,7 +52,7 @@ export default function ShareChat() {
       })
       .then((r) => r?.json())
       .then((msgs: Message[]) => {
-        if (msgs) setMessages(msgs.map((m) => ({ role: m.role, content: m.content })))
+        if (msgs) setMessages(msgs.map((m) => ({ role: m.role, content: m.content, sources: m.sources as { chunk_id: string; content: string; score: number }[] | undefined })))
       })
       .catch(() => setError('加载失败'))
   }, [token])

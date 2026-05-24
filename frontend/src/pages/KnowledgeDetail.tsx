@@ -273,7 +273,6 @@ export default function KnowledgeDetail() {
               <Table
                 rowKey="id"
                 columns={columns}
-                dataSource={docs}
                 loading={loading}
                 rowSelection={{
                   selectedRowKeys,

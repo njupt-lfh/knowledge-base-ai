@@ -4,7 +4,7 @@ import { Card, Input, Button, Space, Typography, Tag, message, Modal } from 'ant
 import { SendOutlined, ArrowLeftOutlined, ShareAltOutlined, BulbOutlined } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
 import request from '../api/request'
-import type { Conversation } from '../types'
+import type { Conversation, Message } from '../types'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
