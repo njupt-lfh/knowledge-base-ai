@@ -1,0 +1,127 @@
+.stat-card {
+  padding: var(--space-lg);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.stat-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.stat-card__icon {
+  font-size: 18px;
+  color: var(--accent-primary);
+}
+
+.stat-card__delta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-success);
+}
+
+.chart-panel {
+  padding: var(--space-lg);
+  height: 100%;
+}
+
+.chart-panel__title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-md);
+  letter-spacing: 0.04em;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.charts-grid--full {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kb-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.kb-selector__tag {
+  padding: 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.kb-selector__tag:hover,
+.kb-selector__tag--active {
+  color: var(--accent-primary);
+  border-color: var(--border-active);
+  background: var(--accent-primary-dim);
+}
+
+.top3-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+.top3-card {
+  padding: var(--space-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.top3-card__rank {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--accent-hot);
+  margin-bottom: var(--space-sm);
+}
+
+.top3-card__content {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.top3-card__hits {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-hot);
+  margin-top: var(--space-sm);
+}

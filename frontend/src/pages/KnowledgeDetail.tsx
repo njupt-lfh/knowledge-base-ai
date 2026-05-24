@@ -1,17 +1,23 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import {
-  Card, Table, Button, Space, Upload, message, Tabs, Input, Switch,
+  Button, Table, Space, Upload, message, Tabs, Input, Switch,
   Popconfirm, Drawer, List, Tag, Typography, Modal, Select,
 } from 'antd'
 import {
   PlusOutlined, DeleteOutlined, SearchOutlined,
-  InboxOutlined, EyeOutlined, TagsOutlined,
+  InboxOutlined, EyeOutlined, TagsOutlined, MessageOutlined,
 } from '@ant-design/icons'
 import { knowledgeApi } from '../api/knowledge'
 import { documentApi } from '../api/document'
 import request from '../api/request'
+import HudPanel from '../components/common/HudPanel'
+import ColdKnowledgeBadge from '../components/Charts/ColdKnowledgeBadge'
+import SearchRadarChart from '../components/Charts/SearchRadarChart'
+import { statsApi, type ColdKnowledgeStats } from '../api/stats'
 import type { KnowledgeBase, Document, Chunk, SearchResultItem } from '../types'
+import './KnowledgeDetail.css'
 
 const { Dragger } = Upload
 
@@ -40,6 +46,8 @@ export default function KnowledgeDetail() {
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [editingChunk, setEditingChunk] = useState<Chunk | null>(null)
   const [editChunkContent, setEditChunkContent] = useState('')
+  const [uploadFlash, setUploadFlash] = useState(false)
+  const [coldStats, setColdStats] = useState<ColdKnowledgeStats | null>(null)
 
   const fetchKb = useCallback(async () => {
     if (!kbId) return
@@ -68,8 +76,15 @@ export default function KnowledgeDetail() {
     setLoading(false)
   }, [kbId])
 
+  const fetchColdStats = useCallback(async () => {
+    if (!kbId) return
+    try {
+      setColdStats((await statsApi.coldKnowledge(kbId)).data)
+    } catch { /* optional */ }
+  }, [kbId])
+
   /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => { fetchKb(); fetchDocs(); fetchTags() }, [fetchKb, fetchDocs, fetchTags])
+  useEffect(() => { fetchKb(); fetchDocs(); fetchTags(); fetchColdStats() }, [fetchKb, fetchDocs, fetchTags, fetchColdStats])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -81,8 +96,15 @@ export default function KnowledgeDetail() {
 
   const handleUpload = async (file: File) => {
     if (!kbId) return
-    try { await documentApi.upload(kbId, file); message.success('上传成功'); fetchDocs() }
-    catch { message.error('上传失败') }
+    try {
+      await documentApi.upload(kbId, file)
+      message.success('上传成功')
+      setUploadFlash(true)
+      setTimeout(() => setUploadFlash(false), 600)
+      fetchDocs()
+    } catch {
+      message.error('上传失败')
+    }
   }
 
   const handleManualCreate = async () => {
@@ -197,9 +219,10 @@ export default function KnowledgeDetail() {
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 100,
       render: (s: string) => {
-        const colors: Record<string, string> = { processing: '#faad14', completed: '#52c41a', error: '#ff4d4f' }
-        const labels: Record<string, string> = { processing: '处理中', completed: '已完成', error: '失败' }
-        return <span style={{ color: colors[s] || '#999' }}>{labels[s] || s}</span>
+        if (s === 'processing') return <span className="status-processing">处理中</span>
+        if (s === 'completed') return <span className="status-completed">已完成</span>
+        if (s === 'error') return <span className="status-error">失败</span>
+        return <span className="status-completed">{s}</span>
       },
     },
     { title: '分块数', dataIndex: 'chunk_count', key: 'chunk_count', width: 80 },
@@ -224,16 +247,23 @@ export default function KnowledgeDetail() {
   ]
 
   return (
-    <Card
-      title={kb?.name || '知识库详情'}
-      extra={
-        <Space>
-          <Button onClick={() => navigate(`/knowledge-bases/${kbId}/chat`)}>AI 对话</Button>
+    <>
+      <div className="kb-detail__header">
+        <div>
+          <h2 className="page-title">{kb?.name || '知识库详情'}</h2>
+          <p className="page-subtitle">{kb?.description || '文档管理与检索测试'}</p>
+        </div>
+        <Space wrap align="center">
+          {coldStats && <ColdKnowledgeBadge data={coldStats} compact />}
+          <Button type="primary" icon={<MessageOutlined />} onClick={() => navigate(`/knowledge-bases/${kbId}/chat`)}>
+            AI 对话
+          </Button>
           <Button onClick={() => navigate('/knowledge-bases')}>返回列表</Button>
         </Space>
-      }
-    >
-      <Tabs defaultActiveKey="documents" items={[
+      </div>
+
+      <HudPanel className="kb-detail__panel">
+      <Tabs defaultActiveKey="documents" className="kb-detail__tabs" items={[
         {
           key: 'documents',
           label: '文档管理',
@@ -243,6 +273,7 @@ export default function KnowledgeDetail() {
                 <Dragger
                   accept=".pdf,.md,.txt"
                   showUploadList={false}
+                  className={`upload-dragger${uploadFlash ? ' upload-dragger--flash' : ''}`}
                   beforeUpload={(file) => { handleUpload(file); return false }}
                   style={{ width: 300, padding: 12 }}
                 >
@@ -274,6 +305,7 @@ export default function KnowledgeDetail() {
                 rowKey="id"
                 columns={columns}
                 loading={loading}
+                rowClassName={(record) => (record.status === 'processing' ? 'doc-row-processing' : '')}
                 rowSelection={{
                   selectedRowKeys,
                   onChange: (keys) => setSelectedRowKeys(keys),
@@ -341,25 +373,46 @@ export default function KnowledgeDetail() {
           key: 'search',
           label: '检索测试',
           children: (
-            <Card size="small">
-              <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                <Input.Search placeholder="输入查询文本..." enterButton={<><SearchOutlined /> 检索</>} onSearch={handleSearch} loading={searching} size="large" />
-                {searchResults.length > 0 && (
-                  <List dataSource={searchResults} renderItem={(item) => (
-                    <List.Item>
-                      <List.Item.Meta
-                        title={<Space><Tag color="green">相似度: {item.score}</Tag><Tag>块 #{item.chunk_index}</Tag></Space>}
-                        description={<Typography.Paragraph ellipsis={{ rows: 3, expandable: true, symbol: '展开' }} style={{ whiteSpace: 'pre-wrap' }}>{item.content}</Typography.Paragraph>}
-                      />
-                    </List.Item>
-                  )} />
-                )}
-                {searchResults.length === 0 && searchQuery && !searching && <Typography.Text type="secondary">未找到匹配的知识内容</Typography.Text>}
-              </Space>
-            </Card>
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Input.Search placeholder="输入查询文本..." enterButton={<><SearchOutlined /> 检索</>} onSearch={handleSearch} loading={searching} size="large" />
+              {searchResults.length > 0 && (
+                <SearchRadarChart
+                  scores={searchResults.map((r) => Number(r.score))}
+                  query={searchQuery}
+                />
+              )}
+              {searchResults.length > 0 && (
+                <div>
+                  {searchResults.map((item, i) => (
+                    <motion.div
+                      key={item.chunk_id}
+                      className="search-result-item animate-fade-in-up"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.08, duration: 0.35 }}
+                    >
+                      <Space style={{ marginBottom: 8 }}>
+                        <Tag color="cyan" className="search-result-score">相似度: {item.score}</Tag>
+                        <Tag>块 #{item.chunk_index}</Tag>
+                      </Space>
+                      <Typography.Paragraph
+                        ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
+                        style={{ whiteSpace: 'pre-wrap', margin: 0, color: 'var(--text-secondary)' }}
+                      >
+                        {item.content}
+                      </Typography.Paragraph>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+              {searchResults.length === 0 && searchQuery && !searching && (
+                <Typography.Text type="secondary">未找到匹配的知识内容</Typography.Text>
+              )}
+            </Space>
           ),
         },
       ]} />
-    </Card>
+      </HudPanel>
+    </>
   )
 }

@@ -12,7 +12,8 @@ export const chatApi = {
     request.get<Message[]>(`/api/conversations/${convId}/messages`),
 
   sendMessage: async function* (convId: string, message: string) {
-    const response = await fetch(`http://localhost:8080/api/conversations/${convId}/chat`, {
+    const base = import.meta.env.VITE_API_BASE || 'http://localhost:8082'
+    const response = await fetch(`${base}/api/conversations/${convId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, knowledge_base_id: '' }),

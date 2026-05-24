@@ -1,10 +1,16 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Input, Button, Space, Typography, Tag, message } from 'antd'
-import { SendOutlined, RobotOutlined } from '@ant-design/icons'
+import { message } from 'antd'
+import { DatabaseOutlined } from '@ant-design/icons'
+import GridBackground from '../components/common/GridBackground'
+import HudPanel from '../components/common/HudPanel'
+import ThemeToggle from '../components/common/ThemeToggle'
+import ChatWindow from '../components/Chat/ChatWindow'
+import type { ChatMessageData } from '../components/Chat/MessageBubble'
 import type { Conversation, Message, SourceItem } from '../types'
+import '../components/Chat/Chat.css'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082'
 
 async function* streamChat(convId: string, msg: string) {
   const r = await fetch(`${API_BASE}/api/conversations/${convId}/chat`, {
@@ -33,13 +39,11 @@ async function* streamChat(convId: string, msg: string) {
 export default function ShareChat() {
   const { token } = useParams<{ token: string }>()
   const [conv, setConv] = useState<Conversation | null>(null)
-  const [messages, setMessages] = useState<
-    { role: string; content: string; sources?: SourceItem[] }[]
-  >([])
+  const [messages, setMessages] = useState<ChatMessageData[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
+  const assistantIdxRef = useRef(-1)
 
   useEffect(() => {
     if (!token) return
@@ -52,110 +56,98 @@ export default function ShareChat() {
       })
       .then((r) => r?.json())
       .then((msgs: Message[]) => {
-        if (msgs) setMessages(msgs.map((m) => ({ role: m.role, content: m.content, sources: m.sources ?? undefined })))
+        if (msgs) {
+          setMessages(msgs.map((m) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            sources: m.sources ?? undefined,
+          })))
+        }
       })
       .catch(() => setError('加载失败'))
   }, [token])
 
-  const scrollToBottom = () => {
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-  }
-
   const handleSend = async () => {
     if (sending || !input.trim() || !conv) return
-    setMessages((prev) => [...prev, { role: 'user', content: input }])
-    const q = input
+    const userMsg: ChatMessageData = { role: 'user', content: input }
+    const query = input
     setInput('')
     setSending(true)
 
-    const assistantIdx = messages.length + 1
-    setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
-    scrollToBottom()
+    setMessages((prev) => {
+      assistantIdxRef.current = prev.length + 1
+      return [...prev, userMsg, { role: 'assistant', content: '', isStreaming: true }]
+    })
 
     try {
-      for await (const evt of streamChat(conv.id, q)) {
+      for await (const evt of streamChat(conv.id, query)) {
         if (evt.type === 'text') {
           setMessages((prev) => prev.map((m, i) =>
-            i === assistantIdx ? { ...m, content: m.content + evt.content } : m,
+            i === assistantIdxRef.current
+              ? { ...m, content: m.content + evt.content }
+              : m,
           ))
-          scrollToBottom()
         } else if (evt.type === 'sources') {
           setMessages((prev) => prev.map((m, i) =>
-            i === assistantIdx ? { ...m, sources: evt.sources } : m,
+            i === assistantIdxRef.current
+              ? { ...m, sources: evt.sources as SourceItem[] }
+              : m,
+          ))
+        } else if (evt.type === 'done') {
+          setMessages((prev) => prev.map((m, i) =>
+            i === assistantIdxRef.current
+              ? { ...m, isStreaming: false }
+              : m,
           ))
         }
       }
-    } catch { message.error('发送失败') }
+    } catch {
+      message.error('发送失败')
+    }
     setSending(false)
   }
 
-  if (error) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Card>
-          <Typography.Text type="danger">{error}</Typography.Text>
-        </Card>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: 24 }}>
-      <Card
-        title={
-          <Space>
-            <RobotOutlined />
-            AI 专家对话
-            <Typography.Text type="secondary">（分享）</Typography.Text>
-          </Space>
-        }
-      >
-        <div style={{
-          height: 500, overflowY: 'auto', border: '1px solid #f0f0f0',
-          borderRadius: 8, padding: 16, marginBottom: 16, background: '#fafafa',
-        }}>
-          {messages.map((msg, idx) => (
-            <div key={idx} style={{ marginBottom: 16 }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              }}>
-                <div style={{
-                  maxWidth: '80%', padding: '8px 16px', borderRadius: 12,
-                  background: msg.role === 'user' ? '#1677ff' : '#fff',
-                  color: msg.role === 'user' ? '#fff' : '#000',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                }}>
-                  <Typography.Text style={{ color: msg.role === 'user' ? '#fff' : '#000', whiteSpace: 'pre-wrap' }}>
-                    {msg.content}
-                  </Typography.Text>
-                </div>
-              </div>
-              {msg.sources && msg.sources.length > 0 && (
-                <div style={{ marginTop: 8, marginLeft: 8 }}>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>引用来源：</Typography.Text>
-                  {msg.sources.map((s, si) => (
-                    <Tag key={si} color="blue" style={{ marginTop: 4 }}>[{s.score.toFixed(2)}] {s.content.slice(0, 60)}...</Tag>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
+  const content = error ? (
+    <div className="share-page__error">
+      <HudPanel style={{ padding: 32 }}>
+        <span style={{ color: 'var(--accent-danger)', fontFamily: 'var(--font-mono)' }}>{error}</span>
+      </HudPanel>
+    </div>
+  ) : (
+    <div className="share-page">
+      <GridBackground />
+      <header className="share-page__topbar">
+        <div className="share-page__brand">
+          <DatabaseOutlined style={{ color: 'var(--accent-primary)' }} />
+          KNOWLEDGE BASE AI
         </div>
-        <Space.Compact style={{ width: '100%' }}>
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onPressEnter={handleSend}
-            placeholder="输入问题..."
-            disabled={sending}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <ThemeToggle />
+          <span className="share-page__badge">分享模式</span>
+        </div>
+      </header>
+      <main className="share-page__content">
+        <HudPanel className="chat-page__panel">
+          <div className="kb-detail__header">
+            <div>
+              <h2 className="page-title">AI 专家对话</h2>
+              <p className="page-subtitle">{conv?.title || '分享会话'}</p>
+            </div>
+          </div>
+          <ChatWindow
+            messages={messages}
+            input={input}
+            sending={sending}
+            disabled={!conv}
+            placeholder="输入问题继续对话..."
+            emptyHint="加载对话中..."
+            onInputChange={setInput}
+            onSend={handleSend}
           />
-          <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending} disabled={sending}>
-            发送
-          </Button>
-        </Space.Compact>
-      </Card>
+        </HudPanel>
+      </main>
     </div>
   )
+
+  return content
 }

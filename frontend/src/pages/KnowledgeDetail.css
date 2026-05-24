@@ -1,0 +1,105 @@
+.kb-detail__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.kb-detail__panel {
+  padding: var(--space-lg);
+}
+
+.kb-detail__tabs .ant-tabs-nav::before {
+  border-color: var(--border-subtle) !important;
+}
+
+.kb-detail__tabs .ant-tabs-tab {
+  color: var(--text-secondary) !important;
+  font-family: var(--font-body);
+}
+
+.kb-detail__tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--accent-primary) !important;
+}
+
+.kb-detail__tabs .ant-tabs-ink-bar {
+  background: var(--accent-primary) !important;
+}
+
+.upload-dragger .ant-upload-drag {
+  background: var(--bg-void) !important;
+  border: 1px dashed var(--border-subtle) !important;
+  border-radius: var(--radius-md) !important;
+  transition: all var(--transition-normal);
+}
+
+.upload-dragger .ant-upload-drag:hover,
+.upload-dragger .ant-upload-drag-hover {
+  border-color: var(--accent-primary) !important;
+  animation: glowPulse 1.5s ease-in-out infinite;
+}
+
+.upload-dragger--flash .ant-upload-drag {
+  animation: uploadFlash 0.6s ease;
+}
+
+.status-processing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  padding: 2px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-warning);
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.status-processing::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from 0deg, transparent, var(--accent-warning), transparent, var(--accent-primary), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin-border 2s linear infinite;
+}
+
+.status-completed {
+  color: var(--accent-success);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.status-error {
+  color: var(--accent-danger);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.search-result-item {
+  padding: var(--space-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  margin-bottom: var(--space-sm);
+}
+
+.search-result-item:hover {
+  border-color: var(--border-active);
+}
+
+.search-result-score {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.doc-row-processing td {
+  background: rgba(245, 158, 11, 0.04) !important;
+}

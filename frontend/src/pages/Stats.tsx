@@ -1,137 +1,143 @@
-import { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Table, Typography, Tag, Space } from 'antd'
-import { FireOutlined, FileTextOutlined, DatabaseOutlined, EyeOutlined } from '@ant-design/icons'
-import request from '../api/request'
-
-interface HotItem {
-  chunk_id: string
-  content: string
-  hit_count: number
-  chunk_index: number
-  document_id: string
-}
-
-interface KBStats {
-  document_count: number
-  chunk_count: number
-  total_hits: number
-  hot_items: HotItem[]
-}
+import { Spin } from 'antd'
+import {
+  DatabaseOutlined,
+  FileTextOutlined,
+  BlockOutlined,
+  EyeOutlined,
+} from '@ant-design/icons'
+import { useStats } from '../hooks/useStats'
+import StatCard from '../components/Charts/StatCard'
+import TrendLineChart from '../components/Charts/TrendLineChart'
+import DistributionPie from '../components/Charts/DistributionPie'
+import HotBarChart from '../components/Charts/HotBarChart'
+import Top3Cards from '../components/Charts/Top3Cards'
+import HitHistogram from '../components/Charts/HitHistogram'
+import CiteHitChart from '../components/Charts/CiteHitChart'
+import RagSankeyChart from '../components/Charts/RagSankeyChart'
+import ActivityHeatmap from '../components/Charts/ActivityHeatmap'
+import ColdKnowledgeBadge from '../components/Charts/ColdKnowledgeBadge'
+import '../components/Charts/StatCard.css'
 
 export default function Stats() {
-  const [kbs, setKbs] = useState<{ id: string; name: string }[]>([])
-  const [selectedKb, setSelectedKb] = useState<string | null>(null)
-  const [stats, setStats] = useState<KBStats | null>(null)
-  const [overview, setOverview] = useState<Record<string, number>>({})
-
-  useEffect(() => {
-    request.get('/api/knowledge-bases').then((r) => setKbs(r.data.items || []))
-    request.get('/api/stats/overview').then((r) => setOverview(r.data))
-  }, [])
-
-  const loadStats = async (kbId: string) => {
-    setSelectedKb(kbId)
-    const r = await request.get(`/api/knowledge-bases/${kbId}/stats`)
-    setStats(r.data)
-  }
-
-  // Progress bar using div
-  const maxHits = stats?.hot_items[0]?.hit_count || 1
+  const {
+    overview,
+    trend,
+    activity,
+    kbs,
+    selectedKb,
+    kbStats,
+    kbAdvanced,
+    loading,
+    loadKbStats,
+    clearKbSelection,
+  } = useStats()
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="large">
-      <Card title="全局概览">
-        <Row gutter={24}>
-          <Col span={6}>
-            <Statistic title="知识库" value={overview.kb_count || 0} prefix={<DatabaseOutlined />} />
-          </Col>
-          <Col span={6}>
-            <Statistic title="文档总数" value={overview.doc_count || 0} prefix={<FileTextOutlined />} />
-          </Col>
-          <Col span={6}>
-            <Statistic title="知识块" value={overview.chunk_count || 0} prefix={<DatabaseOutlined />} />
-          </Col>
-          <Col span={6}>
-            <Statistic title="总命中次数" value={overview.total_hits || 0} prefix={<EyeOutlined />} />
-          </Col>
-        </Row>
-      </Card>
+    <Spin spinning={loading}>
+      <>
+        <div className="kb-list-header">
+          <div>
+            <h2 className="page-title">数据驾驶舱</h2>
+            <p className="page-subtitle">全局知识库运营数据实时监控 · 真实数据驱动</p>
+          </div>
+        </div>
 
-      <Card
-        title={
-          <Space>
-            <FireOutlined style={{ color: '#ff4d4f' }} />
-            知识热度排行
-            <Typography.Text type="secondary">（点击知识库查看详情）</Typography.Text>
-          </Space>
-        }
-      >
-        <Space wrap style={{ marginBottom: 16 }}>
-          {kbs.map((kb) => (
-            <Tag
-              key={kb.id}
-              color={selectedKb === kb.id ? 'blue' : 'default'}
-              style={{ cursor: 'pointer', padding: '4px 12px' }}
-              onClick={() => loadStats(kb.id)}
-            >
-              {kb.name}
-            </Tag>
-          ))}
-        </Space>
+        <ColdKnowledgeBadge data={overview?.cold_knowledge} />
 
-        {stats && stats.hot_items.length > 0 && (
-          <Table
-            rowKey="chunk_id"
-            dataSource={stats.hot_items}
-            pagination={false}
-            size="small"
-            columns={[
-              { title: '排名', key: 'rank', width: 60, render: (_, __, i) => `#${i + 1}` },
-              {
-                title: '热度', dataIndex: 'hit_count', key: 'hits', width: 220,
-                render: (v: number) => (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                      height: 16,
-                      width: `${Math.max(10, (v / maxHits) * 160)}px`,
-                      background: `linear-gradient(90deg, #ff4d4f, #ff7a45)`,
-                      borderRadius: 8,
-                      transition: 'width 0.5s',
-                    }} />
-                    <Typography.Text strong>{v} 次</Typography.Text>
-                  </div>
-                ),
-              },
-              {
-                title: '内容预览', dataIndex: 'content', key: 'content',
-                render: (v: string) => (
-                  <Typography.Paragraph ellipsis={{ rows: 1 }} style={{ margin: 0 }}>
-                    {v}
-                  </Typography.Paragraph>
-                ),
-              },
-            ]}
-          />
-        )}
+        <div className="stats-grid">
+          <StatCard title="知识库" value={overview?.kb_count ?? 0} icon={<DatabaseOutlined />} delta="活跃资产" index={0} />
+          <StatCard title="文档总数" value={overview?.doc_count ?? 0} icon={<FileTextOutlined />} delta="已入库" index={1} />
+          <StatCard title="知识块" value={overview?.chunk_count ?? 0} icon={<BlockOutlined />} delta="向量化" index={2} />
+          <StatCard title="总命中" value={overview?.total_hits ?? 0} icon={<EyeOutlined />} delta="检索+对话" hot index={3} />
+        </div>
 
-        {stats && stats.hot_items.length === 0 && (
-          <Typography.Text type="secondary">暂无命中数据，请先使用检索或对话功能</Typography.Text>
-        )}
+        <div className="charts-grid">
+          <TrendLineChart points={trend} />
+          <DistributionPie data={overview?.kb_distribution ?? []} />
+        </div>
 
-        {stats && (
-          <Row gutter={16} style={{ marginTop: 16 }}>
-            <Col span={8}>
-              <Statistic title="文档数" value={stats.document_count} />
-            </Col>
-            <Col span={8}>
-              <Statistic title="知识块" value={stats.chunk_count} />
-            </Col>
-            <Col span={8}>
-              <Statistic title="总命中" value={stats.total_hits} />
-            </Col>
-          </Row>
-        )}
-      </Card>
-    </Space>
+        <div style={{ marginBottom: 'var(--space-lg)' }}>
+          <ActivityHeatmap points={activity} />
+        </div>
+
+        <div style={{ marginBottom: 'var(--space-lg)' }}>
+          <Top3Cards items={overview?.top_chunks ?? []} />
+        </div>
+
+        <HudSection
+          kbs={kbs}
+          selectedKb={selectedKb}
+          kbStats={kbStats}
+          kbAdvanced={kbAdvanced}
+          onSelectKb={loadKbStats}
+          onClearKb={clearKbSelection}
+        />
+      </>
+    </Spin>
+  )
+}
+
+function HudSection({
+  kbs,
+  selectedKb,
+  kbStats,
+  kbAdvanced,
+  onSelectKb,
+  onClearKb,
+}: {
+  kbs: { id: string; name: string }[]
+  selectedKb: string | null
+  kbStats: ReturnType<typeof useStats>['kbStats']
+  kbAdvanced: ReturnType<typeof useStats>['kbAdvanced']
+  onSelectKb: (id: string) => void
+  onClearKb: () => void
+}) {
+  return (
+    <div>
+      <h3 className="chart-panel__title" style={{ marginBottom: 16 }}>
+        按知识库深度分析
+      </h3>
+      <div className="kb-selector">
+        <button
+          type="button"
+          className={`kb-selector__tag ${!selectedKb ? 'kb-selector__tag--active' : ''}`}
+          onClick={onClearKb}
+        >
+          全局
+        </button>
+        {kbs.map((kb) => (
+          <button
+            key={kb.id}
+            type="button"
+            className={`kb-selector__tag ${selectedKb === kb.id ? 'kb-selector__tag--active' : ''}`}
+            onClick={() => onSelectKb(kb.id)}
+          >
+            {kb.name}
+          </button>
+        ))}
+      </div>
+
+      {selectedKb && kbAdvanced && (
+        <>
+          <ColdKnowledgeBadge data={kbAdvanced.cold} compact />
+          <div className="charts-grid" style={{ marginTop: 16 }}>
+            <HitHistogram buckets={kbAdvanced.distribution} />
+            <CiteHitChart items={kbAdvanced.citeVsHit} />
+          </div>
+          <div style={{ marginBottom: 'var(--space-lg)' }}>
+            <RagSankeyChart nodes={kbAdvanced.sankey.nodes} links={kbAdvanced.sankey.links} />
+          </div>
+        </>
+      )}
+
+      {selectedKb && kbStats && kbStats.hot_items.length > 0 && (
+        <HotBarChart items={kbStats.hot_items} />
+      )}
+      {selectedKb && kbStats && kbStats.hot_items.length === 0 && (
+        <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+          该知识库暂无命中数据
+        </p>
+      )}
+    </div>
   )
 }

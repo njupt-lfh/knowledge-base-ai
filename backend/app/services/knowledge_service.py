@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.chroma_client import delete_collection
+from ..models.chunk import Chunk
 from ..models.document import Document
 from ..models.knowledge_base import KnowledgeBase
 from ..schemas.knowledge import (
@@ -38,6 +39,9 @@ class KnowledgeService:
             doc_count = (await self.db.execute(
                 select(func.count(Document.id)).where(Document.knowledge_base_id == kb.id)
             )).scalar() or 0
+            total_hits = (await self.db.execute(
+                select(func.sum(Chunk.hit_count)).where(Chunk.knowledge_base_id == kb.id)
+            )).scalar() or 0
             resp = KnowledgeBaseResponse(
                 id=kb.id,
                 name=kb.name,
@@ -48,6 +52,7 @@ class KnowledgeService:
                 created_at=kb.created_at,
                 updated_at=kb.updated_at,
                 document_count=doc_count,
+                total_hits=int(total_hits),
             )
             items.append(resp)
 

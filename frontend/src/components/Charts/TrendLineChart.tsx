@@ -1,0 +1,64 @@
+import ReactECharts from 'echarts-for-react'
+import type { EChartsOption } from 'echarts'
+import type { TrendPoint } from '../../api/stats'
+import HudPanel from '../common/HudPanel'
+import './StatCard.css'
+
+interface TrendLineChartProps {
+  points: TrendPoint[]
+}
+
+export default function TrendLineChart({ points }: TrendLineChartProps) {
+  const option: EChartsOption = {
+    backgroundColor: 'transparent',
+    grid: { left: 8, right: 16, top: 24, bottom: 8, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: points.map((p) => p.date.slice(5)),
+      axisLine: { lineStyle: { color: 'rgba(0,212,255,0.2)' } },
+      axisLabel: { color: '#64748b', fontFamily: 'JetBrains Mono', fontSize: 11 },
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: 'rgba(0,212,255,0.08)' } },
+      axisLabel: { color: '#64748b', fontFamily: 'JetBrains Mono' },
+    },
+    series: [
+      {
+        type: 'line',
+        data: points.map((p) => p.hits),
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { color: '#00d4ff', width: 2 },
+        itemStyle: { color: '#00d4ff' },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(0,212,255,0.3)' },
+              { offset: 1, color: 'rgba(0,212,255,0)' },
+            ],
+          },
+        },
+      },
+    ],
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#111827',
+      borderColor: 'rgba(0,212,255,0.3)',
+      textStyle: { color: '#e2e8f0' },
+    },
+  }
+
+  return (
+    <HudPanel className="chart-panel">
+      <h3 className="chart-panel__title">RAG 引用趋势（7日 · 真实对话）</h3>
+      <ReactECharts option={option} style={{ height: 280 }} opts={{ renderer: 'canvas' }} />
+    </HudPanel>
+  )
+}

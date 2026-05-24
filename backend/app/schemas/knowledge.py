@@ -29,6 +29,7 @@ class KnowledgeBaseResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     document_count: int = 0
+    total_hits: int = 0
 
     model_config = {"from_attributes": True}
 

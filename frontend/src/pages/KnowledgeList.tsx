@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Button, Table, Space, Modal, Form, Input, InputNumber, message, Popconfirm } from 'antd'
-import { PlusOutlined, DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
+import { Input, Modal, Form, InputNumber, message, Spin } from 'antd'
+import { SearchOutlined } from '@ant-design/icons'
 import { knowledgeApi } from '../api/knowledge'
 import type { KnowledgeBase } from '../types'
+import KnowledgeCardGrid from '../components/KnowledgeCard/KnowledgeCardGrid'
 
 export default function KnowledgeList() {
   const navigate = useNavigate()
@@ -67,76 +68,51 @@ export default function KnowledgeList() {
     }
   }
 
-  const columns = [
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-    { title: '文档数', dataIndex: 'document_count', key: 'document_count', width: 100 },
-    { title: '分块大小', dataIndex: 'chunk_size', key: 'chunk_size', width: 100 },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (v: string) => new Date(v).toLocaleString('zh-CN'),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 200,
-      render: (_: unknown, record: KnowledgeBase) => (
-        <Space>
-          <Button size="small" onClick={() => navigate(`/knowledge-bases/${record.id}`)}>
-            查看
-          </Button>
-          <Button size="small" onClick={() => navigate(`/knowledge-bases/${record.id}/chat`)}>
-            对话
-          </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setEditingKb(record)
-              form.setFieldsValue(record)
-              setModalOpen(true)
-            }}
-          />
-          <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ]
+  const openCreate = () => {
+    setEditingKb(null)
+    form.resetFields()
+    setModalOpen(true)
+  }
+
+  const openEdit = (kb: KnowledgeBase) => {
+    setEditingKb(kb)
+    form.setFieldsValue(kb)
+    setModalOpen(true)
+  }
 
   return (
-    <Card
-      title="知识库列表"
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-          setEditingKb(null)
-          form.resetFields()
-          setModalOpen(true)
-        }}>
-          新建知识库
-        </Button>
-      }
-    >
-      <Space style={{ marginBottom: 16 }}>
+    <Spin spinning={loading && data.length > 0}>
+      <div className="kb-list-header">
+        <div>
+          <h2 className="page-title">知识库管理</h2>
+          <p className="page-subtitle">管理您的智能知识库资产</p>
+        </div>
         <Input.Search
+          className="kb-list-search"
           placeholder="搜索知识库..."
           allowClear
           onSearch={(v) => setSearchText(v)}
-          style={{ width: 300 }}
-          prefix={<SearchOutlined />}
+          prefix={<SearchOutlined style={{ color: 'var(--text-muted)' }} />}
         />
-      </Space>
-      <Table rowKey="id" columns={columns} dataSource={data} loading={loading} />
+      </div>
+
+      <KnowledgeCardGrid
+        data={data}
+        loading={loading}
+        onCreate={openCreate}
+        onView={(id) => navigate(`/knowledge-bases/${id}`)}
+        onChat={(id) => navigate(`/knowledge-bases/${id}/chat`)}
+        onEdit={openEdit}
+        onDelete={handleDelete}
+      />
 
       <Modal
         title={editingKb ? '编辑知识库' : '新建知识库'}
         open={modalOpen}
         onCancel={() => { setModalOpen(false); setEditingKb(null); form.resetFields() }}
         onOk={() => form.submit()}
+        okText="确认"
+        cancelText="取消"
       >
         <Form form={form} layout="vertical" onFinish={editingKb ? handleEdit : handleCreate}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
@@ -153,6 +129,6 @@ export default function KnowledgeList() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </Spin>
   )
 }

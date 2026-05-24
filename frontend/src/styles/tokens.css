@@ -1,0 +1,93 @@
+:root {
+  --bg-void: #0a0e17;
+  --bg-panel: #111827;
+  --bg-panel-hover: #1a2332;
+  --bg-elevated: #1e293b;
+
+  --accent-primary: #00d4ff;
+  --accent-primary-dim: rgba(0, 212, 255, 0.15);
+  --accent-hot: #ff6b35;
+  --accent-hot-dim: rgba(255, 107, 53, 0.15);
+  --accent-success: #10b981;
+  --accent-warning: #f59e0b;
+  --accent-danger: #ef4444;
+
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-accent: var(--accent-primary);
+
+  --border-subtle: rgba(0, 212, 255, 0.12);
+  --border-active: rgba(0, 212, 255, 0.4);
+  --border-hot: rgba(255, 107, 53, 0.4);
+
+  --glow-primary: 0 0 20px rgba(0, 212, 255, 0.3);
+  --glow-hot: 0 0 20px rgba(255, 107, 53, 0.3);
+
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease;
+
+  --topbar-height: 56px;
+  --sidenav-width: 220px;
+  --sidenav-collapsed: 64px;
+
+  --text-on-accent: #0a0e17;
+  --grid-line: rgba(0, 212, 255, 0.04);
+  --grid-vignette: var(--bg-void);
+
+  --chat-assistant-bg: rgba(17, 24, 39, 0.85);
+  --chat-assistant-inset: rgba(0, 212, 255, 0.08);
+  --chat-user-bg-start: rgba(0, 212, 255, 0.25);
+  --chat-user-bg-end: rgba(0, 212, 255, 0.12);
+  --chat-history-hover: rgba(0, 212, 255, 0.06);
+  --chat-history-active: rgba(0, 212, 255, 0.1);
+}
+
+[data-theme='light'] {
+  --bg-void: #f0f4f8;
+  --bg-panel: #ffffff;
+  --bg-panel-hover: #f8fafc;
+  --bg-elevated: #f1f5f9;
+
+  --accent-primary: #0891b2;
+  --accent-primary-dim: rgba(8, 145, 178, 0.12);
+  --accent-hot: #ea580c;
+  --accent-hot-dim: rgba(234, 88, 12, 0.1);
+
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+
+  --border-subtle: rgba(8, 145, 178, 0.15);
+  --border-active: rgba(8, 145, 178, 0.45);
+  --border-hot: rgba(234, 88, 12, 0.35);
+
+  --glow-primary: 0 0 16px rgba(8, 145, 178, 0.15);
+  --glow-hot: 0 0 16px rgba(234, 88, 12, 0.15);
+
+  --text-on-accent: #ffffff;
+  --grid-line: rgba(8, 145, 178, 0.08);
+  --grid-vignette: #f0f4f8;
+
+  --chat-assistant-bg: #ffffff;
+  --chat-assistant-inset: rgba(8, 145, 178, 0.06);
+  --chat-user-bg-start: rgba(8, 145, 178, 0.16);
+  --chat-user-bg-end: rgba(8, 145, 178, 0.06);
+  --chat-history-hover: rgba(8, 145, 178, 0.08);
+  --chat-history-active: rgba(8, 145, 178, 0.14);
+}

@@ -8,6 +8,7 @@ export interface KnowledgeBase {
   created_at: string
   updated_at: string
   document_count: number
+  total_hits?: number
 }
 
 export interface Document {

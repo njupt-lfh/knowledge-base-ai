@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .api import chat, chunk, document, knowledge, tag
+from .api import chat, chunk, document, knowledge, stats_advanced, tag
 from .core.config import settings
 from .core.database import get_db, init_db
 
@@ -36,7 +36,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,6 +51,7 @@ app.include_router(knowledge.router)
 app.include_router(chunk.router)
 app.include_router(chat.router)
 app.include_router(tag.router)
+app.include_router(stats_advanced.router)
 
 # 批量操作端点必须在 document.router 之前注册
 # 否则 PUT /{doc_id}/status 会抢先匹配 /batch/status
@@ -211,11 +217,41 @@ async def stats_overview(db: AsyncSession = Depends(get_db)):
         .limit(5)
     )).all()
 
+    kb_rows = (await db.execute(
+        select(
+            KnowledgeBase.name,
+            func.count(Document.id.distinct()).label("doc_count"),
+            func.count(Chunk.id.distinct()).label("chunk_count"),
+        )
+        .outerjoin(Document, Document.knowledge_base_id == KnowledgeBase.id)
+        .outerjoin(Chunk, Chunk.knowledge_base_id == KnowledgeBase.id)
+        .group_by(KnowledgeBase.id, KnowledgeBase.name)
+        .order_by(desc(func.count(Document.id.distinct())))
+        .limit(8)
+    )).all()
+
+    from .services import stats_service
+
+    cold = await stats_service.cold_knowledge_count(db)
+
     return {
         "kb_count": kb_count,
         "doc_count": doc_count,
         "chunk_count": chunk_count,
         "total_hits": total_hits,
         "top_chunks": [{"content": r.content[:80], "hits": r.hit_count} for r in top],
+        "kb_distribution": [
+            {"name": r.name, "doc_count": r.doc_count or 0, "chunk_count": r.chunk_count or 0}
+            for r in kb_rows
+        ],
+        "cold_knowledge": cold,
     }
+
+
+@app.get("/api/stats/trend")
+async def stats_trend(days: int = 7, kb_id: str | None = None, db: AsyncSession = Depends(get_db)):
+    from .services import stats_service
+
+    points = await stats_service.hit_trend(db, kb_id, days)
+    return {"points": points}
 
