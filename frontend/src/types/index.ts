@@ -53,11 +53,19 @@ export interface Conversation {
   created_at: string
 }
 
+export interface SourceItem {
+  chunk_id: string
+  content: string
+  score: number
+  chunk_index?: number
+  document_id?: string
+}
+
 export interface Message {
   id: string
   conversation_id: string
   role: 'user' | 'assistant'
   content: string
-  sources: Record<string, unknown> | null
+  sources: SourceItem[] | null
   created_at: string
 }

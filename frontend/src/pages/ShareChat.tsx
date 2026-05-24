@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { Card, Input, Button, Space, Typography, Tag, message } from 'antd'
 import { SendOutlined, RobotOutlined } from '@ant-design/icons'
-import type { Conversation, Message } from '../types'
+import type { Conversation, Message, SourceItem } from '../types'
 
 const API_BASE = 'http://localhost:8080'
 
@@ -34,7 +34,7 @@ export default function ShareChat() {
   const { token } = useParams<{ token: string }>()
   const [conv, setConv] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<
-    { role: string; content: string; sources?: { chunk_id: string; content: string; score: number }[] }[]
+    { role: string; content: string; sources?: SourceItem[] }[]
   >([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -52,7 +52,7 @@ export default function ShareChat() {
       })
       .then((r) => r?.json())
       .then((msgs: Message[]) => {
-        if (msgs) setMessages(msgs.map((m) => ({ role: m.role, content: m.content, sources: m.sources as { chunk_id: string; content: string; score: number }[] | undefined })))
+        if (msgs) setMessages(msgs.map((m) => ({ role: m.role, content: m.content, sources: m.sources ?? undefined })))
       })
       .catch(() => setError('加载失败'))
   }, [token])

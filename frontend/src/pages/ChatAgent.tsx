@@ -4,12 +4,12 @@ import { Card, Input, Button, Space, Typography, Tag, message, Modal } from 'ant
 import { SendOutlined, ArrowLeftOutlined, ShareAltOutlined, BulbOutlined } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
 import request from '../api/request'
-import type { Conversation, Message } from '../types'
+import type { Conversation, Message, SourceItem } from '../types'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
-  sources?: { chunk_id: string; content: string; score: number }[]
+  sources?: SourceItem[]
   isStreaming?: boolean
 }
 
@@ -42,7 +42,7 @@ export default function ChatAgent() {
     setShowHistory(false)
     try {
       const msgs = (await chatApi.getMessages(conv.id)).data
-      setMessages(msgs.map((m: Message) => ({ role: m.role, content: m.content, sources: m.sources as ChatMessage['sources'] })))
+      setMessages(msgs.map((m: Message) => ({ role: m.role, content: m.content, sources: m.sources ?? undefined })))
     } catch { message.error('加载消息失败') }
   }
 
