@@ -9,6 +9,7 @@ import {
   HistoryOutlined,
 } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
+import { gapApi } from '../api/gap'
 import request from '../api/request'
 import HudPanel from '../components/common/HudPanel'
 import ChatWindow from '../components/Chat/ChatWindow'
@@ -157,7 +158,15 @@ export default function ChatAgent() {
   }
 
   const [extractModal, setExtractModal] = useState(false)
-  const [extractData, setExtractData] = useState<{ title: string; content: string; kb_id: string } | null>(null)
+  const [extractData, setExtractData] = useState<{
+    title: string
+    content: string | null
+    kb_id: string
+    gap_id?: string
+    gap_type?: string
+    manual_required?: boolean
+    source_ref?: string
+  } | null>(null)
   const [extracting, setExtracting] = useState(false)
 
   const handleExtract = async () => {
@@ -181,17 +190,19 @@ export default function ChatAgent() {
   }
 
   const confirmExtract = async () => {
-    if (!extractData || !conversation) return
+    if (!extractData?.gap_id || !extractData.kb_id) return
     try {
-      await request.post(`/api/knowledge-bases/${extractData.kb_id}/documents/manual`, {
-        title: extractData.title,
-        content: extractData.content,
-      })
-      message.success('知识已录入知识库！')
+      if (extractData.manual_required) {
+        message.warning('该缺口需到「补全任务」中人工填写内容后入库')
+        navigate(`/knowledge-bases/${extractData.kb_id}/gaps`)
+        return
+      }
+      await gapApi.ingest(extractData.kb_id, extractData.gap_id)
+      message.success('知识已通过门禁入库！')
       setExtractModal(false)
       setExtractData(null)
     } catch {
-      message.error('录入失败')
+      message.error('入库失败')
     }
   }
 
@@ -290,6 +301,12 @@ export default function ChatAgent() {
         {extractData && (
           <Space direction="vertical" style={{ width: '100%' }}>
             <Typography.Text strong>标题：{extractData.title}</Typography.Text>
+            {extractData.source_ref && (
+              <Typography.Text type="secondary">来源引用：{extractData.source_ref}</Typography.Text>
+            )}
+            {extractData.manual_required ? (
+              <Typography.Text type="warning">知识缺失类缺口，请到补全任务人工添加</Typography.Text>
+            ) : (
             <Typography.Paragraph
               ellipsis={{ rows: 6, expandable: true }}
               style={{
@@ -302,6 +319,7 @@ export default function ChatAgent() {
             >
               {extractData.content}
             </Typography.Paragraph>
+            )}
           </Space>
         )}
       </Modal>

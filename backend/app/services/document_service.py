@@ -14,6 +14,7 @@ from ..core.database import async_session
 from ..models.chunk import Chunk
 from ..models.document import Document
 from ..schemas.document import DocumentResponse, ManualDocumentCreate
+from .ingestion_gate_service import IngestStats, ingest_text_chunks
 
 
 class DocumentService:
@@ -77,6 +78,59 @@ class DocumentService:
 
         background_tasks.add_task(_process_manual, doc_id, kb_id, data.title, data.content)
         return DocumentResponse.model_validate(doc)
+
+    async def ingest_manual_immediate(
+        self, kb_id: str, title: str, content: str
+    ) -> tuple[DocumentResponse, IngestStats]:
+        """同步入库（Gap 批准 / 对话提炼确认），经门禁后写入。"""
+        from .chunking_service import TextChunker
+
+        doc_id = str(uuid.uuid4())
+        doc = Document(
+            id=doc_id,
+            knowledge_base_id=kb_id,
+            filename=title,
+            file_type="manual",
+            status="processing",
+        )
+        self.db.add(doc)
+        await self.db.flush()
+
+        from ..models.knowledge_base import KnowledgeBase
+
+        kb_result = await self.db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
+        kb = kb_result.scalar_one_or_none()
+        chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
+        chunk_overlap = kb.chunk_overlap if kb else settings.DEFAULT_CHUNK_OVERLAP
+
+        chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        chunks = chunker.split(content) or [content]
+
+        chunk_records, gate_stats = await ingest_text_chunks(self.db, kb_id, doc_id, chunks)
+        if chunk_records:
+            from .embedding_service import EmbeddingService
+
+            embed_svc = EmbeddingService()
+            embeddings = embed_svc.embed_documents([c.content for c in chunk_records])
+            self.db.add_all(chunk_records)
+            collection = get_collection(kb_id)
+            collection.add(
+                ids=[c.id for c in chunk_records],
+                embeddings=embeddings,
+                documents=[c.content for c in chunk_records],
+                metadatas=[
+                    {"document_id": doc_id, "chunk_index": c.chunk_index} for c in chunk_records
+                ],
+            )
+
+        doc.status = "completed"
+        doc.chunk_count = len(chunk_records)
+        doc.char_count = sum(len(c.content) for c in chunk_records)
+        doc.ingest_duplicate_count = gate_stats.duplicates
+        doc.ingest_conflict_count = gate_stats.conflicts
+        await self.db.commit()
+        await self.db.refresh(doc)
+        return DocumentResponse.model_validate(doc), gate_stats
 
     async def get_by_id(self, doc_id: str) -> DocumentResponse | None:
         doc = await self.db.get(Document, doc_id)
@@ -166,41 +220,35 @@ async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: 
             if not chunks:
                 raise ValueError("未能从文件中提取有效文本")
 
-            # 4. 向量化
-            embed_svc = EmbeddingService()
-            embeddings = embed_svc.embed_documents(chunks)
+            from .ingestion_gate_service import ingest_text_chunks
 
-            # 5. 写入 Chunk 表
-            chunk_records = []
-            for i, content in enumerate(chunks):
-                chunk_records.append(Chunk(
-                    id=str(uuid.uuid4()),
-                    document_id=doc_id,
-                    knowledge_base_id=kb_id,
-                    content=content,
-                    chunk_index=i,
-                    char_count=len(content),
-                ))
-            db.add_all(chunk_records)
+            chunk_records, gate_stats = await ingest_text_chunks(db, kb_id, doc_id, chunks)
 
-            # 6. 写入 Chroma 向量库
-            try:
-                collection = get_collection(kb_id)
-                collection.add(
-                    ids=[c.id for c in chunk_records],
-                    embeddings=embeddings,
-                    documents=[c.content for c in chunk_records],
-                    metadatas=[{"document_id": doc_id, "chunk_index": i} for i in range(len(chunk_records))],
-                )
-            except Exception as e:
-                raise RuntimeError(f"Chroma 写入失败: {e}")
+            if chunk_records:
+                embed_svc = EmbeddingService()
+                embeddings = embed_svc.embed_documents([c.content for c in chunk_records])
+                db.add_all(chunk_records)
+                try:
+                    collection = get_collection(kb_id)
+                    collection.add(
+                        ids=[c.id for c in chunk_records],
+                        embeddings=embeddings,
+                        documents=[c.content for c in chunk_records],
+                        metadatas=[
+                            {"document_id": doc_id, "chunk_index": c.chunk_index}
+                            for c in chunk_records
+                        ],
+                    )
+                except Exception as e:
+                    raise RuntimeError(f"Chroma 写入失败: {e}")
 
-            # 7. 更新文档状态
             doc = await db.get(Document, doc_id)
             if doc:
                 doc.status = "completed"
-                doc.chunk_count = len(chunks)
-                doc.char_count = sum(len(c) for c in chunks)
+                doc.chunk_count = len(chunk_records)
+                doc.char_count = sum(len(c.content) for c in chunk_records)
+                doc.ingest_duplicate_count = gate_stats.duplicates
+                doc.ingest_conflict_count = gate_stats.conflicts
 
             await db.commit()
 
@@ -232,41 +280,35 @@ async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
             if not chunks:
                 chunks = [content]
 
-            # 3. 向量化
-            embed_svc = EmbeddingService()
-            embeddings = embed_svc.embed_documents(chunks)
+            from .ingestion_gate_service import ingest_text_chunks
 
-            # 4. 写入 Chunk 表
-            chunk_records = []
-            for i, text in enumerate(chunks):
-                chunk_records.append(Chunk(
-                    id=str(uuid.uuid4()),
-                    document_id=doc_id,
-                    knowledge_base_id=kb_id,
-                    content=text,
-                    chunk_index=i,
-                    char_count=len(text),
-                ))
-            db.add_all(chunk_records)
+            chunk_records, gate_stats = await ingest_text_chunks(db, kb_id, doc_id, chunks)
 
-            # 5. 写入 Chroma
-            try:
-                collection = get_collection(kb_id)
-                collection.add(
-                    ids=[c.id for c in chunk_records],
-                    embeddings=embeddings,
-                    documents=[c.content for c in chunk_records],
-                    metadatas=[{"document_id": doc_id, "chunk_index": i} for i in range(len(chunk_records))],
-                )
-            except Exception as e:
-                raise RuntimeError(f"Chroma 写入失败: {e}")
+            if chunk_records:
+                embed_svc = EmbeddingService()
+                embeddings = embed_svc.embed_documents([c.content for c in chunk_records])
+                db.add_all(chunk_records)
+                try:
+                    collection = get_collection(kb_id)
+                    collection.add(
+                        ids=[c.id for c in chunk_records],
+                        embeddings=embeddings,
+                        documents=[c.content for c in chunk_records],
+                        metadatas=[
+                            {"document_id": doc_id, "chunk_index": c.chunk_index}
+                            for c in chunk_records
+                        ],
+                    )
+                except Exception as e:
+                    raise RuntimeError(f"Chroma 写入失败: {e}")
 
-            # 6. 更新文档状态
             doc = await db.get(Document, doc_id)
             if doc:
                 doc.status = "completed"
-                doc.chunk_count = len(chunks)
-                doc.char_count = sum(len(c) for c in chunks)
+                doc.chunk_count = len(chunk_records)
+                doc.char_count = sum(len(c.content) for c in chunk_records)
+                doc.ingest_duplicate_count = gate_stats.duplicates
+                doc.ingest_conflict_count = gate_stats.conflicts
 
             await db.commit()
 

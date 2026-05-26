@@ -21,6 +21,8 @@ export interface Document {
   status: string
   chunk_count: number
   char_count: number
+  ingest_duplicate_count?: number
+  ingest_conflict_count?: number
   is_active: boolean
   created_at: string
   updated_at: string

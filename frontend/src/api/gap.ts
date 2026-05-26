@@ -23,4 +23,10 @@ export const gapApi = {
 
   updateStatus: (kbId: string, gapId: string, status: string) =>
     request.patch<KnowledgeGap>(`/api/knowledge-bases/${kbId}/gaps/${gapId}/status`, { status }),
+
+  ingest: (kbId: string, gapId: string, body?: { manual_content?: string; manual_title?: string }) =>
+    request.post<{ gap_id: string; document_id: string; ingest_allowed: number }>(
+      `/api/knowledge-bases/${kbId}/gaps/${gapId}/ingest`,
+      body || {},
+    ),
 }

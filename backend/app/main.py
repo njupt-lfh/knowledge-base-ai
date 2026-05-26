@@ -8,7 +8,22 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .api import chat, chunk, document, eval as eval_api, feedback, gap, knowledge, stats_advanced, tag
+from .api import (
+    chat,
+    chunk,
+    conflict,
+    document,
+    eval as eval_api,
+    feedback,
+    gap,
+    governance,
+    ingestion,
+    kb_health,
+    knowledge,
+    quality,
+    stats_advanced,
+    tag,
+)
 from .core.config import settings
 from .core.database import get_db, init_db
 
@@ -49,6 +64,11 @@ app.add_middleware(
 
 app.include_router(eval_api.router)
 app.include_router(feedback.router)
+app.include_router(quality.router)
+app.include_router(governance.router)
+app.include_router(conflict.router)
+app.include_router(ingestion.router)
+app.include_router(kb_health.router)
 app.include_router(gap.router)
 app.include_router(knowledge.router)
 app.include_router(chunk.router)

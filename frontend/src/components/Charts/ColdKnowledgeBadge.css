@@ -84,3 +84,11 @@
   font-size: 14px;
   margin-top: 0;
 }
+
+.cold-badge--clickable {
+  cursor: pointer;
+}
+
+.cold-badge--clickable:hover {
+  filter: brightness(1.08);
+}

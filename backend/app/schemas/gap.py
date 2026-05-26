@@ -30,3 +30,8 @@ class GapCreateRequest(BaseModel):
     gap_type: str | None = None
     source_ref: str | None = None
     correction_text: str | None = None
+
+
+class GapIngestRequest(BaseModel):
+    manual_content: str | None = Field(None, description="KNOWLEDGE_ABSENT 必填；其他类型可覆盖建议内容")
+    manual_title: str | None = None

@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.chroma_client import get_collection
 from ..models.knowledge_gap import GAP_STATUSES, GAP_TYPES, KnowledgeGap
+from .conversation_extract_service import AUTO_INGEST_GAP_TYPES, ConversationExtractService
+from .document_service import DocumentService
 from .embedding_service import EmbeddingService
 
 # 弱命中：向量距离换算 score 高于此值，但未进入最终 context
@@ -107,6 +109,7 @@ class GapService:
         conversation_id: str | None = None,
         message_id: str | None = None,
         source_ref: str | None = None,
+        suggested_content: str | None = None,
         retrieval_result: list[dict] | None = None,
         confidence: float | None = None,
     ) -> KnowledgeGap:
@@ -131,6 +134,7 @@ class GapService:
             message_id=message_id,
             gap_type=gap_type,
             status=status,
+            suggested_content=suggested_content,
             source_ref=ref,
             confidence=confidence,
         )
@@ -138,6 +142,73 @@ class GapService:
         await self.db.commit()
         await self.db.refresh(gap)
         return gap
+
+    async def _find_open_gap(self, kb_id: str, query: str) -> KnowledgeGap | None:
+        existing = await self.db.execute(
+            select(KnowledgeGap).where(
+                KnowledgeGap.kb_id == kb_id,
+                KnowledgeGap.query == query,
+                KnowledgeGap.status.in_(("pending", "suggested", "manual_required")),
+            )
+        )
+        return existing.scalar_one_or_none()
+
+    async def process_after_chat(
+        self,
+        *,
+        kb_id: str,
+        query: str,
+        answer: str,
+        sources: list[dict],
+        conversation_id: str,
+        message_id: str,
+    ) -> KnowledgeGap | None:
+        """对话结束后：分类 → 结构化提炼（可入库类型）→ 入队。"""
+        if await self._find_open_gap(kb_id, query):
+            return None
+
+        gap_type = self.classify_gap(query, kb_id, sources, user_message=query)
+
+        if gap_type == "KNOWLEDGE_ABSENT":
+            if not self.should_enqueue(sources, answer):
+                return None
+            return await self.create_gap(
+                kb_id=kb_id,
+                query=query,
+                gap_type=gap_type,
+                conversation_id=conversation_id,
+                message_id=message_id,
+                retrieval_result=sources,
+            )
+
+        if gap_type in AUTO_INGEST_GAP_TYPES:
+            extracted = await ConversationExtractService().extract_from_turn(
+                query, answer, hint_gap_type=gap_type
+            )
+            if extracted:
+                return await self.create_gap(
+                    kb_id=kb_id,
+                    query=query,
+                    gap_type=extracted["gap_type"],
+                    conversation_id=conversation_id,
+                    message_id=message_id,
+                    source_ref=extracted["source_ref"],
+                    suggested_content=ConversationExtractService.pack_suggested(extracted),
+                    retrieval_result=sources,
+                    confidence=0.85,
+                )
+
+        if not self.should_enqueue(sources, answer):
+            return None
+
+        return await self.create_gap(
+            kb_id=kb_id,
+            query=query,
+            gap_type=gap_type,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            retrieval_result=sources,
+        )
 
     async def maybe_enqueue_from_chat(
         self,
@@ -149,28 +220,65 @@ class GapService:
         conversation_id: str,
         message_id: str,
     ) -> KnowledgeGap | None:
-        if not self.should_enqueue(sources, answer):
-            return None
-
-        gap_type = self.classify_gap(query, kb_id, sources, user_message=query)
-        existing = await self.db.execute(
-            select(KnowledgeGap).where(
-                KnowledgeGap.kb_id == kb_id,
-                KnowledgeGap.query == query,
-                KnowledgeGap.status.in_(("pending", "suggested", "manual_required")),
-            )
-        )
-        if existing.scalar_one_or_none():
-            return None
-
-        return await self.create_gap(
+        return await self.process_after_chat(
             kb_id=kb_id,
             query=query,
-            gap_type=gap_type,
+            answer=answer,
+            sources=sources,
             conversation_id=conversation_id,
             message_id=message_id,
-            retrieval_result=sources,
         )
+
+    async def ingest_gap(
+        self,
+        kb_id: str,
+        gap_id: str,
+        *,
+        manual_content: str | None = None,
+        manual_title: str | None = None,
+    ) -> dict:
+        gap = await self.db.get(KnowledgeGap, gap_id)
+        if not gap or gap.kb_id != kb_id:
+            raise ValueError("gap not found")
+
+        if gap.gap_type == "KNOWLEDGE_ABSENT":
+            content = (manual_content or "").strip()
+            if not content:
+                raise ValueError("KNOWLEDGE_ABSENT 需人工填写内容，禁止 LLM 自动生成")
+            title = manual_title or gap.query[:80]
+            source_ref = content[:300]
+        elif gap.gap_type in AUTO_INGEST_GAP_TYPES:
+            if not gap.source_ref:
+                raise ValueError("缺少 source_ref，拒绝入库")
+            suggested: dict = {}
+            if gap.suggested_content:
+                try:
+                    suggested = json.loads(gap.suggested_content)
+                except json.JSONDecodeError:
+                    suggested = {}
+            content = (manual_content or suggested.get("content") or "").strip()
+            if not content:
+                raise ValueError("无入库内容")
+            title = manual_title or suggested.get("title") or gap.query[:80]
+            source_ref = gap.source_ref
+        else:
+            raise ValueError(f"gap_type {gap.gap_type} 不支持自动入库")
+
+        doc_svc = DocumentService(self.db)
+        doc, stats = await doc_svc.ingest_manual_immediate(
+            kb_id, f"[Gap] {title}", content
+        )
+        gap.status = "approved"
+        gap.source_ref = source_ref
+        await self.db.commit()
+        await self.db.refresh(gap)
+        return {
+            "gap_id": gap.id,
+            "document_id": doc.id,
+            "ingest_allowed": stats.allowed,
+            "ingest_duplicates": stats.duplicates,
+            "ingest_conflicts": stats.conflicts,
+        }
 
     async def list_gaps(
         self,

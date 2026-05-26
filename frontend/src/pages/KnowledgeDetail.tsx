@@ -7,13 +7,17 @@ import {
 } from 'antd'
 import {
   PlusOutlined, DeleteOutlined, SearchOutlined,
-  InboxOutlined, EyeOutlined, TagsOutlined, MessageOutlined, UnorderedListOutlined,
+  InboxOutlined, EyeOutlined, TagsOutlined, MessageOutlined, UnorderedListOutlined, ToolOutlined,
 } from '@ant-design/icons'
+import GovernancePanel from '../components/Governance/GovernancePanel'
+import ConflictsPanel from '../components/Conflicts/ConflictsPanel'
+import { conflictsApi } from '../api/conflicts'
 import { knowledgeApi } from '../api/knowledge'
 import { documentApi } from '../api/document'
 import request from '../api/request'
 import HudPanel from '../components/common/HudPanel'
 import ColdKnowledgeBadge from '../components/Charts/ColdKnowledgeBadge'
+import KnowledgeHealthPanel from '../components/Health/KnowledgeHealthPanel'
 import SearchRadarChart from '../components/Charts/SearchRadarChart'
 import { statsApi, type ColdKnowledgeStats } from '../api/stats'
 import type { KnowledgeBase, Document, Chunk, SearchResultItem } from '../types'
@@ -48,6 +52,8 @@ export default function KnowledgeDetail() {
   const [editChunkContent, setEditChunkContent] = useState('')
   const [uploadFlash, setUploadFlash] = useState(false)
   const [coldStats, setColdStats] = useState<ColdKnowledgeStats | null>(null)
+  const [activeTab, setActiveTab] = useState('documents')
+  const [healthTick, setHealthTick] = useState(0)
 
   const fetchKb = useCallback(async () => {
     if (!kbId) return
@@ -110,6 +116,12 @@ export default function KnowledgeDetail() {
   const handleManualCreate = async () => {
     if (!kbId || !manualTitle || !manualContent) return
     try {
+      const pre = await conflictsApi.precheck(kbId, manualContent)
+      if (pre.data.status === 'duplicate') {
+        message.warning(pre.data.message || '内容与已有知识高度相似，仍将提交由门禁过滤')
+      } else if (pre.data.status === 'conflict') {
+        message.warning(pre.data.message || '可能与已有知识冲突，提交后进入裁决队列')
+      }
       await documentApi.createManual(kbId, { title: manualTitle, content: manualContent })
       message.success('录入成功'); setManualModal(false); setManualTitle(''); setManualContent(''); fetchDocs()
     } catch { message.error('录入失败') }
@@ -227,6 +239,22 @@ export default function KnowledgeDetail() {
     },
     { title: '分块数', dataIndex: 'chunk_count', key: 'chunk_count', width: 80 },
     {
+      title: '门禁',
+      key: 'ingest_gate',
+      width: 100,
+      render: (_: unknown, record: Document) => {
+        const dup = record.ingest_duplicate_count || 0
+        const conf = record.ingest_conflict_count || 0
+        if (!dup && !conf) return <Typography.Text type="secondary">—</Typography.Text>
+        return (
+          <Space size={4}>
+            {dup > 0 && <Tag color="gold">重复 {dup}</Tag>}
+            {conf > 0 && <Tag color="red">冲突 {conf}</Tag>}
+          </Space>
+        )
+      },
+    },
+    {
       title: '启用', dataIndex: 'is_active', key: 'is_active', width: 80,
       render: (v: boolean, record: Document) => (
         <Switch size="small" checked={v} onChange={() => handleToggleStatus(record)} />
@@ -254,7 +282,13 @@ export default function KnowledgeDetail() {
           <p className="page-subtitle">{kb?.description || '文档管理与检索测试'}</p>
         </div>
         <Space wrap align="center">
-          {coldStats && <ColdKnowledgeBadge data={coldStats} compact />}
+          {coldStats && (
+            <ColdKnowledgeBadge
+              data={coldStats}
+              compact
+              onClick={() => setActiveTab('governance')}
+            />
+          )}
           <Button type="primary" icon={<MessageOutlined />} onClick={() => navigate(`/knowledge-bases/${kbId}/chat`)}>
             AI 对话
           </Button>
@@ -266,7 +300,17 @@ export default function KnowledgeDetail() {
       </div>
 
       <HudPanel className="kb-detail__panel">
-      <Tabs defaultActiveKey="documents" className="kb-detail__tabs" items={[
+      {kbId && (
+        <KnowledgeHealthPanel
+          kbId={kbId}
+          refreshToken={healthTick}
+          onNavigate={(tab) => {
+            if (tab === 'gaps') navigate(`/knowledge-bases/${kbId}/gaps`)
+            else setActiveTab(tab)
+          }}
+        />
+      )}
+      <Tabs activeKey={activeTab} onChange={setActiveTab} className="kb-detail__tabs" items={[
         {
           key: 'documents',
           label: '文档管理',
@@ -371,6 +415,18 @@ export default function KnowledgeDetail() {
               </Drawer>
             </Space>
           ),
+        },
+        {
+          key: 'conflicts',
+          label: '入库冲突',
+          children: kbId ? <ConflictsPanel kbId={kbId} /> : null,
+        },
+        {
+          key: 'governance',
+          label: '治理建议',
+          children: kbId ? (
+            <GovernancePanel kbId={kbId} onApplied={() => { fetchColdStats(); setHealthTick((t) => t + 1) }} />
+          ) : null,
         },
         {
           key: 'search',

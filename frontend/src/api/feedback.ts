@@ -7,6 +7,7 @@ export const feedbackApi = {
       message_id: string
       feedback_type: 'like' | 'dislike' | 'correction'
       chunk_id?: string
+      chunk_ids?: string[]
       correction_text?: string
     },
   ) => request.post(`/api/knowledge-bases/${kbId}/feedback`, body),

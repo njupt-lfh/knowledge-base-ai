@@ -20,6 +20,8 @@ class DocumentResponse(BaseModel):
     status: str
     chunk_count: int
     char_count: int
+    ingest_duplicate_count: int = 0
+    ingest_conflict_count: int = 0
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -51,6 +51,20 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
+async def _apply_sqlite_migrations(conn) -> None:
+    """为已有表补充新增列（SQLite create_all 不会 ALTER）。"""
+    migrations = [
+        ("documents", "ingest_duplicate_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("documents", "ingest_conflict_count", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    for table, column, col_def in migrations:
+        result = await conn.execute(text(f"PRAGMA table_info({table})"))
+        cols = {row[1] for row in result}
+        if column not in cols:
+            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}"))
+            logger.info("migrate: added %s.%s", table, column)
+
+
 async def init_db() -> None:
     """创建所有缺失表，并校验 schema 与 ORM 一致。"""
     import_all_models()
@@ -59,6 +73,7 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _apply_sqlite_migrations(conn)
 
     missing = await verify_schema()
     if missing:

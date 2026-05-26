@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
-from ..schemas.gap import GapCreateRequest, GapResponse, GapStatusUpdate
+from ..schemas.gap import GapCreateRequest, GapIngestRequest, GapResponse, GapStatusUpdate
 from ..services.gap_service import GapService
 from ..services.rag_service import RAGService
 
@@ -48,6 +48,26 @@ async def create_gap(
         retrieval_result=sources,
     )
     return GapResponse.model_validate(gap)
+
+
+@router.post("/{gap_id}/ingest")
+async def ingest_gap(
+    kb_id: str,
+    gap_id: str,
+    body: GapIngestRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """批准入库：仅 USER_PROVIDED/USER_CORRECTION（需 source_ref）；KNOWLEDGE_ABSENT 仅人工正文。"""
+    svc = GapService(db)
+    try:
+        return await svc.ingest_gap(
+            kb_id,
+            gap_id,
+            manual_content=body.manual_content,
+            manual_title=body.manual_title,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.patch("/{gap_id}/status", response_model=GapResponse)

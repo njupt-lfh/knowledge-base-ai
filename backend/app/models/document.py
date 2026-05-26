@@ -36,6 +36,8 @@ class Document(Base):
     )  # processing / completed / error
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     char_count: Mapped[int] = mapped_column(Integer, default=0)
+    ingest_duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
+    ingest_conflict_count: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

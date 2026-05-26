@@ -32,10 +32,13 @@ export default function MessageBubble({ message, kbId, onFeedback }: MessageBubb
       return
     }
     try {
+      const chunkIds = (message.sources || [])
+        .map((s) => s.chunk_id)
+        .filter((id): id is string => Boolean(id))
       await feedbackApi.submit(kbId, {
         message_id: message.id,
         feedback_type: type,
-        chunk_id: message.sources?.[0]?.chunk_id,
+        chunk_ids: chunkIds.length > 0 ? chunkIds : undefined,
         correction_text: text,
       })
       onFeedback?.(message.id, type)

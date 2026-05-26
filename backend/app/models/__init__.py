@@ -1,6 +1,8 @@
 from .chunk import Chunk as Chunk  # noqa: F401
 from .chunk_feedback import ChunkFeedback as ChunkFeedback  # noqa: F401
+from .chunk_quality import ChunkQuality as ChunkQuality  # noqa: F401
 from .knowledge_gap import KnowledgeGap as KnowledgeGap  # noqa: F401
+from .knowledge_conflict import KnowledgeConflict as KnowledgeConflict  # noqa: F401
 from .conversation import Conversation as Conversation  # noqa: F401
 from .conversation import Message as Message
 from .document import Document as Document  # noqa: F401

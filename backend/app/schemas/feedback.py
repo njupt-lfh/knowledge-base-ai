@@ -7,6 +7,7 @@ class FeedbackCreate(BaseModel):
     message_id: str
     feedback_type: str = Field(..., pattern="^(like|dislike|correction)$")
     chunk_id: str | None = None
+    chunk_ids: list[str] | None = None
     correction_text: str | None = None
 
 

@@ -10,6 +10,7 @@ from ..core.chroma_client import get_collection
 from ..models.chunk import Chunk
 from .embedding_service import EmbeddingService
 from .llm_service import LLMService
+from .quality_service import QualityService, blend_retrieval_score
 
 
 class RAGService:
@@ -90,7 +91,17 @@ class RAGService:
                             "document_id": chunk.document_id,
                         }
 
-        sources = sorted(result_map.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+        sources = list(result_map.values())
+
+        if sources and db:
+            quality_svc = QualityService(db)
+            qmap = await quality_svc.get_scores_map([s["chunk_id"] for s in sources])
+            for s in sources:
+                q = qmap.get(s["chunk_id"], 0.5)
+                s["quality_score"] = q
+                s["score"] = blend_retrieval_score(s["score"], q)
+
+        sources = sorted(sources, key=lambda x: x["score"], reverse=True)[:top_k]
 
         # 热度统计
         if sources and db:

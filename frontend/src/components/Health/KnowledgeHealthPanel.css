@@ -1,0 +1,31 @@
+.kb-health-panel {
+  width: 100%;
+  margin-bottom: var(--space-md, 16px);
+  background: var(--panel-bg, rgba(0, 20, 40, 0.35));
+  border-color: var(--border-subtle, rgba(0, 180, 255, 0.2));
+}
+
+.kb-health-panel__row {
+  width: 100%;
+}
+
+.kb-health-panel__level {
+  font-weight: 600;
+}
+
+.kb-health-panel__metric {
+  font-size: 13px;
+}
+
+.kb-health-panel__link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent-cyan, #22d3ee);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.kb-health-panel__link:hover {
+  text-decoration: underline;
+}

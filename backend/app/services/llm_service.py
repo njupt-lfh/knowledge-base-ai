@@ -52,3 +52,33 @@ class LLMService:
                                 yield f"data: {json.dumps({'type': 'text', 'content': content})}\n\n"
                         except json.JSONDecodeError:
                             continue
+
+    async def chat_completion(
+        self,
+        messages: List[Dict],
+        *,
+        temperature: float = 0.3,
+        max_tokens: int = 512,
+    ) -> str:
+        """非流式补全，供入库冲突检测等场景使用。"""
+        if self.mock_mode:
+            return '{"conflict": false, "reason": "mock mode"}'
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model_name,
+                    "messages": messages,
+                    "stream": False,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""

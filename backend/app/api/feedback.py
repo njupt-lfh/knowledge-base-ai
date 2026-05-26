@@ -21,6 +21,7 @@ async def submit_feedback(
             message_id=body.message_id,
             feedback_type=body.feedback_type,
             chunk_id=body.chunk_id,
+            chunk_ids=body.chunk_ids,
             correction_text=body.correction_text,
         )
     except ValueError as e:

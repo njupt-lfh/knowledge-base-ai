@@ -5,16 +5,23 @@ import './ColdKnowledgeBadge.css'
 interface ColdKnowledgeBadgeProps {
   data: ColdKnowledgeStats | null | undefined
   compact?: boolean
+  onClick?: () => void
 }
 
-export default function ColdKnowledgeBadge({ data, compact = false }: ColdKnowledgeBadgeProps) {
+export default function ColdKnowledgeBadge({ data, compact = false, onClick }: ColdKnowledgeBadgeProps) {
   if (!data) return null
 
   const count = data.cold_count_90d
 
   if (compact) {
     return (
-      <span className={`cold-badge cold-badge--inline ${count > 0 ? 'cold-badge--warn' : 'cold-badge--ok'}`}>
+      <span
+        role={onClick ? 'button' : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onClick={onClick}
+        onKeyDown={onClick ? (e) => { if (e.key === 'Enter') onClick() } : undefined}
+        className={`cold-badge cold-badge--inline ${count > 0 ? 'cold-badge--warn' : 'cold-badge--ok'}${onClick ? ' cold-badge--clickable' : ''}`}
+      >
         <AlertOutlined className="cold-badge__icon" />
         <span className="cold-badge__text">
           <span className="cold-badge__count">{count}</span>

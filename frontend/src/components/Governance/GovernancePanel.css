@@ -1,0 +1,14 @@
+.governance-panel__toolbar {
+  width: 100%;
+}
+
+.governance-panel__stat {
+  background: var(--panel-bg, rgba(0, 20, 40, 0.4));
+  border-color: var(--border-subtle, rgba(0, 180, 255, 0.2));
+}
+
+.gov-preview {
+  font-size: 12px;
+  display: block;
+  max-width: 480px;
+}

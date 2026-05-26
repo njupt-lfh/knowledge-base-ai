@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import settings
 from ..models.conversation import Conversation, Message
 from ..schemas.chat import ConversationResponse, MessageResponse, ShareResponse
+from .conversation_extract_service import ConversationExtractService
 from .gap_service import GapService
 from .rag_service import RAGService
 
@@ -106,7 +107,7 @@ class ChatService:
         if kb_id and not settings.LLM_MOCK_MODE:
             try:
                 gap_svc = GapService(self.db)
-                await gap_svc.maybe_enqueue_from_chat(
+                await gap_svc.process_after_chat(
                     kb_id=kb_id,
                     query=message,
                     answer=full_answer,
@@ -127,6 +128,87 @@ class ChatService:
             share_token=conv.share_token,
             share_url=f"/share/{conv.share_token}",
         )
+
+    async def extract_knowledge(self, conv_id: str) -> dict:
+        """手动提炼最近一轮对话 → 结构化 Gap（含 source_ref）。"""
+        result = await self.db.execute(
+            select(Message)
+            .where(Message.conversation_id == conv_id)
+            .order_by(Message.created_at.desc())
+            .limit(2)
+        )
+        recent = list(result.scalars().all())
+        if len(recent) < 2:
+            return {"has_knowledge": False, "kb_id": None}
+
+        conv = await self.db.get(Conversation, conv_id)
+        if not conv:
+            return {"has_knowledge": False, "kb_id": None}
+
+        user_msg = recent[1] if recent[1].role == "user" else recent[0]
+        assistant_msg = recent[0] if recent[0].role == "assistant" else recent[1]
+
+        gap_svc = GapService(self.db)
+        gap_type = gap_svc.classify_gap(
+            user_msg.content,
+            conv.knowledge_base_id,
+            [],
+            user_message=user_msg.content,
+        )
+
+        if gap_type == "KNOWLEDGE_ABSENT":
+            gap = await gap_svc.create_gap(
+                kb_id=conv.knowledge_base_id,
+                query=user_msg.content,
+                gap_type="KNOWLEDGE_ABSENT",
+                conversation_id=conv_id,
+                source_ref=user_msg.content[:500],
+            )
+            return {
+                "has_knowledge": True,
+                "kb_id": conv.knowledge_base_id,
+                "gap_id": gap.id,
+                "gap_type": "KNOWLEDGE_ABSENT",
+                "manual_required": True,
+                "title": user_msg.content[:60],
+                "content": None,
+                "source_ref": user_msg.content[:200],
+                "tags": [],
+                "entities": [],
+            }
+
+        if gap_type not in ("USER_PROVIDED", "USER_CORRECTION"):
+            gap_type = "USER_PROVIDED"
+
+        extracted = await ConversationExtractService().extract_from_turn(
+            user_msg.content,
+            assistant_msg.content,
+            hint_gap_type=gap_type,
+        )
+        if not extracted:
+            return {"has_knowledge": False, "kb_id": conv.knowledge_base_id}
+
+        gap = await gap_svc.create_gap(
+            kb_id=conv.knowledge_base_id,
+            query=user_msg.content,
+            gap_type=extracted["gap_type"],
+            conversation_id=conv_id,
+            source_ref=extracted["source_ref"],
+            suggested_content=ConversationExtractService.pack_suggested(extracted),
+            confidence=0.9,
+        )
+        return {
+            "has_knowledge": True,
+            "kb_id": conv.knowledge_base_id,
+            "gap_id": gap.id,
+            "gap_type": extracted["gap_type"],
+            "manual_required": False,
+            "title": extracted.get("title"),
+            "content": extracted.get("content"),
+            "source_ref": extracted.get("source_ref"),
+            "tags": extracted.get("tags") or [],
+            "entities": extracted.get("entities") or [],
+        }
 
     async def get_by_share_token(self, share_token: str) -> ConversationResponse | None:
         result = await self.db.execute(

@@ -11,4 +11,6 @@ async def test_init_db_creates_all_orm_tables():
 
     expected = expected_table_names()
     assert "chunk_feedback" in expected
+    assert "chunk_quality" in expected
     assert "knowledge_gaps" in expected
+    assert "knowledge_conflicts" in expected
