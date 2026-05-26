@@ -1,10 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { DatabaseOutlined, DashboardOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, DashboardOutlined, ExperimentOutlined } from '@ant-design/icons'
 import './SideNav.css'
 
 const menuItems = [
   { key: '/knowledge-bases', icon: DatabaseOutlined, label: '知识库管理' },
   { key: '/stats', icon: DashboardOutlined, label: '数据驾驶舱' },
+  { key: '/eval', icon: ExperimentOutlined, label: '评测基线' },
 ]
 
 interface SideNavProps {

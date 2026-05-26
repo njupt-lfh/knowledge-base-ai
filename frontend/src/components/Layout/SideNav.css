@@ -1,5 +1,6 @@
 .sidenav {
   width: var(--sidenav-width);
+  height: 100%;
   background: var(--bg-void);
   border-right: 1px solid var(--border-subtle);
   padding: var(--space-md) 0;
@@ -7,6 +8,8 @@
   flex-shrink: 0;
   position: relative;
   z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidenav--collapsed {

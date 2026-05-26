@@ -8,11 +8,13 @@ interface ChatWindowProps {
   messages: ChatMessageData[]
   input: string
   sending: boolean
+  kbId?: string
   disabled?: boolean
   placeholder?: string
   emptyHint?: string
   onInputChange: (value: string) => void
   onSend: () => void
+  onFeedback?: (messageId: string, type: 'like' | 'dislike' | 'correction') => void
 }
 
 export default function ChatWindow({
@@ -22,8 +24,10 @@ export default function ChatWindow({
   disabled = false,
   placeholder = '输入您的问题...',
   emptyHint = '输入问题开始与知识库对话，或点击「新建对话」',
+  kbId,
   onInputChange,
   onSend,
+  onFeedback,
 }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -40,7 +44,14 @@ export default function ChatWindow({
             <span>{emptyHint}</span>
           </div>
         ) : (
-          messages.map((msg, idx) => <MessageBubble key={idx} message={msg} />)
+          messages.map((msg, idx) => (
+            <MessageBubble
+              key={msg.id || idx}
+              message={msg}
+              kbId={kbId}
+              onFeedback={onFeedback}
+            />
+          ))
         )}
         <div ref={messagesEndRef} />
       </div>

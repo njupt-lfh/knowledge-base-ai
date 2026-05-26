@@ -42,6 +42,7 @@ export default function ChatAgent() {
     try {
       const msgs = (await chatApi.getMessages(conv.id)).data
       setMessages(msgs.map((m: Message) => ({
+        id: m.id,
         role: m.role,
         content: m.content,
         sources: m.sources ?? undefined,
@@ -146,6 +147,13 @@ export default function ChatAgent() {
       message.error('发送失败')
     }
     setSending(false)
+    if (conv) await loadMessages(conv)
+  }
+
+  const handleFeedback = (messageId: string, type: 'like' | 'dislike' | 'correction') => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, feedback: type } : m)),
+    )
   }
 
   const [extractModal, setExtractModal] = useState(false)
@@ -265,8 +273,10 @@ export default function ChatAgent() {
         messages={messages}
         input={input}
         sending={sending}
+        kbId={kbId}
         onInputChange={setInput}
         onSend={handleSend}
+        onFeedback={handleFeedback}
       />
 
       <Modal

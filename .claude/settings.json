@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -X POST \"http://localhost:8082/api/knowledge-bases/e3752f00-b894-429e-a982-43142c5f0d8a/feedback\" -H \"Content-Type: application/json\" -d '{\"message_id\":\"test-verify-001\",\"chunk_id\":\"test-verify-001\",\"feedback_type\":\"like\"}')",
+      "Bash(curl -s http://localhost:8082/api/eval/baseline)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('keys:', list\\(d.keys\\(\\)\\)[:10]\\); print\\('has aggregate:', 'aggregate' in d\\)\")",
+      "Bash(curl -s http://localhost:8082/api/eval/baseline -o \"C:\\\\Users\\\\lai\\\\AppData\\\\Local\\\\Temp\\\\eval_baseline_test.json\")",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

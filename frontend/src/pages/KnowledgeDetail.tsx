@@ -7,7 +7,7 @@ import {
 } from 'antd'
 import {
   PlusOutlined, DeleteOutlined, SearchOutlined,
-  InboxOutlined, EyeOutlined, TagsOutlined, MessageOutlined,
+  InboxOutlined, EyeOutlined, TagsOutlined, MessageOutlined, UnorderedListOutlined,
 } from '@ant-design/icons'
 import { knowledgeApi } from '../api/knowledge'
 import { documentApi } from '../api/document'
@@ -69,7 +69,7 @@ export default function KnowledgeDetail() {
       setDocs(res.data.items)
       const ids = res.data.items.map((d: Document) => d.id).join(',')
       if (ids) {
-        const tr = await request.get(`/api/knowledge-bases/${kbId}/documents/batch/tags?doc_ids=${ids}`)
+        const tr = await request.get(`/api/knowledge-bases/${kbId}/documents/tag-map?doc_ids=${ids}`)
         setDocTags(tr.data)
       }
     } catch { message.error('获取文档列表失败') }
@@ -257,6 +257,9 @@ export default function KnowledgeDetail() {
           {coldStats && <ColdKnowledgeBadge data={coldStats} compact />}
           <Button type="primary" icon={<MessageOutlined />} onClick={() => navigate(`/knowledge-bases/${kbId}/chat`)}>
             AI 对话
+          </Button>
+          <Button icon={<UnorderedListOutlined />} onClick={() => navigate(`/knowledge-bases/${kbId}/gaps`)}>
+            补全任务
           </Button>
           <Button onClick={() => navigate('/knowledge-bases')}>返回列表</Button>
         </Space>

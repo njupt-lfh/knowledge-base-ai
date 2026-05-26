@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import settings
 from ..models.conversation import Conversation, Message
 from ..schemas.chat import ConversationResponse, MessageResponse, ShareResponse
+from .gap_service import GapService
 from .rag_service import RAGService
 
 
@@ -100,6 +101,21 @@ class ChatService:
         )
         self.db.add(assistant_msg)
         await self.db.commit()
+        await self.db.refresh(assistant_msg)
+
+        if kb_id and not settings.LLM_MOCK_MODE:
+            try:
+                gap_svc = GapService(self.db)
+                await gap_svc.maybe_enqueue_from_chat(
+                    kb_id=kb_id,
+                    query=message,
+                    answer=full_answer,
+                    sources=sources_data or [],
+                    conversation_id=conv_id,
+                    message_id=assistant_msg.id,
+                )
+            except Exception:
+                pass
 
     async def create_share(self, conv_id: str) -> ShareResponse:
         conv = await self.db.get(Conversation, conv_id)

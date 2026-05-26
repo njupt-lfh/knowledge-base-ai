@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .api import chat, chunk, document, knowledge, stats_advanced, tag
+from .api import chat, chunk, document, eval as eval_api, feedback, gap, knowledge, stats_advanced, tag
 from .core.config import settings
 from .core.database import get_db, init_db
 
@@ -47,6 +47,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(eval_api.router)
+app.include_router(feedback.router)
+app.include_router(gap.router)
 app.include_router(knowledge.router)
 app.include_router(chunk.router)
 app.include_router(chat.router)
@@ -90,6 +93,29 @@ async def batch_toggle_status(kb_id: str, body: BatchStatusBody, db: AsyncSessio
     return {"ok": True, "count": len(body.doc_ids)}
 
 
+# 批量文档标签（不可使用 /documents/batch/tags，会被 /documents/{doc_id}/tags 误匹配）
+@app.get("/api/knowledge-bases/{kb_id}/documents/tag-map")
+async def batch_get_document_tags(
+    kb_id: str,
+    doc_ids: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    from .models.tag import DocumentTag, Tag
+
+    ids = [i.strip() for i in doc_ids.split(",") if i.strip()]
+    if not ids:
+        return {}
+    result = await db.execute(
+        select(DocumentTag.document_id, Tag.name)
+        .join(Tag, Tag.id == DocumentTag.tag_id)
+        .where(DocumentTag.document_id.in_(ids))
+    )
+    tag_map: dict[str, list[str]] = {did: [] for did in ids}
+    for doc_id, tag_name in result:
+        tag_map[doc_id].append(tag_name)
+    return tag_map
+
+
 @app.delete("/api/knowledge-bases/{kb_id}/documents/batch")
 async def batch_delete_documents(kb_id: str, body: BatchDeleteBody, db: AsyncSession = Depends(get_db)):
     from .core.chroma_client import get_collection
@@ -119,27 +145,6 @@ async def batch_delete_documents(kb_id: str, body: BatchDeleteBody, db: AsyncSes
     await db.commit()
     return {"ok": True, "count": len(body.doc_ids)}
 
-
-@app.get("/api/knowledge-bases/{kb_id}/documents/batch/tags")
-async def batch_get_document_tags(
-    kb_id: str,
-    doc_ids: str = "",
-    db: AsyncSession = Depends(get_db),
-):
-    from .models.tag import DocumentTag, Tag
-
-    ids = [i.strip() for i in doc_ids.split(",") if i.strip()]
-    if not ids:
-        return {}
-    result = await db.execute(
-        select(DocumentTag.document_id, Tag.name)
-        .join(Tag, Tag.id == DocumentTag.tag_id)
-        .where(DocumentTag.document_id.in_(ids))
-    )
-    tag_map: dict[str, list[str]] = {did: [] for did in ids}
-    for doc_id, tag_name in result:
-        tag_map[doc_id].append(tag_name)
-    return tag_map
 
 app.include_router(document.router)
 
