@@ -62,6 +62,20 @@
   min-width: 0;
 }
 
+.agent-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+
+.agent-meta-strip__subs {
+  font-size: 12px;
+  flex-basis: 100%;
+}
+
 .message-bubble--assistant .message-bubble__role-label {
   color: var(--accent-primary);
   opacity: 0.7;

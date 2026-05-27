@@ -40,7 +40,7 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
   const fetchScan = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await governanceApi.scan(kbId)
+      const res = await governanceApi.scan(kbId, false)
       setData(res.data)
     } catch {
       message.error('获取治理建议失败')

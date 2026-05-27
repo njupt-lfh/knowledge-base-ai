@@ -3,16 +3,15 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.chroma_client import get_collection
 from ..models.chunk import Chunk
 from ..schemas.chunk import ChunkResponse, ChunkUpdate, SearchResultItem
-from .embedding_service import EmbeddingService
+from .hybrid_retriever import HybridRetriever
 
 
 class ChunkService:
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.embed_svc = EmbeddingService()
+        self.retriever = HybridRetriever()
 
     async def list_by_document(self, doc_id: str) -> list[ChunkResponse]:
         result = await self.db.execute(
@@ -35,6 +34,7 @@ class ChunkService:
             self._sync_chroma_active(chunk)
         await self.db.commit()
         await self.db.refresh(chunk)
+        await self._sync_fts(chunk)
         return ChunkResponse.model_validate(chunk)
 
     async def toggle_status(self, chunk_id: str, is_active: bool) -> ChunkResponse:
@@ -43,7 +43,29 @@ class ChunkService:
         self._sync_chroma_active(chunk)
         await self.db.commit()
         await self.db.refresh(chunk)
+        await self._sync_fts(chunk)
         return ChunkResponse.model_validate(chunk)
+
+    async def _sync_fts(self, chunk: Chunk) -> None:
+        from .fts_service import upsert_chunk_fts
+
+        await upsert_chunk_fts(
+            self.db, chunk.id, chunk.knowledge_base_id, chunk.content, active=chunk.is_active
+        )
+        await self.db.commit()
+        await self._sync_graph(chunk)
+
+    async def _sync_graph(self, chunk: Chunk) -> None:
+        from .graph_store_service import sync_chunk_graph
+
+        await sync_chunk_graph(
+            self.db,
+            chunk.knowledge_base_id,
+            chunk.id,
+            chunk.document_id,
+            chunk.content,
+            active=chunk.is_active,
+        )
 
     def _sync_chroma_active(self, chunk: Chunk):
         """同步 Chroma：启用时添加向量，禁用时删除"""
@@ -77,69 +99,24 @@ class ChunkService:
             pass
 
     async def search(self, kb_id: str, query: str, top_k: int = 5) -> list[SearchResultItem]:
-        """混合检索：向量相似度 + 关键词匹配（过滤已禁用的块）"""
+        """Hybrid 检索（与 RAG 路径一致：Vector + FTS5 + RRF + Rerank）。"""
         try:
-            # —— 1. 向量检索 ——
-            query_embedding = self.embed_svc.embed_query(query)
-            collection = get_collection(kb_id)
-            results = collection.query(
-                query_embeddings=[query_embedding],
-                n_results=top_k * 2,
-            )
-
-            result_map: dict[str, SearchResultItem] = {}
-            active_map: dict[str, bool] = {}
-
-            if results.get("ids") and len(results["ids"][0]) > 0:
-                chunk_ids = results["ids"][0]
-                db_result = await self.db.execute(
-                    select(Chunk.id, Chunk.is_active).where(Chunk.id.in_(chunk_ids))
+            hits = await self.retriever.search(self.db, kb_id, query, top_k=top_k)
+            items = [
+                SearchResultItem(
+                    chunk_id=h["chunk_id"],
+                    content=(h.get("content") or "")[:200],
+                    score=round(float(h.get("score") or 0), 4),
+                    document_id=h.get("document_id", ""),
+                    chunk_index=h.get("chunk_index", 0),
                 )
-                for row in db_result:
-                    active_map[row.id] = row.is_active
+                for h in hits
+            ]
 
-                for i, chunk_id in enumerate(chunk_ids):
-                    if not active_map.get(chunk_id, True):
-                        continue
-                    distance = results["distances"][0][i] if results.get("distances") else 0
-                    score = 0.7 * (1 - distance)  # 向量权重 0.7
-                    if score > 0.2:
-                        result_map[chunk_id] = SearchResultItem(
-                            chunk_id=chunk_id,
-                            content=results["documents"][0][i][:200],
-                            score=round(score, 4),
-                            document_id=results["metadatas"][0][i].get("document_id", ""),
-                            chunk_index=results["metadatas"][0][i].get("chunk_index", 0),
-                        )
-
-            # —— 2. 关键词检索 ——
-            keywords = [w.strip() for w in query.replace(",", " ").replace(".", " ").split() if len(w.strip()) > 1]
-            if keywords:
-                kw_conditions = [Chunk.content.contains(kw) for kw in keywords[:5]]
-                kw_result = await self.db.execute(
-                    select(Chunk)
-                    .where(Chunk.knowledge_base_id == kb_id, Chunk.is_active.is_(True), *kw_conditions)
-                    .limit(top_k)
-                )
-                for chunk in kw_result.scalars().all():
-                    if chunk.id not in result_map:
-                        result_map[chunk.id] = SearchResultItem(
-                            chunk_id=chunk.id,
-                            content=chunk.content[:200],
-                            score=round(0.5, 4),  # 关键词匹配固定 0.5
-                            document_id=chunk.document_id,
-                            chunk_index=chunk.chunk_index,
-                        )
-
-            # 按分数排序，取 top_k
-            items = sorted(result_map.values(), key=lambda x: x.score, reverse=True)[:top_k]
-
-            # 热度统计：递增命中次数
             if items:
                 try:
-                    hit_ids = [it.chunk_id for it in items]
-                    for chunk_id in hit_ids:
-                        chunk = await self.db.get(Chunk, chunk_id)
+                    for it in items:
+                        chunk = await self.db.get(Chunk, it.chunk_id)
                         if chunk:
                             chunk.hit_count = (chunk.hit_count or 0) + 1
                     await self.db.commit()

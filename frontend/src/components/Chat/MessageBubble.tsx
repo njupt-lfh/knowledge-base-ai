@@ -4,6 +4,7 @@ import { DislikeOutlined, EditOutlined, LikeOutlined } from '@ant-design/icons'
 import type { SourceItem } from '../../types'
 import { feedbackApi } from '../../api/feedback'
 import SourceTags from './SourceTags'
+import AgentMetaStrip, { type AgentMeta } from './AgentMetaStrip'
 import './Chat.css'
 
 export interface ChatMessageData {
@@ -13,6 +14,7 @@ export interface ChatMessageData {
   sources?: SourceItem[]
   isStreaming?: boolean
   feedback?: 'like' | 'dislike' | 'correction'
+  agentMeta?: AgentMeta
 }
 
 interface MessageBubbleProps {
@@ -59,6 +61,9 @@ export default function MessageBubble({ message, kbId, onFeedback }: MessageBubb
           {message.content}
           {message.isStreaming && <span className="message-bubble__cursor">▍</span>}
         </div>
+        {!isUser && message.agentMeta && (
+          <AgentMetaStrip meta={message.agentMeta} />
+        )}
         {!isUser && message.sources && message.sources.length > 0 && (
           <SourceTags sources={message.sources} />
         )}

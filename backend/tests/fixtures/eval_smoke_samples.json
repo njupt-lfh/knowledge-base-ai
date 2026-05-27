@@ -1,0 +1,44 @@
+[
+  {
+    "id": "smoke-001",
+    "kb_id": "kb-smoke",
+    "q_type": "fact",
+    "question": "什么是 RAG 检索增强生成？",
+    "ground_truth": "RAG 结合检索与生成",
+    "answer": "RAG 是 Retrieval Augmented Generation，通过检索知识库再生成回答。",
+    "contexts": [
+      "RAG（Retrieval Augmented Generation）检索增强生成，先从知识库检索相关文档，再交给大模型生成答案。"
+    ]
+  },
+  {
+    "id": "smoke-002",
+    "kb_id": "kb-smoke",
+    "q_type": "fact",
+    "question": "向量数据库的作用是什么？",
+    "ground_truth": "存储 embedding 做相似度检索",
+    "answer": "向量数据库用于存储文本 embedding，支持语义相似度检索。",
+    "contexts": [
+      "向量数据库如 Chroma 存储 chunk embedding，通过余弦相似度检索最相关的知识块。"
+    ]
+  },
+  {
+    "id": "smoke-003",
+    "kb_id": "kb-smoke",
+    "q_type": "negative",
+    "question": "火星上的人口有多少？",
+    "ground_truth": "",
+    "answer": "目前知识库中暂无相关信息。",
+    "contexts": []
+  },
+  {
+    "id": "smoke-004",
+    "kb_id": "kb-smoke",
+    "q_type": "fact",
+    "question": "Hybrid 检索包含哪些步骤？",
+    "ground_truth": "向量 + BM25 + RRF",
+    "answer": "Hybrid 检索包括向量检索、FTS5 BM25 关键词检索，以及 RRF 融合与 Rerank。",
+    "contexts": [
+      "Phase 2.1 HybridRetriever：Chroma 向量 + SQLite FTS5 BM25 → RRF(k=60) → Rerank → 质量分融合。"
+    ]
+  }
+]

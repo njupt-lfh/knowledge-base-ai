@@ -17,11 +17,13 @@ from .api import (
     feedback,
     gap,
     governance,
+    graph,
     ingestion,
     kb_health,
     knowledge,
     quality,
     stats_advanced,
+    sync,
     tag,
 )
 from .core.config import settings
@@ -40,7 +42,27 @@ class BatchDeleteBody(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    watch_task = None
+    if settings.SYNC_WATCH_ENABLED:
+        import asyncio
+
+        async def _watch_loop() -> None:
+            from .core.database import async_session
+            from .services.folder_sync_service import scan_all_enabled_watches
+
+            while True:
+                try:
+                    async with async_session() as db:
+                        await scan_all_enabled_watches(db)
+                except Exception:
+                    logger = __import__("logging").getLogger("sync_watch")
+                    logger.exception("folder watch scan failed")
+                await asyncio.sleep(max(30, settings.SYNC_WATCH_INTERVAL_SEC))
+
+        watch_task = asyncio.create_task(_watch_loop())
     yield
+    if watch_task:
+        watch_task.cancel()
 
 
 app = FastAPI(
@@ -70,6 +92,8 @@ app.include_router(conflict.router)
 app.include_router(ingestion.router)
 app.include_router(kb_health.router)
 app.include_router(gap.router)
+app.include_router(graph.router)
+app.include_router(sync.router)
 app.include_router(knowledge.router)
 app.include_router(chunk.router)
 app.include_router(chat.router)

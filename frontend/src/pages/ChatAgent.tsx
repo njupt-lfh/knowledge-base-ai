@@ -126,6 +126,26 @@ export default function ChatAgent() {
                 : msg,
             ),
           )
+        } else if (event.type === 'agent_meta') {
+          setMessages((prev) =>
+            prev.map((msg, i) =>
+              i === prev.length - 1 && msg.role === 'assistant'
+                ? {
+                    ...msg,
+                    agentMeta: {
+                      route: event.route,
+                      rounds: event.rounds,
+                      sim_rag_used: event.sim_rag_used,
+                      sim_sub_queries: event.sim_sub_queries,
+                      sim_coverage: event.sim_coverage,
+                      crag_score: event.crag_score,
+                      graph_used: event.graph_used,
+                      refused: event.refused,
+                    },
+                  }
+                : msg,
+            ),
+          )
         } else if (event.type === 'sources') {
           setMessages((prev) =>
             prev.map((msg, i) =>
@@ -148,7 +168,10 @@ export default function ChatAgent() {
       message.error('发送失败')
     }
     setSending(false)
-    if (conv) await loadMessages(conv)
+    if (conv) {
+      await loadMessages(conv)
+      await loadConvList()
+    }
   }
 
   const handleFeedback = (messageId: string, type: 'like' | 'dislike' | 'correction') => {

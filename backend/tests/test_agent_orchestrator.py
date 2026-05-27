@@ -1,0 +1,110 @@
+"""Phase 2.2 单元测试 — Query Router + CRAG-lite + AgentOrchestrator"""
+
+import json
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from app.services.agent_orchestrator import REFUSAL_TEXT, AgentOrchestrator
+from app.services.crag_evaluator import evaluate_sufficiency
+from app.services.query_router import expand_query_for_retry, route_query, retrieval_top_k_for_route
+
+
+def test_route_factual():
+    assert route_query("什么是 RAG 检索增强生成") == "factual"
+
+
+def test_route_relational():
+    assert route_query("Python 和 Java 的区别是什么") == "relational"
+
+
+def test_route_comprehensive():
+    assert route_query("请总结知识库中有哪些部署方式") == "comprehensive"
+
+
+def test_route_chitchat():
+    assert route_query("你好") == "chitchat"
+
+
+def test_retrieval_top_k_by_route():
+    assert retrieval_top_k_for_route("chitchat", 5) == 0
+    assert retrieval_top_k_for_route("relational", 5) >= 7
+
+
+def test_expand_query_for_retry():
+    q = expand_query_for_retry("Python 和 Java 的区别", "relational")
+    assert "Python" in q or "Java" in q
+
+
+def test_crag_sufficient_with_good_sources():
+    sources = [{"content": "RAG 是检索增强生成技术", "score": 0.45}]
+    r = evaluate_sufficiency("什么是 RAG", sources, "factual")
+    assert r.sufficient is True
+
+
+def test_crag_insufficient_empty():
+    r = evaluate_sufficiency("量子纠错", [], "factual")
+    assert r.sufficient is False
+
+
+def test_crag_insufficient_weak_score():
+    sources = [{"content": "无关内容", "score": 0.05}]
+    r = evaluate_sufficiency("深度学习框架对比", sources, "factual")
+    assert r.sufficient is False
+
+
+@pytest.mark.asyncio
+async def test_agent_refuses_when_crag_fails():
+    orch = AgentOrchestrator()
+    db = AsyncMock()
+
+    weak = [{"chunk_id": "c1", "content": "x", "score": 0.05, "document_id": "d", "chunk_index": 0}]
+
+    with patch.object(orch.hybrid, "search", AsyncMock(return_value=weak)):
+        run = await orch.run(db, "kb1", "完全不存在的冷门话题 XYZ", top_k=3)
+
+    assert run.refused is True
+    assert run.sufficient is False
+    assert run.rounds == 2
+
+
+@pytest.mark.asyncio
+async def test_agent_skips_retrieval_for_chitchat():
+    orch = AgentOrchestrator()
+    db = AsyncMock()
+
+    with patch.object(orch.hybrid, "search", AsyncMock()) as mock_search:
+        run = await orch.run(db, "kb1", "你好", top_k=5)
+
+    mock_search.assert_not_called()
+    assert run.skipped_retrieval is True
+    assert run.route == "chitchat"
+
+
+@pytest.mark.asyncio
+async def test_agent_generate_refusal_stream():
+    orch = AgentOrchestrator()
+    db = AsyncMock()
+
+    weak = [{"chunk_id": "c1", "content": "x", "score": 0.05, "document_id": "d", "chunk_index": 0}]
+
+    with patch.object(orch.hybrid, "search", AsyncMock(return_value=weak)):
+        events = []
+        async for ev in orch.generate_stream(
+            db,
+            "kb1",
+            "冷门话题 ABC",
+            [],
+            system_prompt_template="ctx={context}",
+            compress_context=lambda s, max_chars: "",
+        ):
+            events.append(ev)
+
+    meta = json.loads([ev for ev in events if '"type": "agent_meta"' in ev][0][6:])
+    assert meta.get("refused") is True
+
+    text_payloads = []
+    for ev in events:
+        if '"type": "text"' in ev:
+            text_payloads.append(json.loads(ev[6:]).get("content", ""))
+    assert "暂无相关信息" in "".join(text_payloads)

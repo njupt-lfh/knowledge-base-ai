@@ -74,6 +74,9 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await _apply_sqlite_migrations(conn)
+        from .fts_init import init_fts_on_connection
+
+        await init_fts_on_connection(conn)
 
     missing = await verify_schema()
     if missing:

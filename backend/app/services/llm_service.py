@@ -9,10 +9,10 @@ from ..core.config import settings
 
 
 class LLMService:
-    def __init__(self):
+    def __init__(self, model_name: str | None = None):
         self.api_key = settings.VOLCENGINE_API_KEY
         self.base_url = settings.VOLCENGINE_BASE_URL
-        self.model_name = settings.VOLCENGINE_LLM_MODEL
+        self.model_name = model_name or settings.VOLCENGINE_LLM_MODEL
         self.mock_mode = settings.LLM_MOCK_MODE
 
     async def chat_stream(self, messages: List[Dict]) -> AsyncGenerator[str, None]:

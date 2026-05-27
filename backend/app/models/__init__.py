@@ -9,3 +9,5 @@ from .document import Document as Document  # noqa: F401
 from .knowledge_base import KnowledgeBase as KnowledgeBase  # noqa: F401
 from .tag import DocumentTag as DocumentTag  # noqa: F401
 from .tag import Tag as Tag
+from .kg_relation import KgRelation as KgRelation  # noqa: F401
+from .kb_folder_watch import KbFolderWatch as KbFolderWatch  # noqa: F401

@@ -4,7 +4,7 @@
   python scripts/run_rag_eval.py                    # 全量 20×N 样本（默认无 limit）
   python scripts/run_rag_eval.py --retrieval-only
   python scripts/run_rag_eval.py --ragas --llm-judge
-  python scripts/run_rag_eval.py --limit 5          # 冒烟
+  python scripts/run_rag_eval.py --deepeval         # DeepEval 指标 + retention
 
 输出: ../data/eval_baseline_report.json
 """
@@ -31,6 +31,7 @@ REPORT_FILE = ROOT / "data" / "eval_baseline_report.json"
 
 from app.eval.retrieval_metrics import retrieval_metrics  # noqa: E402
 from app.eval.ragas_runner import llm_judge_faithfulness, run_ragas_eval  # noqa: E402
+from app.eval.deepeval_runner import check_knowledge_retention, run_deepeval  # noqa: E402
 
 
 async def _collect_generation(rag: Any, kb_id: str, question: str, top_k: int, db: Any) -> tuple[str, list[dict]]:
@@ -133,6 +134,13 @@ async def _run(args: argparse.Namespace) -> int:
     if args.limit > 0:
         samples = samples[: args.limit]
 
+    baseline_before: dict[str, Any] | None = None
+    if REPORT_FILE.exists():
+        try:
+            baseline_before = json.loads(REPORT_FILE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            baseline_before = None
+
     rag = RAGService()
     results: list[dict] = []
 
@@ -210,6 +218,27 @@ async def _run(args: argparse.Namespace) -> int:
         if agg.get("faithfulness_mean") is None and judge_scores:
             agg["faithfulness_mean"] = agg["llm_judge_faithfulness_mean"]
 
+    deepeval_meta: dict[str, Any] = {}
+    retention_meta: dict[str, Any] = {"skipped": True}
+
+    if args.deepeval and not args.retrieval_only:
+        deepeval_meta = run_deepeval(results, prefer_live=not settings.LLM_MOCK_MODE)
+        agg["deepeval"] = {
+            "hallucination_mean": deepeval_meta.get("hallucination_mean"),
+            "contextual_relevancy_mean": deepeval_meta.get("contextual_relevancy_mean"),
+            "mode": deepeval_meta.get("mode"),
+        }
+        if deepeval_meta.get("hallucination_mean") is not None and agg.get("faithfulness_mean") is None:
+            agg["faithfulness_mean"] = deepeval_meta["hallucination_mean"]
+
+    if args.deepeval and baseline_before and agg.get("context_recall_mean") is not None:
+        retention_meta = check_knowledge_retention(
+            baseline_before.get("aggregate") or {},
+            agg,
+            min_recall_ratio=args.min_recall_ratio,
+        )
+        retention_meta["skipped"] = False
+
     diagnosis = _diagnose(agg, has_generation=not args.retrieval_only)
 
     report = {
@@ -222,12 +251,15 @@ async def _run(args: argparse.Namespace) -> int:
             "retrieval_only": args.retrieval_only,
             "ragas_enabled": args.ragas,
             "llm_judge_enabled": args.llm_judge,
+            "deepeval_enabled": args.deepeval,
             "llm_mock_mode": settings.LLM_MOCK_MODE,
             "limit": args.limit,
             "sample_count": len(samples),
         },
         "aggregate": agg,
         "ragas_run": ragas_meta,
+        "deepeval_run": deepeval_meta,
+        "knowledge_retention": retention_meta,
         "diagnosis": diagnosis,
         "samples": results,
     }
@@ -247,6 +279,8 @@ def main() -> int:
     parser.add_argument("--retrieval-only", action="store_true")
     parser.add_argument("--ragas", action="store_true")
     parser.add_argument("--llm-judge", action="store_true", help="LLM 忠实度回退/补充")
+    parser.add_argument("--deepeval", action="store_true", help="DeepEval Hallucination + Contextual Relevancy")
+    parser.add_argument("--min-recall-ratio", type=float, default=0.85, help="Knowledge retention 门禁")
     args = parser.parse_args()
     return asyncio.run(_run(args))
 

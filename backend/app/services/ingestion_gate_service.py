@@ -198,13 +198,14 @@ async def ingest_text_chunks(
     texts: list[str],
     *,
     exclude_chunk_ids: set[str] | None = None,
+    start_chunk_index: int = 0,
 ) -> tuple[list[Chunk], IngestStats]:
     """分块文本经门禁后写入 DB（不含 Chroma，由调用方批量写入向量）。"""
     gate = IngestionGateService(db)
     exclude = exclude_chunk_ids or set()
     stats = IngestStats()
     records: list[Chunk] = []
-    next_index = 0
+    next_index = start_chunk_index
 
     for text in texts:
         result = await gate.check_content(kb_id, text, exclude_chunk_ids=exclude)

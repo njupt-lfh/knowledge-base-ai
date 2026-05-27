@@ -15,6 +15,37 @@ from ..models.chunk import Chunk
 from ..models.document import Document
 from ..schemas.document import DocumentResponse, ManualDocumentCreate
 from .ingestion_gate_service import IngestStats, ingest_text_chunks
+from .media_utils import IMAGE_EXTENSIONS
+
+
+async def _sync_chunks_to_fts(db: AsyncSession, kb_id: str, chunk_records: list[Chunk]) -> None:
+    """入库后同步 FTS5（与 Chroma 写入配套，保证 BM25 可检索）。"""
+    if not chunk_records:
+        return
+    from .fts_service import upsert_chunk_fts
+
+    for c in chunk_records:
+        await upsert_chunk_fts(
+            db, c.id, kb_id, c.content, active=bool(c.is_active if c.is_active is not None else True)
+        )
+    await db.commit()
+
+
+async def _sync_chunks_to_graph(db: AsyncSession, kb_id: str, chunk_records: list[Chunk]) -> None:
+    """入库后同步轻量知识图谱三元组。"""
+    if not chunk_records:
+        return
+    from .graph_store_service import sync_chunk_graph
+
+    for c in chunk_records:
+        await sync_chunk_graph(
+            db,
+            kb_id,
+            c.id,
+            c.document_id,
+            c.content,
+            active=bool(c.is_active if c.is_active is not None else True),
+        )
 
 
 class DocumentService:
@@ -35,9 +66,19 @@ class DocumentService:
         return [DocumentResponse.model_validate(d) for d in docs], total
 
     async def upload(self, kb_id: str, file: UploadFile, background_tasks: BackgroundTasks) -> DocumentResponse:
-        ext = Path(file.filename).suffix.lower()
-        type_map = {".pdf": "pdf", ".md": "md", ".txt": "txt"}
-        file_type = type_map.get(ext, "txt")
+        ext = Path(file.filename or "").suffix.lower()
+        text_map = {".pdf": "pdf", ".md": "md", ".txt": "txt"}
+        if ext in IMAGE_EXTENSIONS:
+            if not getattr(settings, "MULTIMODAL_IMAGE_ENABLED", True):
+                raise ValueError("图片上传未启用（MULTIMODAL_IMAGE_ENABLED=false）")
+            file_type = "image"
+            max_sz = getattr(settings, "MAX_IMAGE_UPLOAD_SIZE", 10 * 1024 * 1024)
+            if file.size and file.size > max_sz:
+                raise ValueError(f"图片大小超过限制 ({max_sz // 1048576}MB)")
+        else:
+            if ext not in text_map:
+                raise ValueError(f"不支持的文件类型: {ext}，仅支持 PDF/Markdown/TXT 或图片")
+            file_type = text_map[ext]
 
         doc_id = str(uuid.uuid4())
         upload_dir = Path(settings.UPLOAD_DIR)
@@ -60,7 +101,14 @@ class DocumentService:
         await self.db.commit()
         await self.db.refresh(doc)
 
-        background_tasks.add_task(_process_document, doc_id, kb_id, file_type, str(file_path))
+        background_tasks.add_task(
+            _process_image if file_type == "image" else _process_document,
+            doc_id,
+            kb_id,
+            file_type,
+            str(file_path),
+            file.filename or "unknown",
+        )
         return DocumentResponse.model_validate(doc)
 
     async def create_manual(self, kb_id: str, data: ManualDocumentCreate, background_tasks: BackgroundTasks) -> DocumentResponse:
@@ -130,6 +178,8 @@ class DocumentService:
         doc.ingest_conflict_count = gate_stats.conflicts
         await self.db.commit()
         await self.db.refresh(doc)
+        await _sync_chunks_to_fts(self.db, kb_id, chunk_records)
+        await _sync_chunks_to_graph(self.db, kb_id, chunk_records)
         return DocumentResponse.model_validate(doc), gate_stats
 
     async def get_by_id(self, doc_id: str) -> DocumentResponse | None:
@@ -180,7 +230,10 @@ class DocumentService:
                 embed_svc = EmbeddingService()
                 for chunk in chunks:
                     chunk.is_active = True
-                    embedding = embed_svc.embed_query(chunk.content)
+                    if doc.file_type == "image" and doc.file_path:
+                        embedding = embed_svc.embed_image(doc.file_path)
+                    else:
+                        embedding = embed_svc.embed_query(chunk.content)
                     collection.upsert(
                         ids=[chunk.id],
                         embeddings=[embedding],
@@ -192,55 +245,78 @@ class DocumentService:
                     chunk.is_active = False
                 collection.delete(ids=[c.id for c in chunks])
             await self.db.commit()
+            await _sync_chunks_to_fts(self.db, doc.knowledge_base_id, chunks)
+            await _sync_chunks_to_graph(self.db, doc.knowledge_base_id, chunks)
 
         return DocumentResponse.model_validate(doc)
 
 
 async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: str):
-    """后台处理上传的文档：解析 → 分块 → 向量化 → Chroma 写入"""
+    """后台处理上传的文档：解析 → 分块 → 向量化 → Chroma 写入；PDF 另提取内嵌图。"""
     from .chunking_service import DocumentParser, TextChunker
     from .embedding_service import EmbeddingService
+    from .image_chunk_ingest_service import ingest_pdf_embedded_images
 
     async with async_session() as db:
         try:
-            # 1. 解析文件提取文本
             text = DocumentParser.parse(file_path, file_type)
 
-            # 2. 获取知识库的分块配置
             from ..models.knowledge_base import KnowledgeBase
             kb_result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
             kb = kb_result.scalar_one_or_none()
             chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
             chunk_overlap = kb.chunk_overlap if kb else settings.DEFAULT_CHUNK_OVERLAP
 
-            # 3. 分块
             chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-            chunks = chunker.split(text)
+            text_parts = chunker.split(text) if text and text.strip() else []
 
-            if not chunks:
-                raise ValueError("未能从文件中提取有效文本")
+            chunk_records: list[Chunk] = []
+            gate_stats = IngestStats()
 
-            from .ingestion_gate_service import ingest_text_chunks
+            if text_parts:
+                chunk_records, gate_stats = await ingest_text_chunks(db, kb_id, doc_id, text_parts)
 
-            chunk_records, gate_stats = await ingest_text_chunks(db, kb_id, doc_id, chunks)
-
-            if chunk_records:
-                embed_svc = EmbeddingService()
-                embeddings = embed_svc.embed_documents([c.content for c in chunk_records])
-                db.add_all(chunk_records)
-                try:
+                if chunk_records:
+                    embed_svc = EmbeddingService()
+                    embeddings = embed_svc.embed_documents([c.content for c in chunk_records])
+                    db.add_all(chunk_records)
                     collection = get_collection(kb_id)
                     collection.add(
                         ids=[c.id for c in chunk_records],
                         embeddings=embeddings,
                         documents=[c.content for c in chunk_records],
                         metadatas=[
-                            {"document_id": doc_id, "chunk_index": c.chunk_index}
+                            {
+                                "document_id": doc_id,
+                                "chunk_index": c.chunk_index,
+                                "media_type": "text",
+                            }
                             for c in chunk_records
                         ],
                     )
-                except Exception as e:
-                    raise RuntimeError(f"Chroma 写入失败: {e}")
+
+            doc_row = await db.get(Document, doc_id)
+            filename = doc_row.filename if doc_row else Path(file_path).name
+
+            if file_type == "pdf" and settings.PDF_IMAGE_EXTRACTION_ENABLED:
+                text_ids = {c.id for c in chunk_records}
+                img_records, img_stats = await ingest_pdf_embedded_images(
+                    db,
+                    kb_id,
+                    doc_id,
+                    file_path,
+                    filename,
+                    start_chunk_index=len(chunk_records),
+                    exclude_chunk_ids=text_ids,
+                )
+                gate_stats.allowed += img_stats.allowed
+                gate_stats.duplicates += img_stats.duplicates
+                gate_stats.conflicts += img_stats.conflicts
+                gate_stats.llm_calls += img_stats.llm_calls
+                chunk_records.extend(img_records)
+
+            if not chunk_records:
+                raise ValueError("未能从文件中提取有效文本或图片")
 
             doc = await db.get(Document, doc_id)
             if doc:
@@ -251,6 +327,53 @@ async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: 
                 doc.ingest_conflict_count = gate_stats.conflicts
 
             await db.commit()
+            await _sync_chunks_to_fts(db, kb_id, chunk_records)
+            await _sync_chunks_to_graph(db, kb_id, chunk_records)
+
+        except Exception as e:
+            doc = await db.get(Document, doc_id)
+            if doc:
+                doc.status = "error"
+            await db.commit()
+            raise e
+
+
+async def _process_image(
+    doc_id: str,
+    kb_id: str,
+    file_type: str,
+    file_path: str,
+    filename: str,
+):
+    """后台处理图片：Vision 描述 → 单块入库 → 多模态向量写入 Chroma。"""
+    from .image_chunk_ingest_service import ImageChunkSpec, ingest_image_chunk_specs
+
+    async with async_session() as db:
+        try:
+            spec = ImageChunkSpec(
+                image_path=file_path,
+                content_header=f"[图片文档] {filename}",
+                filename_hint=filename,
+                media_type="image",
+            )
+            chunk_records, _, gate_stats = await ingest_image_chunk_specs(
+                db, kb_id, doc_id, [spec]
+            )
+
+            if not chunk_records:
+                raise ValueError("图片未通过入库门禁或处理失败")
+
+            doc = await db.get(Document, doc_id)
+            if doc:
+                doc.status = "completed"
+                doc.chunk_count = len(chunk_records)
+                doc.char_count = sum(len(c.content) for c in chunk_records)
+                doc.ingest_duplicate_count = gate_stats.duplicates
+                doc.ingest_conflict_count = gate_stats.conflicts
+
+            await db.commit()
+            await _sync_chunks_to_fts(db, kb_id, chunk_records)
+            await _sync_chunks_to_graph(db, kb_id, chunk_records)
 
         except Exception as e:
             doc = await db.get(Document, doc_id)
@@ -311,6 +434,9 @@ async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
                 doc.ingest_conflict_count = gate_stats.conflicts
 
             await db.commit()
+            if chunk_records:
+                await _sync_chunks_to_fts(db, kb_id, chunk_records)
+                await _sync_chunks_to_graph(db, kb_id, chunk_records)
 
         except Exception as e:
             doc = await db.get(Document, doc_id)

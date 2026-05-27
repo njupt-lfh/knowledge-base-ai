@@ -8,6 +8,8 @@ import {
 import {
   PlusOutlined, DeleteOutlined, SearchOutlined,
   InboxOutlined, EyeOutlined, TagsOutlined, MessageOutlined, UnorderedListOutlined, ToolOutlined,
+  ApartmentOutlined,
+  SyncOutlined,
 } from '@ant-design/icons'
 import GovernancePanel from '../components/Governance/GovernancePanel'
 import ConflictsPanel from '../components/Conflicts/ConflictsPanel'
@@ -19,6 +21,9 @@ import HudPanel from '../components/common/HudPanel'
 import ColdKnowledgeBadge from '../components/Charts/ColdKnowledgeBadge'
 import KnowledgeHealthPanel from '../components/Health/KnowledgeHealthPanel'
 import SearchRadarChart from '../components/Charts/SearchRadarChart'
+import KnowledgeGraphChart from '../components/Charts/KnowledgeGraphChart'
+import FolderSyncPanel from '../components/Sync/FolderSyncPanel'
+import { graphApi, type KnowledgeGraphSnapshot } from '../api/graph'
 import { statsApi, type ColdKnowledgeStats } from '../api/stats'
 import type { KnowledgeBase, Document, Chunk, SearchResultItem } from '../types'
 import './KnowledgeDetail.css'
@@ -54,6 +59,24 @@ export default function KnowledgeDetail() {
   const [coldStats, setColdStats] = useState<ColdKnowledgeStats | null>(null)
   const [activeTab, setActiveTab] = useState('documents')
   const [healthTick, setHealthTick] = useState(0)
+  const [graphData, setGraphData] = useState<KnowledgeGraphSnapshot | null>(null)
+  const [graphLoading, setGraphLoading] = useState(false)
+
+  const fetchGraph = useCallback(async () => {
+    if (!kbId) return
+    setGraphLoading(true)
+    try {
+      setGraphData((await graphApi.getSnapshot(kbId)).data)
+    } catch {
+      message.error('获取知识图谱失败')
+    } finally {
+      setGraphLoading(false)
+    }
+  }, [kbId])
+
+  useEffect(() => {
+    if (activeTab === 'graph') fetchGraph()
+  }, [activeTab, fetchGraph, healthTick])
 
   const fetchKb = useCallback(async () => {
     if (!kbId) return
@@ -318,7 +341,7 @@ export default function KnowledgeDetail() {
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               <Space wrap>
                 <Dragger
-                  accept=".pdf,.md,.txt"
+                  accept=".pdf,.md,.txt,.png,.jpg,.jpeg,.webp,.gif"
                   showUploadList={false}
                   className={`upload-dragger${uploadFlash ? ' upload-dragger--flash' : ''}`}
                   beforeUpload={(file) => { handleUpload(file); return false }}
@@ -326,7 +349,7 @@ export default function KnowledgeDetail() {
                 >
                   <p className="ant-upload-drag-icon"><InboxOutlined /></p>
                   <p className="ant-upload-text">拖拽文件或点击上传</p>
-                  <p className="ant-upload-hint">PDF / Markdown / TXT</p>
+                  <p className="ant-upload-hint">PDF / Markdown / TXT / 图片（PNG、JPG、WEBP）</p>
                 </Dragger>
                 <Button icon={<PlusOutlined />} onClick={() => setManualModal(true)}>手动录入</Button>
                 <Select
@@ -426,6 +449,34 @@ export default function KnowledgeDetail() {
           label: '治理建议',
           children: kbId ? (
             <GovernancePanel kbId={kbId} onApplied={() => { fetchColdStats(); setHealthTick((t) => t + 1) }} />
+          ) : null,
+        },
+        {
+          key: 'graph',
+          label: <><ApartmentOutlined /> 知识图谱</>,
+          children: kbId ? (
+            graphLoading ? (
+              <Typography.Text type="secondary">加载图谱中…</Typography.Text>
+            ) : (
+              <KnowledgeGraphChart
+                nodes={graphData?.nodes ?? []}
+                edges={graphData?.edges ?? []}
+                relationCount={graphData?.relation_count ?? 0}
+              />
+            )
+          ) : null,
+        },
+        {
+          key: 'sync',
+          label: <><SyncOutlined /> 文件夹同步</>,
+          children: kbId ? (
+            <FolderSyncPanel
+              kbId={kbId}
+              onSynced={() => {
+                fetchDocs()
+                setHealthTick((t) => t + 1)
+              }}
+            />
           ) : null,
         },
         {

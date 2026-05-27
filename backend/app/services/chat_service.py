@@ -13,6 +13,9 @@ from .conversation_extract_service import ConversationExtractService
 from .gap_service import GapService
 from .rag_service import RAGService
 
+DEFAULT_CONV_TITLE = "新对话"
+MAX_CONV_TITLE_LEN = 80
+
 
 class ChatService:
     def __init__(self, db: AsyncSession):
@@ -32,7 +35,16 @@ class ChatService:
             .where(Conversation.knowledge_base_id == kb_id)
             .order_by(Conversation.created_at.desc())
         )
-        return [ConversationResponse.model_validate(c) for c in result.scalars().all()]
+        convs = list(result.scalars().all())
+        updated = False
+        for conv in convs:
+            if await self._maybe_set_conversation_title(conv):
+                updated = True
+        if updated:
+            await self.db.commit()
+            for conv in convs:
+                await self.db.refresh(conv)
+        return [ConversationResponse.model_validate(c) for c in convs]
 
     async def get_messages(self, conv_id: str) -> list[MessageResponse]:
         result = await self.db.execute(
@@ -63,6 +75,11 @@ class ChatService:
         user_msg = Message(conversation_id=conv_id, role="user", content=message)
         self.db.add(user_msg)
         await self.db.commit()
+
+        if conv:
+            await self._maybe_set_conversation_title(conv, message)
+            await self.db.commit()
+            await self.db.refresh(conv)
 
         # 收集完整回复与来源
         full_answer = ""
@@ -117,6 +134,27 @@ class ChatService:
                 )
             except Exception:
                 pass
+
+    async def _maybe_set_conversation_title(
+        self, conv: Conversation, first_question: str | None = None
+    ) -> bool:
+        if conv.title and conv.title != DEFAULT_CONV_TITLE:
+            return False
+        text = (first_question or "").strip()
+        if not text:
+            row = (
+                await self.db.execute(
+                    select(Message.content)
+                    .where(Message.conversation_id == conv.id, Message.role == "user")
+                    .order_by(Message.created_at)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            text = (row or "").strip()
+        if not text:
+            return False
+        conv.title = text.replace("\n", " ")[:MAX_CONV_TITLE_LEN]
+        return True
 
     async def create_share(self, conv_id: str) -> ShareResponse:
         conv = await self.db.get(Conversation, conv_id)
