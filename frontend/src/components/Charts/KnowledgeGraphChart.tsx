@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { GraphEdge, GraphNode } from '../../api/graph'
@@ -10,7 +11,7 @@ interface KnowledgeGraphChartProps {
   relationCount: number
 }
 
-export default function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChartProps) {
+function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChartProps) {
   if (nodes.length === 0 || edges.length === 0) {
     return (
       <HudPanel className="chart-panel">
@@ -54,7 +55,6 @@ export default function KnowledgeGraphChart({ nodes, edges, relationCount }: Kno
         links: edges.map((e) => ({
           source: e.source,
           target: e.target,
-          value: e.predicate,
           lineStyle: { color: 'rgba(255,107,53,0.45)', curveness: 0.15 },
           label: { show: true, formatter: e.predicate, color: '#64748b', fontSize: 9 },
         })),
@@ -68,7 +68,19 @@ export default function KnowledgeGraphChart({ nodes, edges, relationCount }: Kno
       <h3 className="chart-panel__title">
         知识图谱（力导向 · {relationCount} 条关系）
       </h3>
-      <ReactECharts option={option} style={{ height: 420 }} opts={{ renderer: 'canvas' }} />
+      <ReactECharts
+        option={option}
+        style={{ height: 420 }}
+        opts={{ renderer: 'canvas' }}
+        notMerge
+        lazyUpdate
+      />
     </HudPanel>
   )
 }
+
+export default memo(KnowledgeGraphChart, (prev, next) =>
+  prev.relationCount === next.relationCount &&
+  prev.nodes.length === next.nodes.length &&
+  prev.edges.length === next.edges.length
+)

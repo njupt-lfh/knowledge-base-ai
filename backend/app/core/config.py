@@ -9,6 +9,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR.parent / ".env")
 
 
+def _normalize_upload_dir() -> str:
+    """相对路径固定解析到 backend 目录，避免 uvicorn 工作目录变化导致找不到文件。"""
+    raw = os.getenv("UPLOAD_DIR", str(BASE_DIR.parent / "uploads"))
+    p = Path(raw)
+    if not p.is_absolute():
+        p = (BASE_DIR / p).resolve()
+    else:
+        p = p.resolve()
+    return str(p)
+
+
 class Settings:
     APP_NAME: str = "AI 知识库管理平台"
     APP_VERSION: str = "1.0.0"
@@ -37,8 +48,8 @@ class Settings:
         "CHROMA_PERSIST_DIR", str(BASE_DIR.parent / "chroma_data")
     )
 
-    # 文件上传
-    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", str(BASE_DIR.parent / "uploads"))
+    # 文件上传（相对路径已归一化为绝对路径）
+    UPLOAD_DIR: str = _normalize_upload_dir()
     MAX_UPLOAD_SIZE: int = int(os.getenv("MAX_UPLOAD_SIZE", "52428800"))
 
     # 分块

@@ -7,7 +7,8 @@ import time
 
 
 def _terms(text: str) -> set[str]:
-    return set(re.findall(r"[\w\u4e00-\u9fff]{2,}", text.lower()))
+    t = text.lower()
+    return set(re.findall(r"(?a)\w{2,}", t)) | set(re.findall(r"[\u4e00-\u9fff]{2,}", t))
 
 
 def rerank_candidates(query: str, candidates: list[dict], *, top_k: int) -> list[dict]:

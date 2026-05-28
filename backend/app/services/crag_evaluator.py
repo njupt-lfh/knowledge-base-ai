@@ -20,7 +20,12 @@ class SufficiencyResult:
 
 
 def _terms(text: str) -> set[str]:
-    return set(re.findall(r"[\w\u4e00-\u9fff]{2,}", (text or "").lower()))
+    t = (text or "").lower()
+    return set(re.findall(r"(?a)\w{2,}", t)) | set(re.findall(r"[\u4e00-\u9fff]{2,}", t))
+
+
+# Hybrid RRF + 轻量 rerank 的分值通常 < 0.15，与 0.2+ 的绝对阈值不可直接比较
+RRF_SCALE_SCORE_CEILING = 0.15
 
 
 def evaluate_sufficiency(
@@ -58,7 +63,14 @@ def evaluate_sufficiency(
         min_score *= 0.9
 
     combined = 0.55 * min(1.0, max_score / 0.5) + 0.45 * min(1.0, term_overlap / 0.35)
-    sufficient = max_score >= min_score and (term_overlap >= min_overlap or max_score >= min_score * 1.8)
+
+    if max_score < RRF_SCALE_SCORE_CEILING:
+        # RRF 尺度：以词面重叠为主，避免「图谱/检索有命中但分低」被误拒答
+        sufficient = max_score > 0 and term_overlap >= min_overlap
+    else:
+        sufficient = max_score >= min_score and (
+            term_overlap >= min_overlap or max_score >= min_score * 1.8
+        )
 
     reason = "ok" if sufficient else f"weak(max={max_score:.3f},overlap={term_overlap:.3f})"
     return SufficiencyResult(sufficient, round(combined, 4), max_score, round(term_overlap, 4), reason)
