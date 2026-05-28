@@ -25,17 +25,18 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
 
   const option: EChartsOption = {
     backgroundColor: 'transparent',
+    animationDuration: 2000,
+    animationEasingUpdate: 'quinticInOut',
     tooltip: {
       trigger: 'item',
       backgroundColor: '#111827',
       borderColor: 'rgba(0,212,255,0.3)',
       textStyle: { color: '#e2e8f0', fontSize: 12 },
-      formatter: (params) => {
-        const p = params as { dataType?: string; data?: GraphEdge & { name?: string; value?: number } }
-        if (p.dataType === 'edge' && p.data) {
-          return `${p.data.source} —[${p.data.predicate}]→ ${p.data.target}`
+      formatter: (params: any) => {
+        if (params.dataType === 'edge' && params.data) {
+          return `${params.data.source}<br/>—[<b>${params.data.predicate}</b>]→<br/>${params.data.target}`
         }
-        return p.data?.name ?? ''
+        return params.data?.name ?? ''
       },
     },
     series: [
@@ -44,21 +45,47 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
         layout: 'force',
         roam: true,
         draggable: true,
-        force: { repulsion: 120, edgeLength: [60, 120], gravity: 0.08 },
+        force: {
+          repulsion: 150,
+          edgeLength: [80, 200],
+          gravity: 0.06,
+          friction: 0.6,
+        },
         data: nodes.map((n) => ({
           id: n.id,
           name: n.name,
-          symbolSize: Math.min(36, 14 + n.name.length),
-          itemStyle: { color: '#00d4ff', borderColor: 'rgba(0,212,255,0.5)', borderWidth: 1 },
-          label: { show: true, color: '#94a3b8', fontSize: 10 },
+          symbolSize: Math.min(42, 16 + n.name.length * 1.5),
+          itemStyle: {
+            color: '#00d4ff',
+            borderColor: 'rgba(0,212,255,0.7)',
+            borderWidth: 2,
+            shadowBlur: 12,
+            shadowColor: 'rgba(0,212,255,0.4)',
+          },
+          label: { show: true, color: '#cbd5e1', fontSize: 10, distance: 4 },
+          emphasis: {
+            itemStyle: { color: '#ff6b35', borderColor: '#ff6b35', shadowBlur: 20 },
+            label: { fontSize: 13, fontWeight: 'bold' },
+          },
         })),
         links: edges.map((e) => ({
           source: e.source,
           target: e.target,
-          lineStyle: { color: 'rgba(255,107,53,0.45)', curveness: 0.15 },
+          lineStyle: {
+            color: 'rgba(255,107,53,0.5)',
+            curveness: 0.2,
+            width: 1.2,
+            opacity: 0.7,
+          },
           label: { show: true, formatter: e.predicate, color: '#64748b', fontSize: 9 },
+          emphasis: { lineStyle: { color: '#ff6b35', width: 3, opacity: 1 } },
         })),
-        emphasis: { focus: 'adjacency', lineStyle: { width: 3 } },
+        zoom: 1.2,
+        emphasis: {
+          focus: 'adjacency',
+          lineStyle: { width: 4 },
+          itemStyle: { shadowBlur: 30 },
+        },
       },
     ],
   }
@@ -66,11 +93,11 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
   return (
     <HudPanel className="chart-panel">
       <h3 className="chart-panel__title">
-        知识图谱（力导向 · {relationCount} 条关系）
+        知识图谱（力导向 · {relationCount} 条关系 · {nodes.length} 实体）
       </h3>
       <ReactECharts
         option={option}
-        style={{ height: 420 }}
+        style={{ height: 440 }}
         opts={{ renderer: 'canvas' }}
         notMerge
         lazyUpdate

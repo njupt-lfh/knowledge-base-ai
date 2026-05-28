@@ -4,7 +4,7 @@ from app.services.retrieval_gate import apply_retrieval_abstention
 
 
 def test_abstain_low_confidence():
-    sources = [{"chunk_id": "a", "content": "无关内容", "score": 0.05}]
+    sources = [{"chunk_id": "a", "content": "无关内容", "score": 0.02}]
     out = apply_retrieval_abstention("量子纠缠实验步骤", sources, "factual", graph_paths=[])
     assert out == []
 
