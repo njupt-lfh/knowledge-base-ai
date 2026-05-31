@@ -95,12 +95,20 @@ export default function KnowledgeCard({
           </button>
         </Tooltip>
         <Tooltip title="智能对话">
-          <button type="button" className="kb-card__btn kb-card__btn--primary" onClick={() => onChat(kb.id)}>
+          <button
+            type="button"
+            className="kb-card__btn kb-card__btn--primary"
+            onClick={() => onChat(kb.id)}
+          >
             <MessageOutlined /> 对话
           </button>
         </Tooltip>
         <Tooltip title="编辑">
-          <button type="button" className="kb-card__btn kb-card__btn--icon" onClick={() => onEdit(kb)}>
+          <button
+            type="button"
+            className="kb-card__btn kb-card__btn--icon"
+            onClick={() => onEdit(kb)}
+          >
             <EditOutlined />
           </button>
         </Tooltip>

@@ -14,7 +14,7 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -95,7 +95,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     report = {
         "version": "1.0",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "phase": "2.4",
         "config": {
             "live": args.live,

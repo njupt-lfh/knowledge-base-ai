@@ -8,7 +8,14 @@ import time
 
 def _terms(text: str) -> set[str]:
     t = text.lower()
-    return set(re.findall(r"(?a)\w{2,}", t)) | set(re.findall(r"[\u4e00-\u9fff]{2,}", t))
+    latin = set(re.findall(r"(?a)\w{2,}", t))
+    cjk = set()
+    for seg in re.split(
+        r"[\uff0c\u3002\uff1b\u3001\uff01\uff1f\s\u00b7\u2026\u2014,.;!?\n\r\t\u4e0e\u548c\u53ca\u6216\u7684]+",
+        t,
+    ):
+        cjk.update(re.findall(r"[\u4e00-\u9fff]{1,2}", seg))
+    return latin | cjk
 
 
 def rerank_candidates(query: str, candidates: list[dict], *, top_k: int) -> list[dict]:

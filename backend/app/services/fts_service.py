@@ -79,7 +79,9 @@ async def sync_fts_incremental(conn) -> int:
     ).all()
     refreshed = 0
     for chunk_id, kb_id, content in stale:
-        await conn.execute(text(f"DELETE FROM {FTS_TABLE} WHERE chunk_id = :cid"), {"cid": chunk_id})
+        await conn.execute(
+            text(f"DELETE FROM {FTS_TABLE} WHERE chunk_id = :cid"), {"cid": chunk_id}
+        )
         await conn.execute(
             text(
                 f"INSERT INTO {FTS_TABLE}(chunk_id, knowledge_base_id, content) "
@@ -129,8 +131,9 @@ def build_fts_query(query: str) -> str | None:
     text_q = query.strip()
     if not text_q:
         return None
-    parts = re.findall(r"[\w\u4e00-\u9fff]+", text_q)
-    parts = [p for p in parts if len(p) >= 2][:8]
+    latin = [p for p in re.findall(r"\w{2,}", text_q, re.ASCII) if len(p) >= 2]
+    cjk = re.findall(r"[\u4e00-\u9fff]", text_q)
+    parts = (latin + cjk)[:20]
     if not parts:
         parts = [text_q[:32]]
     return " OR ".join(f'"{p}"' for p in parts)

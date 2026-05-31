@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, Input, Space, Switch, Table, Typography, message } from 'antd'
 import { FolderOpenOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
 import { syncApi, type FolderWatch } from '../../api/sync'
+import { formatDateTime } from '../../utils/format'
 
 interface Props {
   kbId: string
@@ -90,7 +91,9 @@ export default function FolderSyncPanel({ kbId, onSynced }: Props) {
       render: (v: string) => (
         <Space>
           <FolderOpenOutlined />
-          <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text>
+          <Typography.Text code style={{ fontSize: 12 }}>
+            {v}
+          </Typography.Text>
         </Space>
       ),
     },
@@ -128,8 +131,7 @@ export default function FolderSyncPanel({ kbId, onSynced }: Props) {
       title: '上次扫描',
       dataIndex: 'last_scan_at',
       width: 160,
-      render: (v: string | null) =>
-        v ? new Date(v).toLocaleString() : '—',
+      render: (v: string | null) => formatDateTime(v),
     },
     {
       title: '操作',
@@ -164,10 +166,8 @@ export default function FolderSyncPanel({ kbId, onSynced }: Props) {
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        将本地文件夹与知识库同步：新文件自动入库，已变更文件将重新处理。后台定时扫描需服务端开启
-        {' '}
-        <Typography.Text code>SYNC_WATCH_ENABLED=true</Typography.Text>
-        。
+        将本地文件夹与知识库同步：新文件自动入库，已变更文件将重新处理。后台定时扫描需服务端开启{' '}
+        <Typography.Text code>SYNC_WATCH_ENABLED=true</Typography.Text>。
       </Typography.Paragraph>
       <Space.Compact style={{ width: '100%', maxWidth: 720 }}>
         <Input

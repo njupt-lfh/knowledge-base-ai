@@ -6,9 +6,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.chroma_client import get_collection
@@ -230,7 +228,7 @@ async def ingest_text_chunks(
                 text,
                 cand,
                 source_document_id=doc_id,
-                llm_reason="LLM detected semantic conflict",
+                llm_reason="LLM 检测到语义冲突",
             )
             continue
 

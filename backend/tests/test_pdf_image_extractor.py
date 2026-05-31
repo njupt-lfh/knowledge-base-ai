@@ -3,8 +3,6 @@
 from pathlib import Path
 
 import fitz
-import pytest
-
 from app.services.pdf_image_extractor import extract_pdf_images
 
 

@@ -1,12 +1,11 @@
 """Gap / Feedback API 在完整 schema 下可正常响应（非 500）"""
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
-
 from app.core.database import async_session, init_db
 from app.main import app
 from app.models.knowledge_base import KnowledgeBase
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 
 @pytest.mark.asyncio

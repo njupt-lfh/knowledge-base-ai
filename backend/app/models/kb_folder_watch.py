@@ -14,9 +14,7 @@ from ..core.database import Base
 class KbFolderWatch(Base):
     __tablename__ = "kb_folder_watches"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     knowledge_base_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False
     )

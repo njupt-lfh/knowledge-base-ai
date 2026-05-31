@@ -19,16 +19,12 @@ if TYPE_CHECKING:
 class Document(Base):
     __tablename__ = "documents"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     knowledge_base_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False
     )
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
-    file_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # pdf / md / txt / manual
+    file_type: Mapped[str] = mapped_column(String(50), nullable=False)  # pdf / md / txt / manual
     file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(
@@ -44,9 +40,9 @@ class Document(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    knowledge_base: Mapped["KnowledgeBase"] = relationship(
+    knowledge_base: Mapped[KnowledgeBase] = relationship(
         "KnowledgeBase", back_populates="documents"
     )
-    chunks: Mapped[list["Chunk"]] = relationship(
+    chunks: Mapped[list[Chunk]] = relationship(
         "Chunk", back_populates="document", cascade="all, delete-orphan"
     )

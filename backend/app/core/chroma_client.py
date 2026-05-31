@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 
 from .config import settings
 
-_client: Optional[chromadb.PersistentClient] = None
+_client: chromadb.PersistentClient | None = None
 
 
 def get_chroma_client() -> chromadb.PersistentClient:

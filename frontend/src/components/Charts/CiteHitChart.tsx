@@ -13,8 +13,15 @@ export default function CiteHitChart({ items }: CiteHitChartProps) {
     return (
       <HudPanel hot className="chart-panel">
         <h3 className="chart-panel__title">命中 vs 引用转化率</h3>
-        <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13, padding: '40px 0' }}>
-          暂无引用数据，请先进行 AI 对话以产生真实引用记录
+        <p
+          style={{
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 13,
+            padding: '40px 0',
+          }}
+        >
+          暂无引用数据，请先进行 AI 对话以产生引用记录
         </p>
       </HudPanel>
     )

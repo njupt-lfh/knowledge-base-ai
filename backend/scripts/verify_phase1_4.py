@@ -11,13 +11,12 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
-    from httpx import ASGITransport, AsyncClient
-    from sqlalchemy import select
-
     from app.core.database import async_session, init_db, verify_schema
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
     from app.services.ingestion_gate_service import IngestionGateService, distance_to_similarity
+    from httpx import ASGITransport, AsyncClient
+    from sqlalchemy import select
 
     await init_db()
     missing = await verify_schema()

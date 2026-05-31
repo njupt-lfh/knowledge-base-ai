@@ -64,8 +64,17 @@
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: conic-gradient(from 0deg, transparent, var(--accent-warning), transparent, var(--accent-primary), transparent);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  background: conic-gradient(
+    from 0deg,
+    transparent,
+    var(--accent-warning),
+    transparent,
+    var(--accent-primary),
+    transparent
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   animation: spin-border 2s linear infinite;

@@ -13,7 +13,6 @@ from .api import (
     chunk,
     conflict,
     document,
-    eval as eval_api,
     feedback,
     gap,
     governance,
@@ -25,6 +24,9 @@ from .api import (
     stats_advanced,
     sync,
     tag,
+)
+from .api import (
+    eval as eval_api,
 )
 from .core.config import settings
 from .core.database import get_db, init_db
@@ -42,9 +44,13 @@ class BatchDeleteBody(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    import asyncio
+
+    from .services.document_service import recover_stuck_documents
+
+    asyncio.create_task(recover_stuck_documents())
     watch_task = None
     if settings.SYNC_WATCH_ENABLED:
-        import asyncio
 
         async def _watch_loop() -> None:
             from .core.database import async_session
@@ -100,10 +106,13 @@ app.include_router(chat.router)
 app.include_router(tag.router)
 app.include_router(stats_advanced.router)
 
+
 # 批量操作端点必须在 document.router 之前注册
 # 否则 PUT /{doc_id}/status 会抢先匹配 /batch/status
 @app.put("/api/knowledge-bases/{kb_id}/documents/batch/status")
-async def batch_toggle_status(kb_id: str, body: BatchStatusBody, db: AsyncSession = Depends(get_db)):
+async def batch_toggle_status(
+    kb_id: str, body: BatchStatusBody, db: AsyncSession = Depends(get_db)
+):
     from .core.chroma_client import get_collection
     from .models.chunk import Chunk
     from .models.document import Document
@@ -125,9 +134,12 @@ async def batch_toggle_status(kb_id: str, body: BatchStatusBody, db: AsyncSessio
                         if body.is_active:
                             embedding = embed_svc.embed_query(chunk.content)
                             collection.upsert(
-                                ids=[chunk.id], embeddings=[embedding],
+                                ids=[chunk.id],
+                                embeddings=[embedding],
                                 documents=[chunk.content],
-                                metadatas=[{"document_id": doc_id, "chunk_index": chunk.chunk_index}],
+                                metadatas=[
+                                    {"document_id": doc_id, "chunk_index": chunk.chunk_index}
+                                ],
                             )
                         else:
                             collection.delete(ids=[chunk.id])
@@ -161,7 +173,9 @@ async def batch_get_document_tags(
 
 
 @app.delete("/api/knowledge-bases/{kb_id}/documents/batch")
-async def batch_delete_documents(kb_id: str, body: BatchDeleteBody, db: AsyncSession = Depends(get_db)):
+async def batch_delete_documents(
+    kb_id: str, body: BatchDeleteBody, db: AsyncSession = Depends(get_db)
+):
     from .core.chroma_client import get_collection
     from .models.chunk import Chunk
     from .models.document import Document
@@ -181,6 +195,7 @@ async def batch_delete_documents(kb_id: str, body: BatchDeleteBody, db: AsyncSes
             # 清理上传文件
             if doc.file_path:
                 from pathlib import Path
+
                 try:
                     Path(doc.file_path).unlink(missing_ok=True)
                 except Exception:
@@ -208,24 +223,26 @@ async def knowledge_stats(kb_id: str, db: AsyncSession = Depends(get_db)):
     from .models.chunk import Chunk
     from .models.document import Document
 
-    doc_total = (await db.execute(
-        select(func.count(Document.id)).where(Document.knowledge_base_id == kb_id)
-    )).scalar() or 0
+    doc_total = (
+        await db.execute(select(func.count(Document.id)).where(Document.knowledge_base_id == kb_id))
+    ).scalar() or 0
 
-    chunk_total = (await db.execute(
-        select(func.count(Chunk.id)).where(Chunk.knowledge_base_id == kb_id)
-    )).scalar() or 0
+    chunk_total = (
+        await db.execute(select(func.count(Chunk.id)).where(Chunk.knowledge_base_id == kb_id))
+    ).scalar() or 0
 
-    total_hits = (await db.execute(
-        select(func.sum(Chunk.hit_count)).where(Chunk.knowledge_base_id == kb_id)
-    )).scalar() or 0
+    total_hits = (
+        await db.execute(select(func.sum(Chunk.hit_count)).where(Chunk.knowledge_base_id == kb_id))
+    ).scalar() or 0
 
-    top_chunks = (await db.execute(
-        select(Chunk.id, Chunk.content, Chunk.hit_count, Chunk.chunk_index, Chunk.document_id)
-        .where(Chunk.knowledge_base_id == kb_id, Chunk.hit_count > 0)
-        .order_by(desc(Chunk.hit_count))
-        .limit(10)
-    )).all()
+    top_chunks = (
+        await db.execute(
+            select(Chunk.id, Chunk.content, Chunk.hit_count, Chunk.chunk_index, Chunk.document_id)
+            .where(Chunk.knowledge_base_id == kb_id, Chunk.hit_count > 0)
+            .order_by(desc(Chunk.hit_count))
+            .limit(10)
+        )
+    ).all()
 
     hot_items = [
         {
@@ -259,25 +276,29 @@ async def stats_overview(db: AsyncSession = Depends(get_db)):
     chunk_count = (await db.execute(select(func.count(Chunk.id)))).scalar() or 0
     total_hits = (await db.execute(select(func.sum(Chunk.hit_count)))).scalar() or 0
 
-    top = (await db.execute(
-        select(Chunk.content, Chunk.hit_count, Chunk.knowledge_base_id)
-        .where(Chunk.hit_count > 0)
-        .order_by(desc(Chunk.hit_count))
-        .limit(5)
-    )).all()
-
-    kb_rows = (await db.execute(
-        select(
-            KnowledgeBase.name,
-            func.count(Document.id.distinct()).label("doc_count"),
-            func.count(Chunk.id.distinct()).label("chunk_count"),
+    top = (
+        await db.execute(
+            select(Chunk.content, Chunk.hit_count, Chunk.knowledge_base_id)
+            .where(Chunk.hit_count > 0)
+            .order_by(desc(Chunk.hit_count))
+            .limit(5)
         )
-        .outerjoin(Document, Document.knowledge_base_id == KnowledgeBase.id)
-        .outerjoin(Chunk, Chunk.knowledge_base_id == KnowledgeBase.id)
-        .group_by(KnowledgeBase.id, KnowledgeBase.name)
-        .order_by(desc(func.count(Document.id.distinct())))
-        .limit(8)
-    )).all()
+    ).all()
+
+    kb_rows = (
+        await db.execute(
+            select(
+                KnowledgeBase.name,
+                func.count(Document.id.distinct()).label("doc_count"),
+                func.count(Chunk.id.distinct()).label("chunk_count"),
+            )
+            .outerjoin(Document, Document.knowledge_base_id == KnowledgeBase.id)
+            .outerjoin(Chunk, Chunk.knowledge_base_id == KnowledgeBase.id)
+            .group_by(KnowledgeBase.id, KnowledgeBase.name)
+            .order_by(desc(func.count(Document.id.distinct())))
+            .limit(8)
+        )
+    ).all()
 
     from .services import stats_service
 
@@ -303,4 +324,3 @@ async def stats_trend(days: int = 7, kb_id: str | None = None, db: AsyncSession 
 
     points = await stats_service.hit_trend(db, kb_id, days)
     return {"points": points}
-

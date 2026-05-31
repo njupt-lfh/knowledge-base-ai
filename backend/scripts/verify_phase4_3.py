@@ -7,7 +7,6 @@ import os
 import sys
 import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
@@ -38,8 +37,20 @@ async def main() -> int:
     chunk_b = f"c-b-{suffix}"
 
     async with async_session() as db:
-        db.add(KnowledgeBase(id=kb_id, name="p43", embedding_model="m", chunk_size=500, chunk_overlap=50))
-        db.add(Document(id=doc_id, knowledge_base_id=kb_id, filename="m", file_type="manual", status="completed"))
+        db.add(
+            KnowledgeBase(
+                id=kb_id, name="p43", embedding_model="m", chunk_size=500, chunk_overlap=50
+            )
+        )
+        db.add(
+            Document(
+                id=doc_id,
+                knowledge_base_id=kb_id,
+                filename="m",
+                file_type="manual",
+                status="completed",
+            )
+        )
         db.add(
             Chunk(
                 id=chunk_a,
@@ -66,7 +77,14 @@ async def main() -> int:
 
     async def fake_retrieve(db, kb_id, query, *, route, top_k):
         if "A" in query:
-            src = [{"chunk_id": chunk_a, "content": "模块A是检索网关", "score": 0.9, "source": "vector"}]
+            src = [
+                {
+                    "chunk_id": chunk_a,
+                    "content": "模块A是检索网关",
+                    "score": 0.9,
+                    "source": "vector",
+                }
+            ]
         else:
             src = [
                 {

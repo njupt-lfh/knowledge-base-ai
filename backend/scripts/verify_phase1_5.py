@@ -11,14 +11,13 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
-    from httpx import ASGITransport, AsyncClient
-    from sqlalchemy import select
-
     from app.core.database import async_session, init_db
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
     from app.services.conversation_extract_service import ConversationExtractService
     from app.services.gap_service import GapService
+    from httpx import ASGITransport, AsyncClient
+    from sqlalchemy import select
 
     await init_db()
 
@@ -58,7 +57,9 @@ async def main() -> int:
         if bad.status_code != 200:
             print(f"  ingest (mock) status={bad.status_code} — OK if no chunks in test DB")
 
-        gaps = await client.get(f"/api/knowledge-bases/{kb.id}/gaps", params={"gap_type": "KNOWLEDGE_ABSENT"})
+        gaps = await client.get(
+            f"/api/knowledge-bases/{kb.id}/gaps", params={"gap_type": "KNOWLEDGE_ABSENT"}
+        )
         if gaps.status_code != 200:
             print(f"FAIL: list gaps {gaps.status_code}")
             return 1

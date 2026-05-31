@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import settings
 from ..models.conversation import Conversation, Message
 from ..schemas.chat import ConversationResponse, MessageResponse, ShareResponse
+from ..utils.kb_id import KbIdResolver
 from .conversation_extract_service import ConversationExtractService
 from .gap_service import GapService
 from .rag_service import RAGService
@@ -23,17 +24,26 @@ class ChatService:
         self.rag_svc = RAGService()
 
     async def create_conversation(self, kb_id: str) -> ConversationResponse:
-        conv = Conversation(knowledge_base_id=kb_id, title="新对话")
+        canonical = await KbIdResolver(self.db).resolve(kb_id)
+        conv = Conversation(knowledge_base_id=canonical, title="新对话")
         self.db.add(conv)
         await self.db.commit()
         await self.db.refresh(conv)
         return ConversationResponse.model_validate(conv)
 
-    async def list_conversations(self, kb_id: str) -> list[ConversationResponse]:
+    async def list_conversations(
+        self, kb_id: str, limit: int = 50, offset: int = 0
+    ) -> list[ConversationResponse]:
+        resolver = KbIdResolver(self.db)
+        canonical = await resolver.resolve(kb_id)
+        legacy = resolver.legacy_prefix(canonical)
+        kb_ids = [canonical] if legacy == canonical else [canonical, legacy]
         result = await self.db.execute(
             select(Conversation)
-            .where(Conversation.knowledge_base_id == kb_id)
+            .where(Conversation.knowledge_base_id.in_(kb_ids))
             .order_by(Conversation.created_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
         convs = list(result.scalars().all())
         updated = False
@@ -48,11 +58,17 @@ class ChatService:
 
     async def get_messages(self, conv_id: str) -> list[MessageResponse]:
         result = await self.db.execute(
-            select(Message)
-            .where(Message.conversation_id == conv_id)
-            .order_by(Message.created_at)
+            select(Message).where(Message.conversation_id == conv_id).order_by(Message.created_at)
         )
         return [MessageResponse.model_validate(m) for m in result.scalars().all()]
+
+    async def delete_conversation(self, conv_id: str) -> bool:
+        conv = await self.db.get(Conversation, conv_id)
+        if not conv:
+            return False
+        await self.db.delete(conv)
+        await self.db.commit()
+        return True
 
     async def chat_stream(self, conv_id: str, message: str):
         """SSE 流式对话（Mock 或真实 RAG）"""
@@ -62,14 +78,9 @@ class ChatService:
 
         # 先获取历史消息（不包含当前用户消息）
         history_result = await self.db.execute(
-            select(Message)
-            .where(Message.conversation_id == conv_id)
-            .order_by(Message.created_at)
+            select(Message).where(Message.conversation_id == conv_id).order_by(Message.created_at)
         )
-        history = [
-            {"role": m.role, "content": m.content}
-            for m in history_result.scalars().all()
-        ]
+        history = [{"role": m.role, "content": m.content} for m in history_result.scalars().all()]
 
         # 保存用户消息（在历史查询之后）
         user_msg = Message(conversation_id=conv_id, role="user", content=message)
@@ -81,9 +92,11 @@ class ChatService:
             await self.db.commit()
             await self.db.refresh(conv)
 
-        # 收集完整回复与来源
+        # 收集完整回复与来源（含 Agent CRAG 判定，供补全任务去重）
         full_answer = ""
         sources_data = []
+        crag_sufficient = False
+        crag_refused = False
 
         if settings.LLM_MOCK_MODE:
             mock_reply = f"Mock 模式: 您的问题是「{message}」。请在 .env 设置 LLM_MOCK_MODE=false"
@@ -102,6 +115,9 @@ class ChatService:
                             full_answer += parsed.get("content", "")
                         elif parsed.get("type") == "sources":
                             sources_data = parsed.get("sources", [])
+                        elif parsed.get("type") == "agent_meta":
+                            crag_sufficient = bool(parsed.get("sufficient"))
+                            crag_refused = bool(parsed.get("refused"))
                     except Exception:
                         pass
             except Exception as e:
@@ -131,6 +147,8 @@ class ChatService:
                     sources=sources_data or [],
                     conversation_id=conv_id,
                     message_id=assistant_msg.id,
+                    crag_sufficient=crag_sufficient,
+                    crag_refused=crag_refused,
                 )
             except Exception:
                 pass

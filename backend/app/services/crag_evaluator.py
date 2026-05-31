@@ -21,7 +21,16 @@ class SufficiencyResult:
 
 def _terms(text: str) -> set[str]:
     t = (text or "").lower()
-    return set(re.findall(r"(?a)\w{2,}", t)) | set(re.findall(r"[\u4e00-\u9fff]{2,}", t))
+    # Latin words (ASCII only)
+    latin = set(re.findall(r"(?a)\w{2,}", t))
+    # Chinese: split on punctuation to prevent greedy match consuming entire string
+    cjk = set()
+    for seg in re.split(
+        r"[\uff0c\u3002\uff1b\u3001\uff01\uff1f\s\u00b7\u2026\u2014,.;!?\n\r\t\u4e0e\u548c\u53ca\u6216\u7684]+",
+        t,
+    ):
+        cjk.update(re.findall(r"[\u4e00-\u9fff]{1,2}", seg))
+    return latin | cjk
 
 
 # Hybrid RRF + 轻量 rerank 的分值通常 < 0.15，与 0.2+ 的绝对阈值不可直接比较
@@ -73,4 +82,6 @@ def evaluate_sufficiency(
         )
 
     reason = "ok" if sufficient else f"weak(max={max_score:.3f},overlap={term_overlap:.3f})"
-    return SufficiencyResult(sufficient, round(combined, 4), max_score, round(term_overlap, 4), reason)
+    return SufficiencyResult(
+        sufficient, round(combined, 4), max_score, round(term_overlap, 4), reason
+    )

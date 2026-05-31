@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -238,7 +237,7 @@ def test_kb(kb: dict) -> dict:
         "errors": [],
     }
 
-    print(f"\n{'='*60}\n测试知识库: {name} ({kb_id})", flush=True)
+    print(f"\n{'=' * 60}\n测试知识库: {name} ({kb_id})", flush=True)
 
     # 1. 创建标签
     existing_tags = {t["name"]: t["id"] for t in api("GET", f"/api/knowledge-bases/{kb_id}/tags")}
@@ -366,7 +365,7 @@ def main() -> int:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"\n{'='*60}\n测试汇总")
+    print(f"\n{'=' * 60}\n测试汇总")
     total_msgs = sum(r.get("messages", 0) for r in results)
     total_tags = sum(r.get("tags_created", 0) for r in results)
     total_extract = sum(r.get("extract_saved", 0) for r in results)
@@ -379,14 +378,18 @@ def main() -> int:
                 f"  - {r['kb']}: 对话{r['messages']}轮, 标签{r['tags_created']}个, "
                 f"打标文档{r['docs_tagged']}篇, 提炼{r['extract_saved']}篇"
             )
-    print(f"\n合计: {total_msgs} 轮问答, {total_tags} 个标签, {total_extract} 篇提炼入库, {total_errors} 个错误")
+    print(
+        f"\n合计: {total_msgs} 轮问答, {total_tags} 个标签, {total_extract} 篇提炼入库, {total_errors} 个错误"
+    )
     print(f"报告: {report_path}")
 
     # 验证驾驶舱数据
     try:
         overview = api("GET", "/api/stats/overview")
-        print(f"\n驾驶舱概览: 知识库 {overview.get('total_knowledge_bases')} 个, "
-              f"总命中 {overview.get('total_hits')} 次")
+        print(
+            f"\n驾驶舱概览: 知识库 {overview.get('total_knowledge_bases')} 个, "
+            f"总命中 {overview.get('total_hits')} 次"
+        )
     except RuntimeError as exc:
         print(f"\n驾驶舱概览获取失败: {exc}")
 

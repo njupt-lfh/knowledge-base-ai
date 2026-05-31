@@ -11,12 +11,11 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
-    from sqlalchemy import text
-
     from app.core.database import async_session, init_db
     from app.services.embedding_service import EmbeddingService, get_embedding_cache
     from app.services.fts_service import FTS_TABLE
     from app.services.history_memory_service import compress_history, history_compression_ratio
+    from sqlalchemy import text
 
     await init_db()
 

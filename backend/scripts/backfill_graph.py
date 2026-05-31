@@ -35,12 +35,11 @@ def _preflight() -> tuple[bool, str]:
 
 
 async def _run(args: argparse.Namespace) -> int:
-    from sqlalchemy import func, select
-
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.kg_relation import KgRelation
     from app.services.graph_store_service import invalidate_graph_cache, sync_chunk_graph
+    from sqlalchemy import func, select
 
     ok, model_info = _preflight()
     if not ok:
@@ -57,11 +56,17 @@ async def _run(args: argparse.Namespace) -> int:
 
     async with async_session() as db:
         total_active = (
-            await db.execute(select(func.count()).select_from(Chunk).where(Chunk.is_active.is_(True)))
+            await db.execute(
+                select(func.count()).select_from(Chunk).where(Chunk.is_active.is_(True))
+            )
         ).scalar() or 0
         rel_before = (await db.execute(select(func.count()).select_from(KgRelation))).scalar() or 0
 
-        q = select(Chunk).where(Chunk.is_active.is_(True)).order_by(Chunk.knowledge_base_id, Chunk.chunk_index)
+        q = (
+            select(Chunk)
+            .where(Chunk.is_active.is_(True))
+            .order_by(Chunk.knowledge_base_id, Chunk.chunk_index)
+        )
         if kb_filter:
             q = q.where(Chunk.knowledge_base_id.in_(kb_filter))
         if args.kb_id:
@@ -72,7 +77,9 @@ async def _run(args: argparse.Namespace) -> int:
             chunks = chunks[: args.limit]
 
         if args.skip_existing:
-            existing = set((await db.execute(select(KgRelation.chunk_id).distinct())).scalars().all())
+            existing = set(
+                (await db.execute(select(KgRelation.chunk_id).distinct())).scalars().all()
+            )
             skipped = len(chunks)
             chunks = [c for c in chunks if c.id not in existing]
             print(f"WARN: --skip-existing 跳过 {skipped - len(chunks)} 条；LLM 全量请勿加此参数")

@@ -1,6 +1,7 @@
 # Phase 0 评测依赖（可选安装，不影响主服务启动）
 # pip install -r requirements-eval.txt
 ragas==0.2.14
+deepeval>=2.0,<3.0
 datasets>=2.14.0,<3.0
 langchain-openai==0.2.14
 langchain-community==0.3.27

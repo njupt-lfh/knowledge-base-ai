@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-
 from app.services.entity_extraction_service import extract_triples_from_chunk
 from app.services.graph_store_service import (
     build_networkx_graph,
@@ -37,7 +36,9 @@ async def test_sync_and_expand_graph():
     content = "深度学习与机器学习是人工智能的核心分支，深度学习属于机器学习。"
 
     async with async_session() as db:
-        db.add(KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50))
+        db.add(
+            KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
+        )
         db.add(
             Document(
                 id=doc_id,

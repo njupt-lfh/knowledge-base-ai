@@ -3,8 +3,10 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.chroma_client import get_collection
 from ..models.chunk import Chunk
 from ..schemas.chunk import ChunkResponse, ChunkUpdate, SearchResultItem
+from .embedding_service import EmbeddingService
 from .hybrid_retriever import HybridRetriever
 
 
@@ -12,12 +14,11 @@ class ChunkService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.retriever = HybridRetriever()
+        self.embed_svc = EmbeddingService()
 
     async def list_by_document(self, doc_id: str) -> list[ChunkResponse]:
         result = await self.db.execute(
-            select(Chunk)
-            .where(Chunk.document_id == doc_id)
-            .order_by(Chunk.chunk_index)
+            select(Chunk).where(Chunk.document_id == doc_id).order_by(Chunk.chunk_index)
         )
         return [ChunkResponse.model_validate(c) for c in result.scalars().all()]
 
@@ -77,7 +78,9 @@ class ChunkService:
                     ids=[chunk.id],
                     embeddings=[embedding],
                     documents=[chunk.content],
-                    metadatas=[{"document_id": chunk.document_id, "chunk_index": chunk.chunk_index}],
+                    metadatas=[
+                        {"document_id": chunk.document_id, "chunk_index": chunk.chunk_index}
+                    ],
                 )
             else:
                 collection.delete(ids=[chunk.id])

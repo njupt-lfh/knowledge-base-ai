@@ -16,7 +16,9 @@ from ..services.chat_service import ChatService
 router = APIRouter(tags=["对话"])
 
 
-@router.post("/api/knowledge-bases/{kb_id}/chat", response_model=ConversationResponse, status_code=201)
+@router.post(
+    "/api/knowledge-bases/{kb_id}/chat", response_model=ConversationResponse, status_code=201
+)
 async def create_conversation(
     kb_id: str,
     db: AsyncSession = Depends(get_db),
@@ -29,11 +31,13 @@ async def create_conversation(
 @router.get("/api/knowledge-bases/{kb_id}/conversations", response_model=list[ConversationResponse])
 async def list_conversations(
     kb_id: str,
+    limit: int = 50,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
-    """获取对话列表"""
+    """获取对话列表（分页）"""
     service = ChatService(db)
-    return await service.list_conversations(kb_id)
+    return await service.list_conversations(kb_id, limit=limit, offset=offset)
 
 
 @router.get("/api/conversations/{conv_id}/messages", response_model=list[MessageResponse])
@@ -86,6 +90,19 @@ async def get_shared_conversation(
     if not conv:
         raise HTTPException(status_code=404, detail="分享链接无效")
     return conv
+
+
+@router.delete("/api/conversations/{conv_id}")
+async def delete_conversation(
+    conv_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """删除对话及其所有消息"""
+    service = ChatService(db)
+    ok = await service.delete_conversation(conv_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    return {"detail": "ok"}
 
 
 @router.post("/api/conversations/{conv_id}/extract-knowledge")

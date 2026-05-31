@@ -28,9 +28,7 @@ def _parse_sources(raw) -> list[dict]:
 
 
 async def hit_distribution(db: AsyncSession, kb_id: str) -> list[dict]:
-    rows = (await db.execute(
-        select(Chunk.hit_count).where(Chunk.knowledge_base_id == kb_id)
-    )).all()
+    rows = (await db.execute(select(Chunk.hit_count).where(Chunk.knowledge_base_id == kb_id))).all()
 
     buckets = {"0次": 0, "1-5次": 0, "6-20次": 0, "20+次": 0}
     for (hits,) in rows:
@@ -50,15 +48,17 @@ async def hit_distribution(db: AsyncSession, kb_id: str) -> list[dict]:
 async def cite_vs_hit(db: AsyncSession, kb_id: str, limit: int = 10) -> list[dict]:
     cite_counts: dict[str, int] = defaultdict(int)
 
-    msg_rows = (await db.execute(
-        select(Message.sources)
-        .join(Conversation, Conversation.id == Message.conversation_id)
-        .where(
-            Conversation.knowledge_base_id == kb_id,
-            Message.role == "assistant",
-            Message.sources.isnot(None),
+    msg_rows = (
+        await db.execute(
+            select(Message.sources)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Conversation.knowledge_base_id == kb_id,
+                Message.role == "assistant",
+                Message.sources.isnot(None),
+            )
         )
-    )).all()
+    ).all()
 
     for (sources_raw,) in msg_rows:
         for src in _parse_sources(sources_raw):
@@ -66,54 +66,68 @@ async def cite_vs_hit(db: AsyncSession, kb_id: str, limit: int = 10) -> list[dic
             if cid:
                 cite_counts[cid] += 1
 
-    top_chunks = (await db.execute(
-        select(Chunk.id, Chunk.content, Chunk.hit_count)
-        .where(Chunk.knowledge_base_id == kb_id)
-        .order_by(desc(Chunk.hit_count), desc(Chunk.created_at))
-        .limit(limit)
-    )).all()
+    top_chunks = (
+        await db.execute(
+            select(Chunk.id, Chunk.content, Chunk.hit_count)
+            .where(Chunk.knowledge_base_id == kb_id)
+            .order_by(desc(Chunk.hit_count), desc(Chunk.created_at))
+            .limit(limit)
+        )
+    ).all()
 
     items = []
     for row in top_chunks:
         label = row.content[:24].replace("\n", " ")
-        items.append({
-            "chunk_id": row.id,
-            "label": label,
-            "hit_count": row.hit_count or 0,
-            "cite_count": cite_counts.get(row.id, 0),
-        })
+        items.append(
+            {
+                "chunk_id": row.id,
+                "label": label,
+                "hit_count": row.hit_count or 0,
+                "cite_count": cite_counts.get(row.id, 0),
+            }
+        )
 
     if not items and cite_counts:
         cited_ids = sorted(cite_counts.keys(), key=lambda x: cite_counts[x], reverse=True)[:limit]
-        chunk_rows = (await db.execute(
-            select(Chunk.id, Chunk.content, Chunk.hit_count).where(Chunk.id.in_(cited_ids))
-        )).all()
+        chunk_rows = (
+            await db.execute(
+                select(Chunk.id, Chunk.content, Chunk.hit_count).where(Chunk.id.in_(cited_ids))
+            )
+        ).all()
         chunk_map = {r.id: r for r in chunk_rows}
         for cid in cited_ids:
             row = chunk_map.get(cid)
             if row:
-                items.append({
-                    "chunk_id": row.id,
-                    "label": row.content[:24].replace("\n", " "),
-                    "hit_count": row.hit_count or 0,
-                    "cite_count": cite_counts[cid],
-                })
+                items.append(
+                    {
+                        "chunk_id": row.id,
+                        "label": row.content[:24].replace("\n", " "),
+                        "hit_count": row.hit_count or 0,
+                        "cite_count": cite_counts[cid],
+                    }
+                )
 
     return items
 
 
 async def rag_sankey(db: AsyncSession, kb_id: str, limit: int = 15) -> dict:
-    assistant_rows = (await db.execute(
-        select(Message)
-        .join(Conversation, Conversation.id == Message.conversation_id)
-        .where(
-            Conversation.knowledge_base_id == kb_id,
-            Message.role == "assistant",
-            Message.sources.isnot(None),
+    assistant_rows = (
+        (
+            await db.execute(
+                select(Message)
+                .join(Conversation, Conversation.id == Message.conversation_id)
+                .where(
+                    Conversation.knowledge_base_id == kb_id,
+                    Message.role == "assistant",
+                    Message.sources.isnot(None),
+                )
+                .order_by(desc(Message.created_at))
+                .limit(limit)
+            )
         )
-        .order_by(desc(Message.created_at))
-        .limit(limit)
-    )).scalars().all()
+        .scalars()
+        .all()
+    )
 
     nodes: dict[str, str] = {}
     links_map: dict[tuple[str, str], float] = defaultdict(float)
@@ -127,16 +141,18 @@ async def rag_sankey(db: AsyncSession, kb_id: str, limit: int = 15) -> dict:
         if not sources:
             continue
 
-        user_row = (await db.execute(
-            select(Message)
-            .where(
-                Message.conversation_id == amsg.conversation_id,
-                Message.role == "user",
-                Message.created_at < amsg.created_at,
+        user_row = (
+            await db.execute(
+                select(Message)
+                .where(
+                    Message.conversation_id == amsg.conversation_id,
+                    Message.role == "user",
+                    Message.created_at < amsg.created_at,
+                )
+                .order_by(desc(Message.created_at))
+                .limit(1)
             )
-            .order_by(desc(Message.created_at))
-            .limit(1)
-        )).scalar_one_or_none()
+        ).scalar_one_or_none()
 
         q_text = (user_row.content if user_row else "用户提问")[:20].replace("\n", " ")
         a_text = amsg.content[:20].replace("\n", " ") or "AI 回答"
@@ -159,13 +175,14 @@ async def rag_sankey(db: AsyncSession, kb_id: str, limit: int = 15) -> dict:
     return {
         "nodes": [{"name": nid, "label": label} for nid, label in nodes.items()],
         "links": [
-            {"source": s, "target": t, "value": max(v, 0.1)}
-            for (s, t), v in links_map.items()
+            {"source": s, "target": t, "value": max(v, 0.1)} for (s, t), v in links_map.items()
         ],
     }
 
 
-async def activity_heatmap(db: AsyncSession, kb_id: str | None = None, days: int = 30) -> list[dict]:
+async def activity_heatmap(
+    db: AsyncSession, kb_id: str | None = None, days: int = 30
+) -> list[dict]:
     since = datetime.utcnow() - timedelta(days=max(1, min(days, 90)))
 
     query = (

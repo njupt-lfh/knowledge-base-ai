@@ -7,6 +7,7 @@ from ..core.database import get_db
 from ..schemas.gap import GapCreateRequest, GapIngestRequest, GapResponse, GapStatusUpdate
 from ..services.gap_service import GapService
 from ..services.rag_service import RAGService
+from ..utils.kb_id import KbIdResolver
 
 router = APIRouter(prefix="/api/knowledge-bases/{kb_id}/gaps", tags=["gaps"])
 
@@ -20,7 +21,10 @@ async def list_gaps(
     db: AsyncSession = Depends(get_db),
 ):
     svc = GapService(db)
-    gaps = await svc.list_gaps(kb_id, gap_type=gap_type, status=status, limit=limit)
+    try:
+        gaps = await svc.list_gaps(kb_id, gap_type=gap_type, status=status, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     return [GapResponse.model_validate(g) for g in gaps]
 
 
@@ -31,17 +35,21 @@ async def create_gap(
     db: AsyncSession = Depends(get_db),
 ):
     svc = GapService(db)
+    try:
+        canonical = await KbIdResolver(db).resolve(kb_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     rag = RAGService()
-    sources = await rag.retrieve(kb_id, body.query, top_k=5, db=db)
+    sources = await rag.retrieve(canonical, body.query, top_k=5, db=db)
     gap_type = body.gap_type or svc.classify_gap(
         body.query,
-        kb_id,
+        canonical,
         sources,
         correction_text=body.correction_text,
         user_message=body.query,
     )
     gap = await svc.create_gap(
-        kb_id=kb_id,
+        kb_id=canonical,
         query=body.query,
         gap_type=gap_type,
         source_ref=body.source_ref,
@@ -78,7 +86,12 @@ async def update_gap_status(
     db: AsyncSession = Depends(get_db),
 ):
     svc = GapService(db)
+    resolver = KbIdResolver(db)
+    try:
+        canonical = await resolver.resolve(kb_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     gap = await svc.update_status(gap_id, body.status)
-    if not gap or gap.kb_id != kb_id:
+    if not gap or not resolver.gap_kb_matches(gap.kb_id, canonical):
         raise HTTPException(status_code=404, detail="gap not found")
     return GapResponse.model_validate(gap)

@@ -13,7 +13,14 @@ interface StatCardProps {
   index?: number
 }
 
-export default function StatCard({ title, value, icon, delta, hot = false, index = 0 }: StatCardProps) {
+export default function StatCard({
+  title,
+  value,
+  icon,
+  delta,
+  hot = false,
+  index = 0,
+}: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}

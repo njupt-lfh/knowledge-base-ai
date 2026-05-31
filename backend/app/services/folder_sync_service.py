@@ -140,7 +140,9 @@ async def scan_watch(
             await db.commit()
 
             if file_type == "image":
-                await _process_image(doc_id, watch.knowledge_base_id, file_type, str(dest), src.name)
+                await _process_image(
+                    doc_id, watch.knowledge_base_id, file_type, str(dest), src.name
+                )
             else:
                 await _process_document(doc_id, watch.knowledge_base_id, file_type, str(dest))
 
@@ -156,18 +158,24 @@ async def scan_watch(
 
 async def scan_all_enabled_watches(db: AsyncSession) -> list[SyncScanResult]:
     rows = (
-        await db.execute(select(KbFolderWatch).where(KbFolderWatch.enabled.is_(True)))
-    ).scalars().all()
+        (await db.execute(select(KbFolderWatch).where(KbFolderWatch.enabled.is_(True))))
+        .scalars()
+        .all()
+    )
     return [await scan_watch(db, w) for w in rows]
 
 
 async def scan_kb_watch(db: AsyncSession, kb_id: str) -> list[SyncScanResult]:
     rows = (
-        await db.execute(
-            select(KbFolderWatch).where(
-                KbFolderWatch.knowledge_base_id == kb_id,
-                KbFolderWatch.enabled.is_(True),
+        (
+            await db.execute(
+                select(KbFolderWatch).where(
+                    KbFolderWatch.knowledge_base_id == kb_id,
+                    KbFolderWatch.enabled.is_(True),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [await scan_watch(db, w) for w in rows]

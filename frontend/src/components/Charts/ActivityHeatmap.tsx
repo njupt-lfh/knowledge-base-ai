@@ -68,7 +68,7 @@ export default function ActivityHeatmap({ points }: ActivityHeatmapProps) {
 
   return (
     <HudPanel className="chart-panel">
-      <h3 className="chart-panel__title">活跃时段热力图（真实消息）</h3>
+      <h3 className="chart-panel__title">活跃时段热力图</h3>
       <ReactECharts option={option} style={{ height: 300 }} opts={{ renderer: 'canvas' }} />
     </HudPanel>
   )

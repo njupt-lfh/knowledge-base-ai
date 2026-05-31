@@ -39,7 +39,9 @@ def invalidate_graph_cache(kb_id: str) -> None:
     _graph_cache.pop(kb_id, None)
 
 
-async def delete_relations_for_chunk(db: AsyncSession, chunk_id: str, *, commit: bool = True) -> None:
+async def delete_relations_for_chunk(
+    db: AsyncSession, chunk_id: str, *, commit: bool = True
+) -> None:
     await db.execute(delete(KgRelation).where(KgRelation.chunk_id == chunk_id))
     if commit:
         await db.commit()

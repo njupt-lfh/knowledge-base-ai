@@ -53,16 +53,22 @@ class GraphRetriever:
         if not chunk_scores:
             return [], paths
 
-        ranked_ids = sorted(chunk_scores.keys(), key=lambda x: chunk_scores[x], reverse=True)[: max(effective_k * 2, 10)]
+        ranked_ids = sorted(chunk_scores.keys(), key=lambda x: chunk_scores[x], reverse=True)[
+            : max(effective_k * 2, 10)
+        ]
         chunks = (
-            await db.execute(
-                select(Chunk).where(
-                    Chunk.id.in_(ranked_ids),
-                    Chunk.knowledge_base_id == kb_id,
-                    Chunk.is_active.is_(True),
+            (
+                await db.execute(
+                    select(Chunk).where(
+                        Chunk.id.in_(ranked_ids),
+                        Chunk.knowledge_base_id == kb_id,
+                        Chunk.is_active.is_(True),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         chunk_map = {c.id: c for c in chunks}
 
         sources: list[dict[str, Any]] = []

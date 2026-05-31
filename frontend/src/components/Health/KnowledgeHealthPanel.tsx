@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Card, Space, Tag, Typography } from 'antd'
 import {
-  AlertOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
+  AlertOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
 import { healthApi, type KnowledgeBaseHealth } from '../../api/health'
@@ -19,7 +21,11 @@ interface KnowledgeHealthPanelProps {
   onNavigate?: (tab: 'governance' | 'conflicts' | 'gaps') => void
 }
 
-export default function KnowledgeHealthPanel({ kbId, refreshToken = 0, onNavigate }: KnowledgeHealthPanelProps) {
+export default function KnowledgeHealthPanel({
+  kbId,
+  refreshToken = 0,
+  onNavigate,
+}: KnowledgeHealthPanelProps) {
   const [health, setHealth] = useState<KnowledgeBaseHealth | null>(null)
 
   const fetchHealth = useCallback(async () => {

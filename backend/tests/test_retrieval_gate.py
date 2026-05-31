@@ -18,5 +18,7 @@ def test_keep_graph_backed():
 
 def test_keep_high_overlap():
     sources = [{"chunk_id": "a", "content": "React 18 Suspense 源码分析章节详解", "score": 0.25}]
-    out = apply_retrieval_abstention("React 18 Suspense 源码分析", sources, "factual", graph_paths=[])
+    out = apply_retrieval_abstention(
+        "React 18 Suspense 源码分析", sources, "factual", graph_paths=[]
+    )
     assert len(out) == 1

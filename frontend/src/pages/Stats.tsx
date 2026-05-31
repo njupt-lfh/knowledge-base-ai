@@ -1,10 +1,5 @@
 import { Spin } from 'antd'
-import {
-  DatabaseOutlined,
-  FileTextOutlined,
-  BlockOutlined,
-  EyeOutlined,
-} from '@ant-design/icons'
+import { DatabaseOutlined, FileTextOutlined, BlockOutlined, EyeOutlined } from '@ant-design/icons'
 import { useStats } from '../hooks/useStats'
 import StatCard from '../components/Charts/StatCard'
 import TrendLineChart from '../components/Charts/TrendLineChart'
@@ -32,6 +27,8 @@ export default function Stats() {
     clearKbSelection,
   } = useStats()
 
+  const selectedKbName = kbs.find((kb) => kb.id === selectedKb)?.name
+
   return (
     <Spin spinning={loading}>
       <>
@@ -42,13 +39,46 @@ export default function Stats() {
           </div>
         </div>
 
-        <ColdKnowledgeBadge data={overview?.cold_knowledge} />
+        <KbSelector
+          kbs={kbs}
+          selectedKb={selectedKb}
+          selectedKbName={selectedKbName}
+          onSelectKb={loadKbStats}
+          onClearKb={clearKbSelection}
+        />
+
+        <ColdKnowledgeBadge data={selectedKb ? kbAdvanced?.cold : overview?.cold_knowledge} />
 
         <div className="stats-grid">
-          <StatCard title="知识库" value={overview?.kb_count ?? 0} icon={<DatabaseOutlined />} delta="活跃资产" index={0} />
-          <StatCard title="文档总数" value={overview?.doc_count ?? 0} icon={<FileTextOutlined />} delta="已入库" index={1} />
-          <StatCard title="知识块" value={overview?.chunk_count ?? 0} icon={<BlockOutlined />} delta="向量化" index={2} />
-          <StatCard title="总命中" value={overview?.total_hits ?? 0} icon={<EyeOutlined />} delta="检索+对话" hot index={3} />
+          <StatCard
+            title="知识库"
+            value={overview?.kb_count ?? 0}
+            icon={<DatabaseOutlined />}
+            delta="活跃资产"
+            index={0}
+          />
+          <StatCard
+            title="文档总数"
+            value={overview?.doc_count ?? 0}
+            icon={<FileTextOutlined />}
+            delta="已入库"
+            index={1}
+          />
+          <StatCard
+            title="知识块"
+            value={overview?.chunk_count ?? 0}
+            icon={<BlockOutlined />}
+            delta="向量化"
+            index={2}
+          />
+          <StatCard
+            title="总命中"
+            value={overview?.total_hits ?? 0}
+            icon={<EyeOutlined />}
+            delta="检索+对话"
+            hot
+            index={3}
+          />
         </div>
 
         <div className="charts-grid">
@@ -64,39 +94,48 @@ export default function Stats() {
           <Top3Cards items={overview?.top_chunks ?? []} />
         </div>
 
-        <HudSection
-          kbs={kbs}
-          selectedKb={selectedKb}
-          kbStats={kbStats}
-          kbAdvanced={kbAdvanced}
-          onSelectKb={loadKbStats}
-          onClearKb={clearKbSelection}
-        />
+        {selectedKb && <KbDeepSection kbStats={kbStats} kbAdvanced={kbAdvanced} />}
       </>
     </Spin>
   )
 }
 
-function HudSection({
+function KbSelector({
   kbs,
   selectedKb,
-  kbStats,
-  kbAdvanced,
+  selectedKbName,
   onSelectKb,
   onClearKb,
 }: {
   kbs: { id: string; name: string }[]
   selectedKb: string | null
-  kbStats: ReturnType<typeof useStats>['kbStats']
-  kbAdvanced: ReturnType<typeof useStats>['kbAdvanced']
+  selectedKbName?: string
   onSelectKb: (id: string) => void
   onClearKb: () => void
 }) {
   return (
-    <div>
-      <h3 className="chart-panel__title" style={{ marginBottom: 16 }}>
-        按知识库深度分析
-      </h3>
+    <div style={{ marginBottom: 'var(--space-lg)' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+          marginBottom: 12,
+        }}
+      >
+        <h3 className="chart-panel__title" style={{ margin: 0 }}>
+          按知识库深度分析
+        </h3>
+        {selectedKbName && (
+          <span
+            style={{ color: 'var(--text-muted)', fontSize: 13, fontFamily: 'var(--font-mono)' }}
+          >
+            当前：{selectedKbName}
+          </span>
+        )}
+      </div>
       <div className="kb-selector">
         <button
           type="button"
@@ -116,24 +155,39 @@ function HudSection({
           </button>
         ))}
       </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8, marginBottom: 0 }}>
+        选择知识库后，下方趋势图、热力图及深度指标将切换为该库数据；概览卡片与分布图仍为全局统计。
+      </p>
+    </div>
+  )
+}
 
-      {selectedKb && kbAdvanced && (
-        <>
-          <ColdKnowledgeBadge data={kbAdvanced.cold} compact />
-          <div className="charts-grid" style={{ marginTop: 16 }}>
-            <HitHistogram buckets={kbAdvanced.distribution} />
-            <CiteHitChart items={kbAdvanced.citeVsHit} />
-          </div>
-          <div style={{ marginBottom: 'var(--space-lg)' }}>
-            <RagSankeyChart nodes={kbAdvanced.sankey.nodes} links={kbAdvanced.sankey.links} />
-          </div>
-        </>
-      )}
+function KbDeepSection({
+  kbStats,
+  kbAdvanced,
+}: {
+  kbStats: ReturnType<typeof useStats>['kbStats']
+  kbAdvanced: ReturnType<typeof useStats>['kbAdvanced']
+}) {
+  if (!kbAdvanced) return null
 
-      {selectedKb && kbStats && kbStats.hot_items.length > 0 && (
-        <HotBarChart items={kbStats.hot_items} />
-      )}
-      {selectedKb && kbStats && kbStats.hot_items.length === 0 && (
+  return (
+    <div>
+      <h3 className="chart-panel__title" style={{ marginBottom: 16 }}>
+        深度指标
+      </h3>
+
+      <div className="charts-grid" style={{ marginBottom: 'var(--space-lg)' }}>
+        <HitHistogram buckets={kbAdvanced.distribution} />
+        <CiteHitChart items={kbAdvanced.citeVsHit} />
+      </div>
+
+      <div style={{ marginBottom: 'var(--space-lg)' }}>
+        <RagSankeyChart nodes={kbAdvanced.sankey.nodes} links={kbAdvanced.sankey.links} />
+      </div>
+
+      {kbStats && kbStats.hot_items.length > 0 && <HotBarChart items={kbStats.hot_items} />}
+      {kbStats && kbStats.hot_items.length === 0 && (
         <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
           该知识库暂无命中数据
         </p>

@@ -12,8 +12,6 @@ os.environ["LLM_MOCK_MODE"] = "true"
 
 @pytest.mark.asyncio
 async def test_process_image_creates_chunk_and_vector():
-    from sqlalchemy import select
-
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
@@ -21,6 +19,7 @@ async def test_process_image_creates_chunk_and_vector():
     from app.models.knowledge_base import KnowledgeBase
     from app.services.document_service import _process_image
     from app.services.embedding_service import EmbeddingService
+    from sqlalchemy import select
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]
@@ -58,20 +57,25 @@ async def test_process_image_creates_chunk_and_vector():
         )
         await db.commit()
 
-    with patch(
-        "app.services.vision_caption_service.describe_image",
-        new=AsyncMock(return_value="测试图片描述：流程图与指标。"),
-    ), patch.object(
-        EmbeddingService,
-        "embed_image",
-        return_value=[float(i % 17) for i in range(256)],
+    with (
+        patch(
+            "app.services.vision_caption_service.describe_image",
+            new=AsyncMock(return_value="测试图片描述：流程图与指标。"),
+        ),
+        patch.object(
+            EmbeddingService,
+            "embed_image",
+            return_value=[float(i % 17) for i in range(256)],
+        ),
     ):
         await _process_image(doc_id, kb_id, "image", str(img), "cap.png")
 
     async with async_session() as db:
         doc = await db.get(Document, doc_id)
         assert doc.status == "completed"
-        chunks = (await db.execute(select(Chunk).where(Chunk.document_id == doc_id))).scalars().all()
+        chunks = (
+            (await db.execute(select(Chunk).where(Chunk.document_id == doc_id))).scalars().all()
+        )
         assert len(chunks) == 1
         assert "Mock 描述" in chunks[0].content or "流程图" in chunks[0].content
 

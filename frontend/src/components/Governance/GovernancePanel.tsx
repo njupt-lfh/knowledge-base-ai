@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Card, Space, Table, Tag, Typography, message } from 'antd'
+import { Button, Card, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
 import { ReloadOutlined, ToolOutlined } from '@ant-design/icons'
 import ColdKnowledgeBadge from '../Charts/ColdKnowledgeBadge'
-import { governanceApi, type GovernanceScanResult, type GovernanceSuggestion } from '../../api/governance'
+import {
+  governanceApi,
+  type GovernanceScanResult,
+  type GovernanceSuggestion,
+} from '../../api/governance'
 import type { ColdKnowledgeStats } from '../../api/stats'
 import './GovernancePanel.css'
 
@@ -12,6 +16,12 @@ const TYPE_LABELS: Record<string, string> = {
   high_quality_zero_hit: '高质量零命中',
   low_quality: '低质量',
   archive_candidate: '建议归档',
+}
+
+const SEVERITY_LABELS: Record<string, string> = {
+  error: '高',
+  warning: '中',
+  info: '低',
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -52,15 +62,15 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
     fetchScan()
   }, [fetchScan])
 
-  const handleApply = async (row: GovernanceSuggestion) => {
-    const action = row.recommended_action
-    if (action === 'merge') {
+  const handleApply = async (row: GovernanceSuggestion, action?: string) => {
+    const act = action || row.recommended_action
+    if (act === 'merge') {
       message.info('请在文档分块列表中编辑后禁用重复项')
       return
     }
     setActingId(row.id)
     try {
-      const res = await governanceApi.apply(kbId, action, row.chunk_ids)
+      const res = await governanceApi.apply(kbId, act, row.chunk_ids)
       message.success(`已处理 ${res.data.applied} 项`)
       onApplied?.()
       fetchScan()
@@ -93,7 +103,9 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
         <Space direction="vertical" size={0}>
           <Typography.Text strong>{row.title}</Typography.Text>
           <Typography.Text type="secondary">{row.description}</Typography.Text>
-          <Typography.Text type="secondary" className="gov-preview">{row.content_preview}</Typography.Text>
+          <Typography.Text type="secondary" className="gov-preview">
+            {row.content_preview}
+          </Typography.Text>
         </Space>
       ),
     },
@@ -101,28 +113,66 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       title: '优先级',
       dataIndex: 'severity',
       width: 90,
-      render: (s: string) => <Tag color={SEVERITY_COLOR[s] || 'default'}>{s}</Tag>,
+      render: (s: string) => (
+        <Tag color={SEVERITY_COLOR[s] || 'default'}>{SEVERITY_LABELS[s] || s}</Tag>
+      ),
     },
     {
       title: '操作',
       key: 'action',
-      width: 120,
-      render: (_: unknown, row: GovernanceSuggestion) => (
-        <Button
-          size="small"
-          type="primary"
-          ghost
-          loading={actingId === row.id}
-          onClick={() => handleApply(row)}
-        >
-          {ACTION_LABELS[row.recommended_action] || row.recommended_action}
-        </Button>
-      ),
+      width: 200,
+      render: (_: unknown, row: GovernanceSuggestion) => {
+        const actions = [row.recommended_action]
+        // 对于低质量和冷知识，额外提供归档和禁用的交叉选项
+        if (row.type === 'low_quality') {
+          if (!actions.includes('archive')) actions.push('archive')
+        }
+        if (row.type === 'cold_stale') {
+          if (!actions.includes('deactivate')) actions.push('deactivate')
+        }
+        return (
+          <Space size="small">
+            {actions.map((action) => {
+              const btn = (
+                <Button
+                  key={action}
+                  size="small"
+                  type={action === row.recommended_action ? 'primary' : 'default'}
+                  loading={actingId === row.id}
+                >
+                  {ACTION_LABELS[action] || action}
+                </Button>
+              )
+              if (action === 'deactivate' || action === 'archive') {
+                return (
+                  <Popconfirm
+                    key={action}
+                    title={`确定${ACTION_LABELS[action]}？`}
+                    onConfirm={() => handleApply(row, action)}
+                  >
+                    {btn}
+                  </Popconfirm>
+                )
+              }
+              return (
+                <span key={action} onClick={() => handleApply(row, action)}>
+                  {btn}
+                </span>
+              )
+            })}
+          </Space>
+        )
+      },
     },
   ]
 
   return (
-    <Space direction="vertical" style={{ width: '100%' }} size="middle" className="governance-panel">
+    <Space
+      direction="vertical"
+      style={{ width: '100%' }}
+      size="middle"
+      className="governance-panel"
+    >
       <Space wrap align="center" className="governance-panel__toolbar">
         <ColdKnowledgeBadge data={coldBadge} />
         {health && (

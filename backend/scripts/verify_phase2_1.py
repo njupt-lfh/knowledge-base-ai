@@ -11,14 +11,13 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
-    from httpx import ASGITransport, AsyncClient
-    from sqlalchemy import select, text
-
     from app.core.database import async_session, init_db
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
     from app.services.hybrid_retriever import reciprocal_rank_fusion
     from app.services.rerank_service import rerank_candidates
+    from httpx import ASGITransport, AsyncClient
+    from sqlalchemy import select, text
 
     await init_db()
 
@@ -45,7 +44,9 @@ async def main() -> int:
         print(f"FAIL: RRF merge unexpected {rrf}")
         return 1
 
-    reranked = rerank_candidates("python 环境变量", [{"content": "dotenv 读取环境变量", "rrf_score": 0.5}], top_k=1)
+    reranked = rerank_candidates(
+        "python 环境变量", [{"content": "dotenv 读取环境变量", "rrf_score": 0.5}], top_k=1
+    )
     if not reranked:
         print("FAIL: rerank empty")
         return 1

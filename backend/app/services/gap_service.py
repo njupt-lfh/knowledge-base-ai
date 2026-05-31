@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.chroma_client import get_collection
 from ..models.knowledge_gap import GAP_STATUSES, GAP_TYPES, KnowledgeGap
+from ..utils.kb_id import KbIdResolver
 from .conversation_extract_service import AUTO_INGEST_GAP_TYPES, ConversationExtractService
 from .document_service import DocumentService
 from .embedding_service import EmbeddingService
@@ -37,6 +37,15 @@ class GapService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.embed_svc = EmbeddingService()
+        self._kb_resolver = KbIdResolver(db)
+
+    async def _canonical_kb_id(self, kb_id: str) -> str:
+        return await self._kb_resolver.resolve(kb_id)
+
+    def _gap_kb_clause(self, canonical: str):
+        legacy = KbIdResolver.legacy_prefix(canonical)
+        ids = [canonical] if legacy == canonical else [canonical, legacy]
+        return KnowledgeGap.kb_id.in_(ids)
 
     def classify_gap(
         self,
@@ -87,6 +96,18 @@ class GapService:
         return any(m in t for m in markers) and "?" not in t and "？" not in t
 
     @staticmethod
+    def should_skip_gap_after_sufficient_answer(
+        *,
+        crag_sufficient: bool,
+        crag_refused: bool,
+        gap_type: str,
+    ) -> bool:
+        """CRAG 已判定检索充分且未拒答时，不再记「知识缺失/检索未命中」类假缺口。"""
+        if not crag_sufficient or crag_refused:
+            return False
+        return gap_type in ("KNOWLEDGE_ABSENT", "RETRIEVAL_MISS")
+
+    @staticmethod
     def should_enqueue(
         retrieval_result: list[dict],
         answer: str,
@@ -116,6 +137,7 @@ class GapService:
         if gap_type not in GAP_TYPES:
             raise ValueError(f"invalid gap_type: {gap_type}")
 
+        kb_id = await self._canonical_kb_id(kb_id)
         status = "manual_required" if gap_type == "KNOWLEDGE_ABSENT" else "pending"
         if gap_type in ("USER_PROVIDED", "USER_CORRECTION"):
             status = "suggested"
@@ -123,7 +145,10 @@ class GapService:
         ref = source_ref
         if ref is None and retrieval_result:
             ref = json.dumps(
-                [{"chunk_id": s.get("chunk_id"), "score": s.get("score")} for s in retrieval_result[:5]],
+                [
+                    {"chunk_id": s.get("chunk_id"), "score": s.get("score")}
+                    for s in retrieval_result[:5]
+                ],
                 ensure_ascii=False,
             )
 
@@ -144,9 +169,10 @@ class GapService:
         return gap
 
     async def _find_open_gap(self, kb_id: str, query: str) -> KnowledgeGap | None:
+        canonical = await self._canonical_kb_id(kb_id)
         existing = await self.db.execute(
             select(KnowledgeGap).where(
-                KnowledgeGap.kb_id == kb_id,
+                self._gap_kb_clause(canonical),
                 KnowledgeGap.query == query,
                 KnowledgeGap.status.in_(("pending", "suggested", "manual_required")),
             )
@@ -162,12 +188,21 @@ class GapService:
         sources: list[dict],
         conversation_id: str,
         message_id: str,
+        crag_sufficient: bool = False,
+        crag_refused: bool = False,
     ) -> KnowledgeGap | None:
         """对话结束后：分类 → 结构化提炼（可入库类型）→ 入队。"""
         if await self._find_open_gap(kb_id, query):
             return None
 
         gap_type = self.classify_gap(query, kb_id, sources, user_message=query)
+
+        if self.should_skip_gap_after_sufficient_answer(
+            crag_sufficient=crag_sufficient,
+            crag_refused=crag_refused,
+            gap_type=gap_type,
+        ):
+            return None
 
         if gap_type == "KNOWLEDGE_ABSENT":
             if not self.should_enqueue(sources, answer):
@@ -237,15 +272,18 @@ class GapService:
         manual_content: str | None = None,
         manual_title: str | None = None,
     ) -> dict:
+        canonical = await self._canonical_kb_id(kb_id)
         gap = await self.db.get(KnowledgeGap, gap_id)
-        if not gap or gap.kb_id != kb_id:
+        if not gap or not self._kb_resolver.gap_kb_matches(gap.kb_id, canonical):
             raise ValueError("gap not found")
+        if gap.kb_id != canonical:
+            gap.kb_id = canonical
 
         if gap.gap_type == "KNOWLEDGE_ABSENT":
             content = (manual_content or "").strip()
             if not content:
                 raise ValueError("KNOWLEDGE_ABSENT 需人工填写内容，禁止 LLM 自动生成")
-            title = manual_title or gap.query[:80]
+            title = manual_title or gap.query[:30]
             source_ref = content[:300]
         elif gap.gap_type in AUTO_INGEST_GAP_TYPES:
             if not gap.source_ref:
@@ -257,17 +295,17 @@ class GapService:
                 except json.JSONDecodeError:
                     suggested = {}
             content = (manual_content or suggested.get("content") or "").strip()
+            if not content and gap.gap_type in ("USER_CORRECTION", "USER_PROVIDED"):
+                content = (gap.source_ref or "").strip()
             if not content:
                 raise ValueError("无入库内容")
-            title = manual_title or suggested.get("title") or gap.query[:80]
+            title = manual_title or suggested.get("title") or gap.query[:30]
             source_ref = gap.source_ref
         else:
             raise ValueError(f"gap_type {gap.gap_type} 不支持自动入库")
 
         doc_svc = DocumentService(self.db)
-        doc, stats = await doc_svc.ingest_manual_immediate(
-            kb_id, f"[Gap] {title}", content
-        )
+        doc, stats = await doc_svc.ingest_manual_immediate(canonical, f"[Gap] {title}", content)
         gap.status = "approved"
         gap.source_ref = source_ref
         await self.db.commit()
@@ -288,7 +326,8 @@ class GapService:
         status: str | None = None,
         limit: int = 50,
     ) -> list[KnowledgeGap]:
-        q = select(KnowledgeGap).where(KnowledgeGap.kb_id == kb_id)
+        canonical = await self._canonical_kb_id(kb_id)
+        q = select(KnowledgeGap).where(self._gap_kb_clause(canonical))
         if gap_type:
             q = q.where(KnowledgeGap.gap_type == gap_type)
         if status:

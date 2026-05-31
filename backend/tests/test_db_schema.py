@@ -1,5 +1,4 @@
 import pytest
-
 from app.core.database import expected_table_names, init_db, verify_schema
 
 

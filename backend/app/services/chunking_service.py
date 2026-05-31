@@ -1,7 +1,6 @@
 """文档解析与分块服务"""
 
 import re
-from typing import List
 
 import markdown
 from pypdf import PdfReader
@@ -33,7 +32,7 @@ class DocumentParser:
 
     @staticmethod
     def _parse_markdown(path: str) -> str:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             md_content = f.read()
         html = markdown.markdown(md_content)
         clean = re.sub(r"<[^>]+>", "", html)
@@ -41,7 +40,7 @@ class DocumentParser:
 
     @staticmethod
     def _parse_txt(path: str) -> str:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return f.read()
 
 
@@ -53,10 +52,10 @@ class TextChunker:
         self.chunk_overlap = chunk_overlap
         self.separators = ["\n\n", "\n", "。", ".", "！", "?", "？", "! ", "; ", "；", " "]
 
-    def split(self, text: str) -> List[str]:
+    def split(self, text: str) -> list[str]:
         return self._split_recursive(text, self.separators)
 
-    def _split_recursive(self, text: str, separators: List[str]) -> List[str]:
+    def _split_recursive(self, text: str, separators: list[str]) -> list[str]:
         chunks = []
         current_chunk = ""
 
@@ -66,7 +65,7 @@ class TextChunker:
                 split_pos = self._find_best_split_point(current_chunk, separators)
                 if split_pos > 0:
                     chunks.append(current_chunk[:split_pos].strip())
-                    current_chunk = current_chunk[max(0, split_pos - self.chunk_overlap):]
+                    current_chunk = current_chunk[max(0, split_pos - self.chunk_overlap) :]
                 else:
                     chunks.append(current_chunk.strip())
                     current_chunk = ""
@@ -76,7 +75,7 @@ class TextChunker:
 
         return chunks
 
-    def _find_best_split_point(self, text: str, separators: List[str]) -> int:
+    def _find_best_split_point(self, text: str, separators: list[str]) -> int:
         search_start = int(len(text) * 0.8)
         search_area = text[search_start:]
         best_pos = -1

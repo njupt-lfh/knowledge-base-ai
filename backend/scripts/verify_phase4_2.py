@@ -27,8 +27,6 @@ def _build_sample_pdf(path: Path) -> None:
 
 
 async def main() -> int:
-    from sqlalchemy import select
-
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
@@ -36,6 +34,7 @@ async def main() -> int:
     from app.models.knowledge_base import KnowledgeBase
     from app.services.document_service import _process_document
     from app.services.pdf_image_extractor import extract_pdf_images
+    from sqlalchemy import select
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]
@@ -77,8 +76,8 @@ async def main() -> int:
         assert doc and doc.status == "completed" and doc.chunk_count >= 2
 
         chunks = (
-            await db.execute(select(Chunk).where(Chunk.document_id == doc_id))
-        ).scalars().all()
+            (await db.execute(select(Chunk).where(Chunk.document_id == doc_id))).scalars().all()
+        )
         text_hit = any("Q7Z9" in c.content for c in chunks)
         img_hit = any(c.content.startswith("[PDF图片]") for c in chunks)
         assert text_hit and img_hit

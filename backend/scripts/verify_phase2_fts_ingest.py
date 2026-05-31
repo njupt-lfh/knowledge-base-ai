@@ -13,13 +13,12 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
-    from sqlalchemy import text
-
     from app.core.database import async_session, init_db
     from app.models.document import Document
     from app.models.knowledge_base import KnowledgeBase
     from app.services.document_service import DocumentService, _process_document, _process_manual
     from app.services.fts_service import FTS_TABLE, search_fts
+    from sqlalchemy import text
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]
@@ -68,7 +67,9 @@ async def main() -> int:
         "app.services.embedding_service.EmbeddingService.embed_query",
         return_value=[0.1] * 256,
     )
-    chroma_patch = patch("app.services.document_service.get_collection", return_value=fake_collection)
+    chroma_patch = patch(
+        "app.services.document_service.get_collection", return_value=fake_collection
+    )
 
     with embed_patch, embed_query_patch, chroma_patch:
         await _process_manual(

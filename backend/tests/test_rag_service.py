@@ -1,10 +1,9 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.chunk import Chunk
 from app.services.rag_service import RAGService
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

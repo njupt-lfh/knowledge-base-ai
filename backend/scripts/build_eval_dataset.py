@@ -11,11 +11,10 @@ BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
 sys.path.insert(0, str(BACKEND))
 
-from sqlalchemy import func, select  # noqa: E402
-
 from app.core.database import async_session  # noqa: E402
 from app.models.chunk import Chunk  # noqa: E402
 from app.models.knowledge_base import KnowledgeBase  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 
 OUTPUT = ROOT / "data" / "eval_qa_dataset.json"
 TARGET_KBS = 5
@@ -84,8 +83,18 @@ def _make_samples(kb_id: str, kb_name: str, chunks: list[Chunk]) -> list[dict]:
         )
 
     # 2 negative
-    add("negative", f"本知识库中关于「量子纠缠实验步骤」的详细记录是什么？", "知识库中暂无相关信息。", [])
-    add("negative", f"请介绍本知识库中 React 18 Suspense 源码分析章节。", "知识库中暂无相关信息。", [])
+    add(
+        "negative",
+        "本知识库中关于「量子纠缠实验步骤」的详细记录是什么？",
+        "知识库中暂无相关信息。",
+        [],
+    )
+    add(
+        "negative",
+        "请介绍本知识库中 React 18 Suspense 源码分析章节。",
+        "知识库中暂无相关信息。",
+        [],
+    )
 
     return samples[:SAMPLES_PER_KB]
 
@@ -108,13 +117,17 @@ async def main() -> int:
 
         for kb_id, kb_name, _ in kb_rows:
             chunks = (
-                await db.execute(
-                    select(Chunk)
-                    .where(Chunk.knowledge_base_id == kb_id, Chunk.is_active.is_(True))
-                    .order_by(Chunk.hit_count.desc(), Chunk.chunk_index)
-                    .limit(30)
+                (
+                    await db.execute(
+                        select(Chunk)
+                        .where(Chunk.knowledge_base_id == kb_id, Chunk.is_active.is_(True))
+                        .order_by(Chunk.hit_count.desc(), Chunk.chunk_index)
+                        .limit(30)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             batch = _make_samples(kb_id, kb_name or kb_id, list(chunks))
             if len(batch) < SAMPLES_PER_KB:
                 print(f"WARN: {kb_id} only {len(batch)} samples")

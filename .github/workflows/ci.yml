@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-eval.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-eval.txt
+
+      - name: Pytest
+        run: python -m pytest tests/ -q
+        env:
+          LLM_MOCK_MODE: "true"
+
+      - name: Phase 2.4 DeepEval CI gates
+        run: python scripts/run_deepeval_ci.py
+
+      - name: Phase 2.4 verify
+        run: python scripts/verify_phase2_4.py
+
+  eval-retention:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-eval.txt
+
+      - name: Full eval with DeepEval live (requires secrets)
+        if: env.VOLCENGINE_API_KEY != ''
+        run: python scripts/run_deepeval_ci.py --live --retrieval
+        env:
+          LLM_MOCK_MODE: "false"
+          VOLCENGINE_API_KEY: ${{ secrets.VOLCENGINE_API_KEY }}
+          VOLCENGINE_BASE_URL: ${{ secrets.VOLCENGINE_BASE_URL }}
+          VOLCENGINE_LLM_MODEL: ${{ secrets.VOLCENGINE_LLM_MODEL }}
+
+  backend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install Ruff
+        run: pip install "ruff>=0.9.0,<1.0.0"
+
+      - name: Ruff check
+        run: ruff check app tests scripts
+
+      - name: Ruff format check
+        run: ruff format --check app tests scripts
+
+  frontend-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck + Lint + Prettier
+        run: npm run check

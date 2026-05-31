@@ -80,11 +80,18 @@ export const statsApi = {
   hitDistribution: (kbId: string) =>
     request.get<{ buckets: HitBucket[] }>(`/api/knowledge-bases/${kbId}/stats/distribution`),
   citeVsHit: (kbId: string, limit = 10) =>
-    request.get<{ items: CiteHitItem[] }>(`/api/knowledge-bases/${kbId}/stats/cite-vs-hit`, { params: { limit } }),
+    request.get<{ items: CiteHitItem[] }>(`/api/knowledge-bases/${kbId}/stats/cite-vs-hit`, {
+      params: { limit },
+    }),
   sankey: (kbId: string, limit = 15) =>
-    request.get<{ nodes: SankeyNode[]; links: SankeyLink[] }>(`/api/knowledge-bases/${kbId}/stats/sankey`, { params: { limit } }),
+    request.get<{ nodes: SankeyNode[]; links: SankeyLink[] }>(
+      `/api/knowledge-bases/${kbId}/stats/sankey`,
+      { params: { limit } },
+    ),
   activityHeatmap: (kbId?: string, days = 30) =>
-    request.get<{ points: ActivityPoint[] }>('/api/stats/activity-heatmap', { params: { kb_id: kbId, days } }),
+    request.get<{ points: ActivityPoint[] }>('/api/stats/activity-heatmap', {
+      params: { kb_id: kbId, days },
+    }),
   coldKnowledge: (kbId?: string) =>
     request.get<ColdKnowledgeStats>('/api/stats/cold-knowledge', { params: { kb_id: kbId } }),
   kbAdvanced: async (kbId: string): Promise<KBAdvancedStats> => {

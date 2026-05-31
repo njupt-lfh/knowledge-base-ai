@@ -3,7 +3,7 @@
 import os
 import uuid
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import fitz
 import pytest
@@ -24,8 +24,6 @@ def _pdf_with_text_and_image(path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_process_document_pdf_with_embedded_image(tmp_path: Path):
-    from sqlalchemy import select
-
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
@@ -33,6 +31,7 @@ async def test_process_document_pdf_with_embedded_image(tmp_path: Path):
     from app.models.knowledge_base import KnowledgeBase
     from app.services.document_service import _process_document
     from app.services.embedding_service import EmbeddingService
+    from sqlalchemy import select
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]
@@ -76,10 +75,14 @@ async def test_process_document_pdf_with_embedded_image(tmp_path: Path):
         assert doc.chunk_count >= 2
 
         chunks = (
-            await db.execute(
-                select(Chunk).where(Chunk.document_id == doc_id).order_by(Chunk.chunk_index)
+            (
+                await db.execute(
+                    select(Chunk).where(Chunk.document_id == doc_id).order_by(Chunk.chunk_index)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert any("XYZ123" in c.content for c in chunks)
         pdf_img = [c for c in chunks if c.content.startswith("[PDF图片]")]
         assert len(pdf_img) >= 1

@@ -34,7 +34,7 @@
 ## 快速启动
 
 ### 1. 环境准备
-- Node.js >= 18
+- Node.js >= 20.19（ESLint 10 要求；推荐 22）
 - Python >= 3.11
 
 ### 2. 配置
@@ -88,6 +88,32 @@ knowledge-base-ai/
 ## 架构说明
 
 详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## 代码质量
+
+本地自检（与 CI 一致）：
+
+```bash
+# 前端：TypeScript + ESLint + Prettier
+cd frontend
+npm run check
+
+# 后端：Ruff lint + format
+cd backend
+pip install -r requirements-dev.txt
+ruff check app tests scripts
+ruff format --check app tests scripts
+```
+
+GitHub Actions（`.github/workflows/ci.yml`）在 push/PR 时并行执行：
+
+| Job | 内容 |
+|-----|------|
+| `frontend-quality` | `npm run check` |
+| `backend-lint` | `ruff check` + `ruff format --check` |
+| `backend` | pytest + DeepEval 门禁（已有） |
+
+详细方案见 `开发文档/代码质量工具集成方案-合并版.md`。
 
 ## 开发文档
 

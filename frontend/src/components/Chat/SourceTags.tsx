@@ -16,8 +16,7 @@ export default function SourceTags({ sources }: SourceTagsProps) {
     <div className="source-tags">
       <button type="button" className="source-tags__toggle" onClick={() => setExpanded(!expanded)}>
         <LinkOutlined />
-        知识链路 {sources.length} 条
-        {expanded ? <UpOutlined /> : <DownOutlined />}
+        知识链路 {sources.length} 条{expanded ? <UpOutlined /> : <DownOutlined />}
       </button>
       {expanded && (
         <div className="source-tags__list">

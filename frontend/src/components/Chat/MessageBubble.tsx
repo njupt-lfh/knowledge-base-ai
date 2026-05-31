@@ -54,16 +54,12 @@ export default function MessageBubble({ message, kbId, onFeedback }: MessageBubb
   return (
     <div className={`message-bubble message-bubble--${message.role}`}>
       <div className="message-bubble__wrapper">
-        <div className="message-bubble__role-label">
-          {isUser ? 'USER' : 'ASSISTANT'}
-        </div>
+        <div className="message-bubble__role-label">{isUser ? 'USER' : 'ASSISTANT'}</div>
         <div className="message-bubble__content">
           {message.content}
           {message.isStreaming && <span className="message-bubble__cursor">▍</span>}
         </div>
-        {!isUser && message.agentMeta && (
-          <AgentMetaStrip meta={message.agentMeta} />
-        )}
+        {!isUser && message.agentMeta && <AgentMetaStrip meta={message.agentMeta} />}
         {!isUser && message.sources && message.sources.length > 0 && (
           <SourceTags sources={message.sources} />
         )}

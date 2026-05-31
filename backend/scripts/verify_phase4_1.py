@@ -15,8 +15,6 @@ os.environ["MULTIMODAL_IMAGE_ENABLED"] = "true"
 
 
 async def main() -> int:
-    from sqlalchemy import select
-
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
@@ -25,6 +23,7 @@ async def main() -> int:
     from app.services.document_service import _process_image
     from app.services.embedding_service import EmbeddingService
     from app.services.media_utils import guess_image_mime, image_to_data_url, is_image_file
+    from sqlalchemy import select
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]

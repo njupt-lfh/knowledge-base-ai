@@ -8,7 +8,11 @@ interface ColdKnowledgeBadgeProps {
   onClick?: () => void
 }
 
-export default function ColdKnowledgeBadge({ data, compact = false, onClick }: ColdKnowledgeBadgeProps) {
+export default function ColdKnowledgeBadge({
+  data,
+  compact = false,
+  onClick,
+}: ColdKnowledgeBadgeProps) {
   if (!data) return null
 
   const count = data.cold_count_90d
@@ -19,7 +23,13 @@ export default function ColdKnowledgeBadge({ data, compact = false, onClick }: C
         role={onClick ? 'button' : undefined}
         tabIndex={onClick ? 0 : undefined}
         onClick={onClick}
-        onKeyDown={onClick ? (e) => { if (e.key === 'Enter') onClick() } : undefined}
+        onKeyDown={
+          onClick
+            ? (e) => {
+                if (e.key === 'Enter') onClick()
+              }
+            : undefined
+        }
         className={`cold-badge cold-badge--inline ${count > 0 ? 'cold-badge--warn' : 'cold-badge--ok'}${onClick ? ' cold-badge--clickable' : ''}`}
       >
         <AlertOutlined className="cold-badge__icon" />

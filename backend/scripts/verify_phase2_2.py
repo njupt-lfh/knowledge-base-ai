@@ -12,15 +12,14 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
-    from httpx import ASGITransport, AsyncClient
-    from sqlalchemy import select
-
     from app.core.database import async_session, init_db
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
     from app.services.agent_orchestrator import REFUSAL_TEXT, AgentOrchestrator
     from app.services.crag_evaluator import evaluate_sufficiency
     from app.services.query_router import route_query
+    from httpx import ASGITransport, AsyncClient
+    from sqlalchemy import select
 
     await init_db()
 
@@ -45,7 +44,9 @@ async def main() -> int:
             if not run.refused:
                 print(f"FAIL: expected refusal, got sufficient={run.sufficient}")
                 return 1
-            print(f"  crag refusal ok (rounds={run.rounds}, reason={run.sufficiency.reason if run.sufficiency else ''})")
+            print(
+                f"  crag refusal ok (rounds={run.rounds}, reason={run.sufficiency.reason if run.sufficiency else ''})"
+            )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

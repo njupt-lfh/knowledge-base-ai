@@ -33,8 +33,6 @@ async def main() -> int:
         print("FAIL: MULTIMODAL_IMAGE_ENABLED=false")
         return 1
 
-    from sqlalchemy import select
-
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
@@ -42,6 +40,7 @@ async def main() -> int:
     from app.models.knowledge_base import KnowledgeBase
     from app.services.document_service import _process_image
     from app.services.embedding_service import EmbeddingService
+    from sqlalchemy import select
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]
@@ -102,8 +101,8 @@ async def main() -> int:
             return 1
 
         chunks = (
-            await db.execute(select(Chunk).where(Chunk.document_id == doc_id))
-        ).scalars().all()
+            (await db.execute(select(Chunk).where(Chunk.document_id == doc_id))).scalars().all()
+        )
         if not chunks:
             print("FAIL: 无 chunk")
             return 1

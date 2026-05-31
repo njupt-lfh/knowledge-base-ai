@@ -4,10 +4,9 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from app.services.agent_orchestrator import REFUSAL_TEXT, AgentOrchestrator
+from app.services.agent_orchestrator import AgentOrchestrator
 from app.services.crag_evaluator import evaluate_sufficiency
-from app.services.query_router import expand_query_for_retry, route_query, retrieval_top_k_for_route
+from app.services.query_router import expand_query_for_retry, retrieval_top_k_for_route, route_query
 
 
 def test_route_factual():
@@ -51,6 +50,26 @@ def test_crag_insufficient_weak_score():
     sources = [{"content": "无关内容", "score": 0.05}]
     r = evaluate_sufficiency("深度学习框架对比", sources, "factual")
     assert r.sufficient is False
+
+
+def test_crag_sufficient_rrf_scale_with_overlap():
+    """RRF 分很低但词面高度重叠时，应判定为充分（修复误拒答）。"""
+    sources = [
+        {
+            "content": (
+                "Python 与 JavaScript 异步模型的核心关联与差异。"
+                "两者的异步模型同源，async/await 语法由 JS 影响 Python。"
+            ),
+            "score": 0.03,
+        }
+    ]
+    r = evaluate_sufficiency(
+        "Python 和 JavaScript 在异步模型上有什么关联",
+        sources,
+        "relational",
+    )
+    assert r.sufficient is True
+    assert r.term_overlap >= 0.12
 
 
 @pytest.mark.asyncio

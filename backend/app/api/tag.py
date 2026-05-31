@@ -48,7 +48,9 @@ async def get_document_tags(kb_id: str, doc_id: str, db: AsyncSession = Depends(
 
 
 @router.post("/api/knowledge-bases/{kb_id}/documents/{doc_id}/tags")
-async def set_document_tags(kb_id: str, doc_id: str, data: dict, db: AsyncSession = Depends(get_db)):
+async def set_document_tags(
+    kb_id: str, doc_id: str, data: dict, db: AsyncSession = Depends(get_db)
+):
     tag_ids = data.get("tag_ids", [])
     await db.execute(delete(DocumentTag).where(DocumentTag.document_id == doc_id))
     for tag_id in tag_ids:
@@ -56,5 +58,3 @@ async def set_document_tags(kb_id: str, doc_id: str, data: dict, db: AsyncSessio
         db.add(dt)
     await db.commit()
     return {"tag_ids": tag_ids}
-
-

@@ -44,7 +44,9 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
 ):
     if file.size and file.size > settings.MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail=f"文件大小超过限制 ({settings.MAX_UPLOAD_SIZE // 1048576}MB)")
+        raise HTTPException(
+            status_code=413, detail=f"文件大小超过限制 ({settings.MAX_UPLOAD_SIZE // 1048576}MB)"
+        )
     service = DocumentService(db)
     return await service.upload(kb_id, file, background_tasks)
 
@@ -103,6 +105,7 @@ async def reindex_document(
 ):
     """重新向量化文档"""
     from ..services.document_service import _process_document
+
     doc = await db.get(Document, doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")

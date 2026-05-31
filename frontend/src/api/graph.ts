@@ -22,5 +22,7 @@ export interface KnowledgeGraphSnapshot {
 
 export const graphApi = {
   getSnapshot: (kbId: string, limit = 80) =>
-    request.get<KnowledgeGraphSnapshot>(`/api/knowledge-bases/${kbId}/graph`, { params: { limit } }),
+    request.get<KnowledgeGraphSnapshot>(`/api/knowledge-bases/${kbId}/graph`, {
+      params: { limit },
+    }),
 }

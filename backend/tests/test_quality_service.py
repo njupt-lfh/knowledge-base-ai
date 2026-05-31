@@ -19,10 +19,18 @@ def test_compute_quality_score_range():
 
 def test_dislike_lowers_score():
     good = compute_quality_score(
-        hit_count=5, like_count=10, dislike_count=0, correction_count=0, created_at=datetime.utcnow()
+        hit_count=5,
+        like_count=10,
+        dislike_count=0,
+        correction_count=0,
+        created_at=datetime.utcnow(),
     )
     bad = compute_quality_score(
-        hit_count=5, like_count=0, dislike_count=10, correction_count=0, created_at=datetime.utcnow()
+        hit_count=5,
+        like_count=0,
+        dislike_count=10,
+        correction_count=0,
+        created_at=datetime.utcnow(),
     )
     assert bad < good
 

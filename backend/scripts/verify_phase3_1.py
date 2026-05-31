@@ -30,8 +30,20 @@ async def main() -> int:
     content = "知识图谱与向量检索是RAG的两种路径，知识图谱属于关系型检索。"
 
     async with async_session() as db:
-        db.add(KnowledgeBase(id=kb_id, name="p3", embedding_model="m", chunk_size=500, chunk_overlap=50))
-        db.add(Document(id=doc_id, knowledge_base_id=kb_id, filename="m", file_type="manual", status="completed"))
+        db.add(
+            KnowledgeBase(
+                id=kb_id, name="p3", embedding_model="m", chunk_size=500, chunk_overlap=50
+            )
+        )
+        db.add(
+            Document(
+                id=doc_id,
+                knowledge_base_id=kb_id,
+                filename="m",
+                file_type="manual",
+                status="completed",
+            )
+        )
         db.add(
             Chunk(
                 id=chunk_id,

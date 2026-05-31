@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.eval.deepeval_runner import (
     check_deepeval_gates,
     check_knowledge_retention,

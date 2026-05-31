@@ -34,10 +34,9 @@ def _check_schema(samples: list[dict]) -> list[str]:
 
 
 async def _check_chunks(samples: list[dict]) -> list[str]:
-    from sqlalchemy import select
-
     from app.core.database import async_session
     from app.models.chunk import Chunk
+    from sqlalchemy import select
 
     ids = set()
     for s in samples:

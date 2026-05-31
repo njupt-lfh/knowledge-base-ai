@@ -1,7 +1,5 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.services.gap_service import GapService
 
 
@@ -47,3 +45,32 @@ def test_classify_user_correction():
     svc = GapService(db=MagicMock())
     t = svc.classify_gap("q", "kb1", [], correction_text="正确答案是 B")
     assert t == "USER_CORRECTION"
+
+
+def test_skip_gap_when_crag_sufficient():
+    assert GapService.should_skip_gap_after_sufficient_answer(
+        crag_sufficient=True,
+        crag_refused=False,
+        gap_type="KNOWLEDGE_ABSENT",
+    )
+    assert GapService.should_skip_gap_after_sufficient_answer(
+        crag_sufficient=True,
+        crag_refused=False,
+        gap_type="RETRIEVAL_MISS",
+    )
+
+
+def test_no_skip_gap_when_refused():
+    assert not GapService.should_skip_gap_after_sufficient_answer(
+        crag_sufficient=False,
+        crag_refused=True,
+        gap_type="KNOWLEDGE_ABSENT",
+    )
+
+
+def test_no_skip_gap_when_insufficient():
+    assert not GapService.should_skip_gap_after_sufficient_answer(
+        crag_sufficient=False,
+        crag_refused=False,
+        gap_type="KNOWLEDGE_ABSENT",
+    )

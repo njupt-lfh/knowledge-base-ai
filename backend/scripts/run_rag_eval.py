@@ -17,7 +17,7 @@ import json
 import math
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -29,12 +29,14 @@ sys.path.insert(0, str(BACKEND_DIR))
 DATA_FILE = ROOT / "data" / "eval_qa_dataset.json"
 REPORT_FILE = ROOT / "data" / "eval_baseline_report.json"
 
-from app.eval.retrieval_metrics import retrieval_metrics  # noqa: E402
-from app.eval.ragas_runner import llm_judge_faithfulness, run_ragas_eval  # noqa: E402
 from app.eval.deepeval_runner import check_knowledge_retention, run_deepeval  # noqa: E402
+from app.eval.ragas_runner import llm_judge_faithfulness, run_ragas_eval  # noqa: E402
+from app.eval.retrieval_metrics import retrieval_metrics  # noqa: E402
 
 
-async def _collect_generation(rag: Any, kb_id: str, question: str, top_k: int, db: Any) -> tuple[str, list[dict]]:
+async def _collect_generation(
+    rag: Any, kb_id: str, question: str, top_k: int, db: Any
+) -> tuple[str, list[dict]]:
     answer_parts: list[str] = []
     sources: list[dict] = []
     async for event in rag.generate(kb_id, question, [], top_k, db):
@@ -61,14 +63,23 @@ def _diagnose(agg: dict[str, Any], *, has_generation: bool) -> dict[str, str]:
 
     if not has_generation:
         if retrieval_weak:
-            return {"primary_bottleneck": "retrieval", "recommendation": "相关 chunk 召回不足，优先 Hybrid/Rerank/分块。"}
+            return {
+                "primary_bottleneck": "retrieval",
+                "recommendation": "相关 chunk 召回不足，优先 Hybrid/Rerank/分块。",
+            }
         return {
             "primary_bottleneck": "retrieval_baseline_only",
-            "recommendation": "仅检索基线；请去掉 --retrieval-only 跑完整生成评测。",
+            "recommendation": (
+                "本报告为检索专项基线（--retrieval-only），已包含召回率/命中率等指标；"
+                "忠实度与答案相关性需另跑完整评测：python scripts/run_rag_eval.py --ragas --llm-judge"
+            ),
         }
 
     if retrieval_weak and (generation_weak or reject_weak):
-        return {"primary_bottleneck": "both", "recommendation": "检索与生成/拒答均偏弱，先修检索与负例拒答。"}
+        return {
+            "primary_bottleneck": "both",
+            "recommendation": "检索与生成/拒答均偏弱，先修检索与负例拒答。",
+        }
     if retrieval_weak or precision_weak:
         return {
             "primary_bottleneck": "retrieval",
@@ -80,7 +91,10 @@ def _diagnose(agg: dict[str, Any], *, has_generation: bool) -> dict[str, str]:
             "recommendation": f"负例拒答率 {neg_rate} 偏低，优化 Prompt/CRAG。",
         }
     if generation_weak:
-        return {"primary_bottleneck": "generation", "recommendation": "忠实度/相关性偏低，优化 Prompt 与引用约束。"}
+        return {
+            "primary_bottleneck": "generation",
+            "recommendation": "忠实度/相关性偏低，优化 Prompt 与引用约束。",
+        }
     return {"primary_bottleneck": "balanced", "recommendation": "指标未明显偏向，请逐条复核报告。"}
 
 
@@ -96,8 +110,14 @@ def _aggregate(samples: list[dict]) -> dict[str, Any]:
         "sample_count": len(samples),
         "context_recall_mean": _avg("context_recall"),
         "context_precision_mean": _avg("context_precision"),
-        "retrieval_hit_rate": round(mean(1.0 if s.get("retrieval_hit") else 0.0 for s in non_neg), 4) if non_neg else None,
-        "negative_reject_rate": round(mean(1.0 if s.get("negative_ok") else 0.0 for s in neg), 4) if neg else None,
+        "retrieval_hit_rate": round(
+            mean(1.0 if s.get("retrieval_hit") else 0.0 for s in non_neg), 4
+        )
+        if non_neg
+        else None,
+        "negative_reject_rate": round(mean(1.0 if s.get("negative_ok") else 0.0 for s in neg), 4)
+        if neg
+        else None,
         "faithfulness_mean": _avg("faithfulness"),
         "answer_relevancy_mean": _avg("answer_relevancy"),
         "llm_judge_faithfulness_mean": _avg("llm_judge_faithfulness"),
@@ -119,6 +139,7 @@ def _json_safe(obj: Any) -> Any:
 async def _run(args: argparse.Namespace) -> int:
     from app.core.config import settings
     from app.core.database import async_session
+    from app.services.agent_orchestrator import AgentOrchestrator
     from app.services.rag_service import RAGService
 
     if not DATA_FILE.exists():
@@ -141,10 +162,13 @@ async def _run(args: argparse.Namespace) -> int:
         except json.JSONDecodeError:
             baseline_before = None
 
+    agent = AgentOrchestrator()
     rag = RAGService()
     results: list[dict] = []
 
-    print(f"Evaluating {len(samples)} samples (top_k={args.top_k}, ragas={args.ragas}, llm_judge={args.llm_judge})")
+    print(
+        f"Evaluating {len(samples)} samples (top_k={args.top_k}, ragas={args.ragas}, llm_judge={args.llm_judge})"
+    )
 
     async with async_session() as db:
         for s in samples:
@@ -153,7 +177,9 @@ async def _run(args: argparse.Namespace) -> int:
             relevant = {x for x in (s.get("relevant_chunk_ids") or []) if x}
 
             t0 = time.perf_counter()
-            sources = await rag.retrieve(kb_id, question, args.top_k, db)
+            sources, _route, _paths = await agent.retrieve_for_eval(
+                db, kb_id, question, top_k=args.top_k
+            )
             retrieve_ms = round((time.perf_counter() - t0) * 1000, 1)
 
             retrieved_ids = [x["chunk_id"] for x in sources]
@@ -185,7 +211,9 @@ async def _run(args: argparse.Namespace) -> int:
                 **metrics,
             }
             results.append(row)
-            print(f"  {s['id']} recall={metrics.get('context_recall')} hit={metrics.get('retrieval_hit')}")
+            print(
+                f"  {s['id']} recall={metrics.get('context_recall')} hit={metrics.get('retrieval_hit')}"
+            )
 
     agg = _aggregate(results)
     ragas_meta: dict[str, Any] = {}
@@ -228,7 +256,10 @@ async def _run(args: argparse.Namespace) -> int:
             "contextual_relevancy_mean": deepeval_meta.get("contextual_relevancy_mean"),
             "mode": deepeval_meta.get("mode"),
         }
-        if deepeval_meta.get("hallucination_mean") is not None and agg.get("faithfulness_mean") is None:
+        if (
+            deepeval_meta.get("hallucination_mean") is not None
+            and agg.get("faithfulness_mean") is None
+        ):
             agg["faithfulness_mean"] = deepeval_meta["hallucination_mean"]
 
     if args.deepeval and baseline_before and agg.get("context_recall_mean") is not None:
@@ -243,7 +274,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     report = {
         "version": "2.0",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "primary_kb_id": data.get("primary_kb_id"),
         "knowledge_bases": data.get("knowledge_bases"),
         "config": {
@@ -264,7 +295,9 @@ async def _run(args: argparse.Namespace) -> int:
         "samples": results,
     }
 
-    REPORT_FILE.write_text(json.dumps(_json_safe(report), ensure_ascii=False, indent=2), encoding="utf-8")
+    REPORT_FILE.write_text(
+        json.dumps(_json_safe(report), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     print(f"\nPASS: report -> {REPORT_FILE}")
     print(f"  context_recall_mean: {agg.get('context_recall_mean')}")
     print(f"  faithfulness_mean:   {agg.get('faithfulness_mean')}")
@@ -279,8 +312,12 @@ def main() -> int:
     parser.add_argument("--retrieval-only", action="store_true")
     parser.add_argument("--ragas", action="store_true")
     parser.add_argument("--llm-judge", action="store_true", help="LLM 忠实度回退/补充")
-    parser.add_argument("--deepeval", action="store_true", help="DeepEval Hallucination + Contextual Relevancy")
-    parser.add_argument("--min-recall-ratio", type=float, default=0.85, help="Knowledge retention 门禁")
+    parser.add_argument(
+        "--deepeval", action="store_true", help="DeepEval Hallucination + Contextual Relevancy"
+    )
+    parser.add_argument(
+        "--min-recall-ratio", type=float, default=0.85, help="Knowledge retention 门禁"
+    )
     args = parser.parse_args()
     return asyncio.run(_run(args))
 

@@ -9,6 +9,7 @@ import KnowledgeCardGrid from '../components/KnowledgeCard/KnowledgeCardGrid'
 export default function KnowledgeList() {
   const navigate = useNavigate()
   const [data, setData] = useState<KnowledgeBase[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKb, setEditingKb] = useState<KnowledgeBase | null>(null)
@@ -18,10 +19,22 @@ export default function KnowledgeList() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const params: Record<string, unknown> = {}
-      if (searchText) params.search = searchText
-      const res = await knowledgeApi.list(params)
-      setData(res.data.items)
+      const pageSize = 100
+      let page = 1
+      let items: KnowledgeBase[] = []
+      let count = 0
+      do {
+        const res = await knowledgeApi.list({
+          page,
+          page_size: pageSize,
+          search: searchText || undefined,
+        })
+        items = [...items, ...res.data.items]
+        count = res.data.total
+        page += 1
+      } while (items.length < count)
+      setData(items)
+      setTotal(count)
     } catch {
       message.error('获取知识库列表失败')
     }
@@ -29,7 +42,9 @@ export default function KnowledgeList() {
   }, [searchText])
 
   /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleCreate = async (values: Record<string, unknown>) => {
@@ -85,7 +100,10 @@ export default function KnowledgeList() {
       <div className="kb-list-header">
         <div>
           <h2 className="page-title">知识库管理</h2>
-          <p className="page-subtitle">管理您的智能知识库资产</p>
+          <p className="page-subtitle">
+            管理您的智能知识库资产
+            {total > 0 ? ` · 共 ${total} 个` : ''}
+          </p>
         </div>
         <Input.Search
           className="kb-list-search"
@@ -109,7 +127,11 @@ export default function KnowledgeList() {
       <Modal
         title={editingKb ? '编辑知识库' : '新建知识库'}
         open={modalOpen}
-        onCancel={() => { setModalOpen(false); setEditingKb(null); form.resetFields() }}
+        onCancel={() => {
+          setModalOpen(false)
+          setEditingKb(null)
+          form.resetFields()
+        }}
         onOk={() => form.submit()}
         okText="确认"
         cancelText="取消"

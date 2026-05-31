@@ -18,9 +18,13 @@ def compress_history(
     if not history:
         return []
 
-    turns = recent_turns if recent_turns is not None else getattr(settings, "HISTORY_RECENT_TURNS", 2)
-    summary_cap = max_summary_chars if max_summary_chars is not None else getattr(
-        settings, "HISTORY_SUMMARY_MAX_CHARS", 600
+    turns = (
+        recent_turns if recent_turns is not None else getattr(settings, "HISTORY_RECENT_TURNS", 2)
+    )
+    summary_cap = (
+        max_summary_chars
+        if max_summary_chars is not None
+        else getattr(settings, "HISTORY_SUMMARY_MAX_CHARS", 600)
     )
     keep = max(2, turns * 2)
 

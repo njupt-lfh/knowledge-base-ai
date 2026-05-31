@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from datetime import datetime
 
 from sqlalchemy import select
@@ -40,12 +39,7 @@ def compute_quality_score(
         days = (datetime.utcnow() - created_at).days
         freshness = max(0.0, 1.0 - days / 365.0)
 
-    raw = (
-        0.4 * norm_hit
-        + 0.3 * like_rate
-        - 0.2 * correction_rate
-        + 0.1 * freshness
-    )
+    raw = 0.4 * norm_hit + 0.3 * like_rate - 0.2 * correction_rate + 0.1 * freshness
     return round(max(0.0, min(1.0, raw)), 4)
 
 
@@ -85,8 +79,7 @@ class QualityService:
             created_at=chunk.created_at,
         )
         q.needs_review = (
-            q.quality_score < LOW_QUALITY_THRESHOLD
-            or q.dislike_count >= REVIEW_DISLIKE_THRESHOLD
+            q.quality_score < LOW_QUALITY_THRESHOLD or q.dislike_count >= REVIEW_DISLIKE_THRESHOLD
         )
         q.updated_at = datetime.utcnow()
         await self.db.commit()

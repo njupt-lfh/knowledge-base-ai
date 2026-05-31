@@ -6,7 +6,27 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('keys:', list\\(d.keys\\(\\)\\)[:10]\\); print\\('has aggregate:', 'aggregate' in d\\)\")",
       "Bash(curl -s http://localhost:8082/api/eval/baseline -o \"C:\\\\Users\\\\lai\\\\AppData\\\\Local\\\\Temp\\\\eval_baseline_test.json\")",
       "Bash(python -c ' *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(xargs grep -l \"graph\\\\|GraphRAG\\\\|LightRAG\\\\|networkx\\\\|kg_\")",
+      "Bash(xargs grep -l \"entity_extract\\\\|三元组\\\\|triple\\\\|关系抽取\\\\|extract.*relation\\\\|knowledge.*graph\\\\|graph.*retriev\")",
+      "Bash(xargs head -5)",
+      "Bash(python -c \"from app.core.database import expected_table_names; print\\(sorted\\(expected_table_names\\(\\)\\)\\)\")",
+      "Bash(python -m pytest tests/ -q --tb=short)",
+      "Bash(python -m pytest tests/test_document_fts_sync.py -v --tb=short)",
+      "Bash(ping -n 1 github.com)",
+      "Bash(git config *)",
+      "Bash(mkdir -p \"D:\\\\laicode\\\\字节\\\\知识文档\\\\测试\")",
+      "Bash(curl -s http://localhost:8082/api/knowledge-bases)",
+      "Bash(python -c \"import sys,json; kbs=json.load\\(sys.stdin\\); [print\\(f'{k[\\\\\"id\\\\\"][:8]}... {k[\\\\\"name\\\\\"]}'\\) for k in kbs.get\\('items',kbs if isinstance\\(kbs,list\\) else []\\)]\")",
+      "Bash(python run_integration_test.py)",
+      "Bash(python run_chat_feedback.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"http://localhost:8082/api/knowledge-bases/e3752f00/chat\" -H \"Content-Type: application/json\" -d '{\"title\":\"test\"}')",
+      "Bash(curl -s -X POST \"http://localhost:8082/api/knowledge-bases/e3752f00/chat\" -H \"Content-Type: application/json\" -d '{\"title\":\"test\"}')",
+      "Bash(curl -s -X POST \"http://localhost:8082/api/knowledge-bases/e3752f00-b894-429e-a982-43142c5f0d8a/search\" -H \"Content-Type: application/json\" -d '{\"query\":\"RAG\"}')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'results: {len\\(d\\)}' if isinstance\\(d,list\\) else f'keys: {list\\(d.keys\\(\\)\\)[:5]}'\\)\")"
+    ],
+    "additionalDirectories": [
+      "D:\\laicode\\字节\\知识文档\\测试"
     ]
   }
 }

@@ -33,9 +33,7 @@ class Settings:
     VOLCENGINE_EMBEDDING_MODEL: str = os.getenv(
         "VOLCENGINE_EMBEDDING_MODEL", "doubao-embedding-text-240715"
     )
-    VOLCENGINE_LLM_MODEL: str = os.getenv(
-        "VOLCENGINE_LLM_MODEL", "doubao-seed-1-6-flash-250828"
-    )
+    VOLCENGINE_LLM_MODEL: str = os.getenv("VOLCENGINE_LLM_MODEL", "doubao-seed-1-6-flash-250828")
 
     # 数据库
     DATABASE_URL: str = os.getenv(
@@ -44,9 +42,7 @@ class Settings:
     DATABASE_URL_SYNC: str = DATABASE_URL.replace("+aiosqlite", "")
 
     # Chroma
-    CHROMA_PERSIST_DIR: str = os.getenv(
-        "CHROMA_PERSIST_DIR", str(BASE_DIR.parent / "chroma_data")
-    )
+    CHROMA_PERSIST_DIR: str = os.getenv("CHROMA_PERSIST_DIR", str(BASE_DIR.parent / "chroma_data"))
 
     # 文件上传（相对路径已归一化为绝对路径）
     UPLOAD_DIR: str = _normalize_upload_dir()
@@ -84,7 +80,9 @@ class Settings:
     GRAPH_EXTRACTION_MODEL: str = os.getenv("GRAPH_EXTRACTION_MODEL", "")
 
     # Phase 3 检索 abstention（负例误召回抑制）
-    RETRIEVAL_ABSTAIN_ENABLED: bool = os.getenv("RETRIEVAL_ABSTAIN_ENABLED", "true").lower() == "true"
+    RETRIEVAL_ABSTAIN_ENABLED: bool = (
+        os.getenv("RETRIEVAL_ABSTAIN_ENABLED", "true").lower() == "true"
+    )
     RETRIEVAL_ABSTAIN_MIN_SCORE: float = float(os.getenv("RETRIEVAL_ABSTAIN_MIN_SCORE", "0.20"))
     RETRIEVAL_ABSTAIN_MIN_OVERLAP: float = float(os.getenv("RETRIEVAL_ABSTAIN_MIN_OVERLAP", "0.10"))
 
@@ -94,9 +92,9 @@ class Settings:
     VISION_CAPTION_MODEL: str = os.getenv("VISION_CAPTION_MODEL", "")
 
     # Phase 4.2 PDF 内嵌图片
-    PDF_IMAGE_EXTRACTION_ENABLED: bool = os.getenv(
-        "PDF_IMAGE_EXTRACTION_ENABLED", "true"
-    ).lower() == "true"
+    PDF_IMAGE_EXTRACTION_ENABLED: bool = (
+        os.getenv("PDF_IMAGE_EXTRACTION_ENABLED", "true").lower() == "true"
+    )
     PDF_IMAGE_MIN_DIMENSION: int = int(os.getenv("PDF_IMAGE_MIN_DIMENSION", "32"))
     PDF_IMAGE_MAX_PER_DOCUMENT: int = int(os.getenv("PDF_IMAGE_MAX_PER_DOCUMENT", "30"))
 

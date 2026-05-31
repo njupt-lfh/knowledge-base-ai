@@ -23,9 +23,7 @@ export default function AgentMetaStrip({ meta }: { meta: AgentMeta }) {
 
   return (
     <div className="agent-meta-strip">
-      {meta.route && (
-        <Tag color="blue">路由 {ROUTE_LABEL[meta.route] || meta.route}</Tag>
-      )}
+      {meta.route && <Tag color="blue">路由 {ROUTE_LABEL[meta.route] || meta.route}</Tag>}
       {typeof meta.rounds === 'number' && <Tag>检索 {meta.rounds} 轮</Tag>}
       {meta.graph_used && <Tag color="purple">图谱</Tag>}
       {meta.sim_rag_used && (

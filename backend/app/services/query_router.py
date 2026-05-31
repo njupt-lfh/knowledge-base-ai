@@ -95,7 +95,21 @@ def expand_query_for_retry(query: str, route: QueryRoute) -> str:
         return query
 
     terms = re.findall(r"[\w\u4e00-\u9fff]{2,}", query)
-    stop = {"什么", "如何", "怎么", "为什么", "哪些", "之间", "关系", "区别", "对比", "和", "与", "的", "是"}
+    stop = {
+        "什么",
+        "如何",
+        "怎么",
+        "为什么",
+        "哪些",
+        "之间",
+        "关系",
+        "区别",
+        "对比",
+        "和",
+        "与",
+        "的",
+        "是",
+    }
     key_terms = [t for t in terms if t not in stop][:6]
     if not key_terms:
         return query

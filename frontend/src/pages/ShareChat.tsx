@@ -30,7 +30,11 @@ async function* streamChat(convId: string, msg: string) {
     buffer = lines.pop() || ''
     for (const line of lines) {
       if (line.startsWith('data: ')) {
-        try { yield JSON.parse(line.slice(6)) } catch { /* skip */ }
+        try {
+          yield JSON.parse(line.slice(6))
+        } catch {
+          /* skip */
+        }
       }
     }
   }
@@ -50,18 +54,23 @@ export default function ShareChat() {
     fetch(`${API_BASE}/api/share/${token}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.detail) { setError('分享链接无效或已过期'); return }
+        if (data.detail) {
+          setError('分享链接无效或已过期')
+          return
+        }
         setConv(data)
         return fetch(`${API_BASE}/api/conversations/${data.id}/messages`)
       })
       .then((r) => r?.json())
       .then((msgs: Message[]) => {
         if (msgs) {
-          setMessages(msgs.map((m) => ({
-            role: m.role as 'user' | 'assistant',
-            content: m.content,
-            sources: m.sources ?? undefined,
-          })))
+          setMessages(
+            msgs.map((m) => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              sources: m.sources ?? undefined,
+            })),
+          )
         }
       })
       .catch(() => setError('加载失败'))
@@ -82,23 +91,21 @@ export default function ShareChat() {
     try {
       for await (const evt of streamChat(conv.id, query)) {
         if (evt.type === 'text') {
-          setMessages((prev) => prev.map((m, i) =>
-            i === assistantIdxRef.current
-              ? { ...m, content: m.content + evt.content }
-              : m,
-          ))
+          setMessages((prev) =>
+            prev.map((m, i) =>
+              i === assistantIdxRef.current ? { ...m, content: m.content + evt.content } : m,
+            ),
+          )
         } else if (evt.type === 'sources') {
-          setMessages((prev) => prev.map((m, i) =>
-            i === assistantIdxRef.current
-              ? { ...m, sources: evt.sources as SourceItem[] }
-              : m,
-          ))
+          setMessages((prev) =>
+            prev.map((m, i) =>
+              i === assistantIdxRef.current ? { ...m, sources: evt.sources as SourceItem[] } : m,
+            ),
+          )
         } else if (evt.type === 'done') {
-          setMessages((prev) => prev.map((m, i) =>
-            i === assistantIdxRef.current
-              ? { ...m, isStreaming: false }
-              : m,
-          ))
+          setMessages((prev) =>
+            prev.map((m, i) => (i === assistantIdxRef.current ? { ...m, isStreaming: false } : m)),
+          )
         }
       }
     } catch {
@@ -110,7 +117,9 @@ export default function ShareChat() {
   const content = error ? (
     <div className="share-page__error">
       <HudPanel style={{ padding: 32 }}>
-        <span style={{ color: 'var(--accent-danger)', fontFamily: 'var(--font-mono)' }}>{error}</span>
+        <span style={{ color: 'var(--accent-danger)', fontFamily: 'var(--font-mono)' }}>
+          {error}
+        </span>
       </HudPanel>
     </div>
   ) : (

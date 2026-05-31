@@ -21,4 +21,6 @@ class ChunkQuality(Base):
     dislike_count: Mapped[int] = mapped_column(Integer, default=0)
     correction_count: Mapped[int] = mapped_column(Integer, default=0)
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

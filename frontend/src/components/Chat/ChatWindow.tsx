@@ -45,12 +45,7 @@ export default function ChatWindow({
           </div>
         ) : (
           messages.map((msg, idx) => (
-            <MessageBubble
-              key={msg.id || idx}
-              message={msg}
-              kbId={kbId}
-              onFeedback={onFeedback}
-            />
+            <MessageBubble key={msg.id || idx} message={msg} kbId={kbId} onFeedback={onFeedback} />
           ))
         )}
         <div ref={messagesEndRef} />

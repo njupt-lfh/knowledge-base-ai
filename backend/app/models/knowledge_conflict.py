@@ -16,9 +16,7 @@ CONFLICT_STATUSES = ("pending", "resolved_keep_new", "resolved_keep_old", "dismi
 class KnowledgeConflict(Base):
     __tablename__ = "knowledge_conflicts"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     knowledge_base_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False, index=True
     )

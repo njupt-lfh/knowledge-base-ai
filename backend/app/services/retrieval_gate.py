@@ -35,6 +35,11 @@ def apply_retrieval_abstention(
     if has_graph and max_score >= min_score * 0.6:
         return sources
 
+    # RRF scale (scores 0.01-0.17): overlap is the only reliable discriminator
+    # Negative queries have near-zero overlap → abstain
+    if overlap < min_overlap * 0.75 and max_score < 0.18:
+        return []
+
     if max_score < min_score and overlap < min_overlap:
         return []
 

@@ -18,7 +18,9 @@ class KnowledgeService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list(self, page: int, page_size: int, search: str | None) -> tuple[list[KnowledgeBaseResponse], int]:
+    async def list(
+        self, page: int, page_size: int, search: str | None
+    ) -> tuple[list[KnowledgeBaseResponse], int]:
         query = select(KnowledgeBase)
         count_query = select(func.count(KnowledgeBase.id))
 
@@ -36,12 +38,16 @@ class KnowledgeService:
 
         items = []
         for kb in kbs:
-            doc_count = (await self.db.execute(
-                select(func.count(Document.id)).where(Document.knowledge_base_id == kb.id)
-            )).scalar() or 0
-            total_hits = (await self.db.execute(
-                select(func.sum(Chunk.hit_count)).where(Chunk.knowledge_base_id == kb.id)
-            )).scalar() or 0
+            doc_count = (
+                await self.db.execute(
+                    select(func.count(Document.id)).where(Document.knowledge_base_id == kb.id)
+                )
+            ).scalar() or 0
+            total_hits = (
+                await self.db.execute(
+                    select(func.sum(Chunk.hit_count)).where(Chunk.knowledge_base_id == kb.id)
+                )
+            ).scalar() or 0
             resp = KnowledgeBaseResponse(
                 id=kb.id,
                 name=kb.name,
@@ -84,9 +90,11 @@ class KnowledgeService:
         kb = await self.db.get(KnowledgeBase, kb_id)
         if not kb:
             return None
-        doc_count = (await self.db.execute(
-            select(func.count(Document.id)).where(Document.knowledge_base_id == kb.id)
-        )).scalar() or 0
+        doc_count = (
+            await self.db.execute(
+                select(func.count(Document.id)).where(Document.knowledge_base_id == kb.id)
+            )
+        ).scalar() or 0
         return KnowledgeBaseResponse(
             id=kb.id,
             name=kb.name,

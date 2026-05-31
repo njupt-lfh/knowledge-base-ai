@@ -1,8 +1,6 @@
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.feedback_service import FeedbackService
 
 
@@ -14,7 +12,9 @@ async def test_resolve_chunk_ids_prefers_chunk_ids_list():
         {"chunk_id": "c1", "score": 0.8},
         {"chunk_id": "c2", "score": 0.7},
     ]
-    ids = await svc._resolve_chunk_ids(msg, explicit_chunk_id="c99", explicit_chunk_ids=["c2", "c1", "c2"])
+    ids = await svc._resolve_chunk_ids(
+        msg, explicit_chunk_id="c99", explicit_chunk_ids=["c2", "c1", "c2"]
+    )
     assert ids == ["c2", "c1"]
 
 

@@ -1,7 +1,7 @@
 """RAG 检索增强生成服务 — Phase 2.2 使用 AgentOrchestrator（Hybrid + CRAG-lite）"""
 
 import json
-from typing import AsyncGenerator, Dict, List
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +27,7 @@ class RAGService:
 
     async def retrieve(
         self, knowledge_base_id: str, query: str, top_k: int = 5, db: AsyncSession = None
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Hybrid 检索（评测脚本兼容路径）。"""
         if not db:
             return []
@@ -48,7 +48,7 @@ class RAGService:
         return sources
 
     @staticmethod
-    def compress_context(sources: List[Dict], max_chars: int = 4500) -> str:
+    def compress_context(sources: list[dict], max_chars: int = 4500) -> str:
         """选择性压缩 context，控制 token 预算（extractive 截断）。"""
         if not sources:
             return "知识库中暂无相关内容"
@@ -67,8 +67,12 @@ class RAGService:
         return "\n\n---\n\n".join(parts)
 
     async def generate(
-        self, knowledge_base_id: str, query: str, history: List[Dict],
-        top_k: int = 5, db: AsyncSession = None,
+        self,
+        knowledge_base_id: str,
+        query: str,
+        history: list[dict],
+        top_k: int = 5,
+        db: AsyncSession = None,
     ) -> AsyncGenerator[str, None]:
         """Agentic-lite RAG 生成（流式）。"""
         if not db:

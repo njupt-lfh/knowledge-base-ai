@@ -18,9 +18,7 @@ if TYPE_CHECKING:
 class Chunk(Base):
     __tablename__ = "chunks"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     document_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
@@ -34,4 +32,4 @@ class Chunk(Base):
     hit_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    document: Mapped["Document"] = relationship("Document", back_populates="chunks")
+    document: Mapped[Document] = relationship("Document", back_populates="chunks")

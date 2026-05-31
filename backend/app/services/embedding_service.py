@@ -1,7 +1,5 @@
 """向量嵌入服务 — 火山引擎 Doubao-embedding-vision（多模态 API）"""
 
-from typing import List
-
 from volcenginesdkarkruntime import Ark
 
 from ..core.config import settings
@@ -28,7 +26,7 @@ class EmbeddingService:
     def _get_client(self) -> Ark:
         return Ark(base_url=self.base_url, api_key=self.api_key)
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         """将查询文本向量化（带 LRU 缓存）。"""
         cached = self.cache.get(text)
         if cached is not None:
@@ -52,7 +50,7 @@ class EmbeddingService:
         self.cache.set(text, vec)
         return vec
 
-    def embed_image(self, image_path: str) -> List[float]:
+    def embed_image(self, image_path: str) -> list[float]:
         """图片多模态向量化（与文本同一 embedding 空间）。"""
         from .media_utils import image_to_data_url
 
@@ -80,11 +78,11 @@ class EmbeddingService:
         self.cache.set(cache_key, vec)
         return vec
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """批量向量化：相同文本只 embed 一次（缓存 + 去重）。"""
         if not texts:
             return []
-        unique: dict[str, List[float]] = {}
+        unique: dict[str, list[float]] = {}
         for t in texts:
             if t not in unique:
                 unique[t] = self.embed_query(t)

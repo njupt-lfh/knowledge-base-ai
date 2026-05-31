@@ -1,7 +1,9 @@
 """文档服务"""
 
+import logging
 import shutil
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import BackgroundTasks, UploadFile
@@ -17,6 +19,22 @@ from ..schemas.document import DocumentResponse, ManualDocumentCreate
 from .ingestion_gate_service import IngestStats, ingest_text_chunks
 from .media_utils import IMAGE_EXTENSIONS
 
+logger = logging.getLogger(__name__)
+
+
+def resolve_upload_path(file_path: str | None) -> Path:
+    """解析 DB 中的 file_path（可能为相对路径 uploads/xxx）为可读的绝对路径。"""
+    if not file_path:
+        raise FileNotFoundError("文档缺少 file_path")
+    p = Path(file_path)
+    if p.is_file():
+        return p.resolve()
+    upload_root = Path(settings.UPLOAD_DIR)
+    for cand in (upload_root / p.name, upload_root / p, p):
+        if cand.is_file():
+            return cand.resolve()
+    raise FileNotFoundError(f"找不到上传文件: {file_path}")
+
 
 async def _sync_chunks_to_fts(db: AsyncSession, kb_id: str, chunk_records: list[Chunk]) -> None:
     """入库后同步 FTS5（与 Chroma 写入配套，保证 BM25 可检索）。"""
@@ -26,7 +44,11 @@ async def _sync_chunks_to_fts(db: AsyncSession, kb_id: str, chunk_records: list[
 
     for c in chunk_records:
         await upsert_chunk_fts(
-            db, c.id, kb_id, c.content, active=bool(c.is_active if c.is_active is not None else True)
+            db,
+            c.id,
+            kb_id,
+            c.content,
+            active=bool(c.is_active if c.is_active is not None else True),
         )
     await db.commit()
 
@@ -52,7 +74,9 @@ class DocumentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_by_kb(self, kb_id: str, page: int, page_size: int) -> tuple[list[DocumentResponse], int]:
+    async def list_by_kb(
+        self, kb_id: str, page: int, page_size: int
+    ) -> tuple[list[DocumentResponse], int]:
         query = select(Document).where(Document.knowledge_base_id == kb_id)
         count_query = select(func.count(Document.id)).where(Document.knowledge_base_id == kb_id)
 
@@ -65,7 +89,9 @@ class DocumentService:
         docs = result.scalars().all()
         return [DocumentResponse.model_validate(d) for d in docs], total
 
-    async def upload(self, kb_id: str, file: UploadFile, background_tasks: BackgroundTasks) -> DocumentResponse:
+    async def upload(
+        self, kb_id: str, file: UploadFile, background_tasks: BackgroundTasks
+    ) -> DocumentResponse:
         ext = Path(file.filename or "").suffix.lower()
         text_map = {".pdf": "pdf", ".md": "md", ".txt": "txt"}
         if ext in IMAGE_EXTENSIONS:
@@ -83,7 +109,7 @@ class DocumentService:
         doc_id = str(uuid.uuid4())
         upload_dir = Path(settings.UPLOAD_DIR)
         upload_dir.mkdir(parents=True, exist_ok=True)
-        file_path = upload_dir / f"{doc_id}{ext}"
+        file_path = (upload_dir / f"{doc_id}{ext}").resolve()
 
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
@@ -101,17 +127,28 @@ class DocumentService:
         await self.db.commit()
         await self.db.refresh(doc)
 
-        background_tasks.add_task(
-            _process_image if file_type == "image" else _process_document,
-            doc_id,
-            kb_id,
-            file_type,
-            str(file_path),
-            file.filename or "unknown",
-        )
+        if file_type == "image":
+            background_tasks.add_task(
+                _process_image,
+                doc_id,
+                kb_id,
+                file_type,
+                str(file_path),
+                file.filename or "unknown",
+            )
+        else:
+            background_tasks.add_task(
+                _process_document,
+                doc_id,
+                kb_id,
+                file_type,
+                str(file_path),
+            )
         return DocumentResponse.model_validate(doc)
 
-    async def create_manual(self, kb_id: str, data: ManualDocumentCreate, background_tasks: BackgroundTasks) -> DocumentResponse:
+    async def create_manual(
+        self, kb_id: str, data: ManualDocumentCreate, background_tasks: BackgroundTasks
+    ) -> DocumentResponse:
         doc_id = str(uuid.uuid4())
         doc = Document(
             id=doc_id,
@@ -200,9 +237,12 @@ class DocumentService:
 
                 from ..core.chroma_client import get_collection
                 from ..models.chunk import Chunk
-                chunk_ids = (await self.db.execute(
-                    _select(Chunk.id).where(Chunk.document_id == doc_id)
-                )).scalars().all()
+
+                chunk_ids = (
+                    (await self.db.execute(_select(Chunk.id).where(Chunk.document_id == doc_id)))
+                    .scalars()
+                    .all()
+                )
                 if chunk_ids:
                     collection = get_collection(doc.knowledge_base_id)
                     collection.delete(ids=list(chunk_ids))
@@ -259,9 +299,11 @@ async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: 
 
     async with async_session() as db:
         try:
-            text = DocumentParser.parse(file_path, file_type)
+            resolved = str(resolve_upload_path(file_path))
+            text = DocumentParser.parse(resolved, file_type)
 
             from ..models.knowledge_base import KnowledgeBase
+
             kb_result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
             kb = kb_result.scalar_one_or_none()
             chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
@@ -304,7 +346,7 @@ async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: 
                     db,
                     kb_id,
                     doc_id,
-                    file_path,
+                    resolved,
                     filename,
                     start_chunk_index=len(chunk_records),
                     exclude_chunk_ids=text_ids,
@@ -315,10 +357,18 @@ async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: 
                 gate_stats.llm_calls += img_stats.llm_calls
                 chunk_records.extend(img_records)
 
+            doc = await db.get(Document, doc_id)
             if not chunk_records:
+                if gate_stats.duplicates > 0 and doc:
+                    doc.status = "completed"
+                    doc.chunk_count = 0
+                    doc.char_count = 0
+                    doc.ingest_duplicate_count = gate_stats.duplicates
+                    doc.ingest_conflict_count = gate_stats.conflicts
+                    await db.commit()
+                    return
                 raise ValueError("未能从文件中提取有效文本或图片")
 
-            doc = await db.get(Document, doc_id)
             if doc:
                 doc.status = "completed"
                 doc.chunk_count = len(chunk_records)
@@ -330,12 +380,12 @@ async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: 
             await _sync_chunks_to_fts(db, kb_id, chunk_records)
             await _sync_chunks_to_graph(db, kb_id, chunk_records)
 
-        except Exception as e:
+        except Exception:
+            logger.exception("document ingest failed doc_id=%s", doc_id)
             doc = await db.get(Document, doc_id)
             if doc:
                 doc.status = "error"
             await db.commit()
-            raise e
 
 
 async def _process_image(
@@ -350,15 +400,14 @@ async def _process_image(
 
     async with async_session() as db:
         try:
+            resolved = str(resolve_upload_path(file_path))
             spec = ImageChunkSpec(
-                image_path=file_path,
+                image_path=resolved,
                 content_header=f"[图片文档] {filename}",
                 filename_hint=filename,
                 media_type="image",
             )
-            chunk_records, _, gate_stats = await ingest_image_chunk_specs(
-                db, kb_id, doc_id, [spec]
-            )
+            chunk_records, _, gate_stats = await ingest_image_chunk_specs(db, kb_id, doc_id, [spec])
 
             if not chunk_records:
                 raise ValueError("图片未通过入库门禁或处理失败")
@@ -375,12 +424,54 @@ async def _process_image(
             await _sync_chunks_to_fts(db, kb_id, chunk_records)
             await _sync_chunks_to_graph(db, kb_id, chunk_records)
 
-        except Exception as e:
+        except Exception:
+            logger.exception("image ingest failed doc_id=%s", doc_id)
             doc = await db.get(Document, doc_id)
             if doc:
                 doc.status = "error"
             await db.commit()
-            raise e
+
+
+async def recover_stuck_documents(min_stuck_minutes: int = 3) -> int:
+    """恢复 status=processing 的文档（服务重启 / reload 导致后台任务丢失）。"""
+    from sqlalchemy import select
+
+    from ..models.document import Document
+
+    cutoff = datetime.utcnow() - timedelta(minutes=min_stuck_minutes)
+    async with async_session() as db:
+        result = await db.execute(
+            select(Document).where(
+                Document.status == "processing",
+                Document.created_at < cutoff,
+            )
+        )
+        docs = list(result.scalars().all())
+
+    if not docs:
+        return 0
+
+    logger.info("recovering %s stuck document(s) in processing", len(docs))
+    for doc in docs:
+        if not doc.file_path:
+            async with async_session() as db:
+                row = await db.get(Document, doc.id)
+                if row:
+                    row.status = "error"
+                    await db.commit()
+            continue
+        try:
+            if doc.file_type == "image":
+                await _process_image(
+                    doc.id, doc.knowledge_base_id, doc.file_type, doc.file_path, doc.filename
+                )
+            else:
+                await _process_document(
+                    doc.id, doc.knowledge_base_id, doc.file_type or "txt", doc.file_path
+                )
+        except Exception:
+            logger.exception("recover failed doc_id=%s", doc.id)
+    return len(docs)
 
 
 async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
@@ -392,6 +483,7 @@ async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
         try:
             # 1. 获取分块配置
             from ..models.knowledge_base import KnowledgeBase
+
             kb_result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
             kb = kb_result.scalar_one_or_none()
             chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
@@ -423,7 +515,7 @@ async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
                         ],
                     )
                 except Exception as e:
-                    raise RuntimeError(f"Chroma 写入失败: {e}")
+                    raise RuntimeError(f"Chroma 写入失败: {e}") from e
 
             doc = await db.get(Document, doc_id)
             if doc:
@@ -438,9 +530,9 @@ async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
                 await _sync_chunks_to_fts(db, kb_id, chunk_records)
                 await _sync_chunks_to_graph(db, kb_id, chunk_records)
 
-        except Exception as e:
+        except Exception:
+            logger.exception("manual ingest failed doc_id=%s", doc_id)
             doc = await db.get(Document, doc_id)
             if doc:
                 doc.status = "error"
             await db.commit()
-            raise e

@@ -31,9 +31,9 @@ export interface EvalBaselineReport {
 /** 样本数：优先 aggregate，其次 config / samples 长度 */
 export function getReportSampleCount(report: EvalBaselineReport): number | undefined {
   return (
-    report.aggregate?.sample_count
-    ?? report.config?.sample_count
-    ?? (report.samples?.length ? report.samples.length : undefined)
+    report.aggregate?.sample_count ??
+    report.config?.sample_count ??
+    (report.samples?.length ? report.samples.length : undefined)
   )
 }
 

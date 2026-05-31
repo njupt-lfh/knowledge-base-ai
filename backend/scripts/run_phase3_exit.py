@@ -16,7 +16,7 @@ import json
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import mean
 
@@ -61,7 +61,9 @@ async def _eval_samples(
             elif mode == "hybrid":
                 sources = await hybrid.search(db, kb_id, question, top_k=top_k)
             else:
-                sources, route, paths = await agent.retrieve_for_eval(db, kb_id, question, top_k=top_k)
+                sources, route, paths = await agent.retrieve_for_eval(
+                    db, kb_id, question, top_k=top_k
+                )
             ms = round((time.perf_counter() - t0) * 1000, 1)
 
             retrieved_ids = [x["chunk_id"] for x in sources]
@@ -95,7 +97,12 @@ async def _run(args: argparse.Namespace) -> int:
     multi_hop = [s for s in all_samples if s.get("q_type") == "multi_hop"]
 
     if not args.skip_backfill:
-        cmd = [sys.executable, str(BACKEND / "scripts" / "backfill_graph.py"), "--eval-kbs-only", "--skip-existing"]
+        cmd = [
+            sys.executable,
+            str(BACKEND / "scripts" / "backfill_graph.py"),
+            "--eval-kbs-only",
+            "--skip-existing",
+        ]
         if args.mock_backfill:
             cmd.append("--mock")
         print("Running backfill:", " ".join(cmd))
@@ -116,7 +123,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     multi_hop_pass = rel_improve is not None and rel_improve >= 20.0
 
-    print(f"\n=== Multi-hop hybrid baseline ===")
+    print("\n=== Multi-hop hybrid baseline ===")
     hybrid_rows = await _eval_samples(multi_hop, mode="hybrid", top_k=args.top_k)
     hybrid_recall = _avg_recall(hybrid_rows)
     hybrid_improve = None
@@ -130,8 +137,12 @@ async def _run(args: argparse.Namespace) -> int:
     neg = [r for r in full_rows if r.get("q_type") == "negative"]
     full_recall = _avg_recall(full_rows)
     pos_recall = _avg_recall(non_neg)
-    neg_empty = round(mean(1.0 if r.get("context_recall") == 1.0 else 0.0 for r in neg), 4) if neg else None
-    hit_rate = round(mean(1.0 if r.get("retrieval_hit") else 0.0 for r in non_neg), 4) if non_neg else None
+    neg_empty = (
+        round(mean(1.0 if r.get("context_recall") == 1.0 else 0.0 for r in neg), 4) if neg else None
+    )
+    hit_rate = (
+        round(mean(1.0 if r.get("retrieval_hit") else 0.0 for r in non_neg), 4) if non_neg else None
+    )
 
     phase0_recall = None
     if PHASE0_FILE.exists():
@@ -144,7 +155,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     report = {
         "version": "1.0",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "config": {
             "top_k": args.top_k,
             "mock_backfill": args.mock_backfill,
@@ -177,16 +188,22 @@ async def _run(args: argparse.Namespace) -> int:
         },
         "exit_summary": {
             "multi_hop_graph_vs_vector": "PASS" if multi_hop_pass else "FAIL",
-            "unified_recall_vs_phase0": "PASS" if rel_vs_p0 and rel_vs_p0 >= 15.0 else "PARTIAL/FAIL",
+            "unified_recall_vs_phase0": "PASS"
+            if rel_vs_p0 and rel_vs_p0 >= 15.0
+            else "PARTIAL/FAIL",
         },
     }
 
     REPORT_FILE.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"\n=== Phase 3 Exit Summary ===")
+    print("\n=== Phase 3 Exit Summary ===")
     print(f"  Multi-hop: vector={vec_recall} hybrid={hybrid_recall} agent={agent_recall}")
-    print(f"    vs vector Δ={rel_improve}% vs hybrid Δ={hybrid_improve}% -> {report['exit_summary']['multi_hop_graph_vs_vector']}")
-    print(f"  Unified:   recall={full_recall} (P0={phase0_recall}, Δ={rel_vs_p0}%) neg_empty={neg_empty}")
+    print(
+        f"    vs vector Δ={rel_improve}% vs hybrid Δ={hybrid_improve}% -> {report['exit_summary']['multi_hop_graph_vs_vector']}"
+    )
+    print(
+        f"  Unified:   recall={full_recall} (P0={phase0_recall}, Δ={rel_vs_p0}%) neg_empty={neg_empty}"
+    )
     print(f"  Report -> {REPORT_FILE}")
     return 0 if multi_hop_pass else 1
 

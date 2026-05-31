@@ -1,6 +1,6 @@
 """知识图谱 API — Phase 3"""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db

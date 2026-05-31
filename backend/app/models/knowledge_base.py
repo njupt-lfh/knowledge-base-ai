@@ -18,9 +18,7 @@ if TYPE_CHECKING:
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_bases"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     embedding_model: Mapped[str] = mapped_column(
@@ -33,6 +31,6 @@ class KnowledgeBase(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    documents: Mapped[list["Document"]] = relationship(
+    documents: Mapped[list[Document]] = relationship(
         "Document", back_populates="knowledge_base", cascade="all, delete-orphan"
     )

@@ -40,7 +40,9 @@ def _mock_extract_triples(content: str, max_n: int) -> list[dict[str, str]]:
         _add(m.group(1), "是", m.group(2))
     for m in re.finditer(r"([^\s，。；、]{2,12})(?:属于|包含于)([^\s，。；、]{2,24})", content):
         _add(m.group(1), "属于", m.group(2))
-    for m in re.finditer(r"([^\s，。；、]{2,12})(?:对比|区别|不同于)([^\s，。；、]{2,12})", content):
+    for m in re.finditer(
+        r"([^\s，。；、]{2,12})(?:对比|区别|不同于)([^\s，。；、]{2,12})", content
+    ):
         _add(m.group(1), "对比", m.group(2))
 
     return triples[:max_n]

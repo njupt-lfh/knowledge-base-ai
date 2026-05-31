@@ -66,7 +66,9 @@ class ConversationExtractService:
             if gap_type not in AUTO_INGEST_GAP_TYPES:
                 return None
             source_ref = (data.get("source_ref") or "").strip()
-            if not source_ref or not self._source_in_dialog(source_ref, user_message, assistant_message):
+            if not source_ref or not self._source_in_dialog(
+                source_ref, user_message, assistant_message
+            ):
                 logger.info("extract: rejected — missing or invalid source_ref")
                 return None
             data["gap_type"] = gap_type

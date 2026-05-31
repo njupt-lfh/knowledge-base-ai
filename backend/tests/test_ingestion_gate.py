@@ -1,11 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.ingestion_gate_service import (
     CONFLICT_MAX_DISTANCE,
     DUPLICATE_MAX_DISTANCE,
-    ChunkGateResult,
     IngestionGateService,
     distance_to_similarity,
 )

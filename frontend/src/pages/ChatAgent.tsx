@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Space, Typography, message, Modal } from 'antd'
+import { Button, Space, Typography, message, Modal, Popconfirm } from 'antd'
 import {
   ArrowLeftOutlined,
   ShareAltOutlined,
   BulbOutlined,
   PlusOutlined,
   HistoryOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
 import { gapApi } from '../api/gap'
@@ -25,14 +26,16 @@ export default function ChatAgent() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [convList, setConvList] = useState<Conversation[]>([])
+  const [convHasMore, setConvHasMore] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [initialized, setInitialized] = useState(false)
 
   const loadConvList = useCallback(async () => {
     if (!kbId) return []
     try {
-      const list = (await chatApi.listConversations(kbId)).data
+      const list = (await chatApi.listConversations(kbId, 5, 0)).data
       setConvList(list)
+      setConvHasMore(list.length >= 20)
       return list
     } catch {
       return []
@@ -42,22 +45,27 @@ export default function ChatAgent() {
   const loadMessages = useCallback(async (conv: Conversation) => {
     try {
       const msgs = (await chatApi.getMessages(conv.id)).data
-      setMessages(msgs.map((m: Message) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        sources: m.sources ?? undefined,
-      })))
+      setMessages(
+        msgs.map((m: Message) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          sources: m.sources ?? undefined,
+        })),
+      )
     } catch {
       message.error('加载消息失败')
     }
   }, [])
 
-  const switchConversation = useCallback(async (conv: Conversation) => {
-    setConversation(conv)
-    setShowHistory(false)
-    await loadMessages(conv)
-  }, [loadMessages])
+  const switchConversation = useCallback(
+    async (conv: Conversation) => {
+      setConversation(conv)
+      setShowHistory(false)
+      await loadMessages(conv)
+    },
+    [loadMessages],
+  )
 
   const handleNewChat = async () => {
     if (!kbId) return
@@ -175,9 +183,7 @@ export default function ChatAgent() {
   }
 
   const handleFeedback = (messageId: string, type: 'like' | 'dislike' | 'correction') => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, feedback: type } : m)),
-    )
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, feedback: type } : m)))
   }
 
   const [extractModal, setExtractModal] = useState(false)
@@ -244,6 +250,21 @@ export default function ChatAgent() {
     }
   }
 
+  const handleDeleteConv = async (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await request.delete(`/api/conversations/${convId}`)
+      message.success('已删除')
+      setConvList((prev) => prev.filter((c) => c.id !== convId))
+      if (conversation?.id === convId) {
+        setConversation(null)
+        setMessages([])
+      }
+    } catch {
+      message.error('删除失败')
+    }
+  }
+
   if (!initialized) {
     return <div className="kb-list-empty">加载中...</div>
   }
@@ -259,7 +280,13 @@ export default function ChatAgent() {
           <Button type="primary" icon={<PlusOutlined />} onClick={handleNewChat}>
             新建对话
           </Button>
-          <Button icon={<HistoryOutlined />} onClick={() => { setShowHistory(!showHistory); loadConvList() }}>
+          <Button
+            icon={<HistoryOutlined />}
+            onClick={() => {
+              setShowHistory(!showHistory)
+              loadConvList()
+            }}
+          >
             历史
           </Button>
           <Button icon={<BulbOutlined />} onClick={handleExtract} loading={extracting}>
@@ -295,10 +322,39 @@ export default function ChatAgent() {
               <span className="chat-history-item__date">
                 {new Date(c.created_at).toLocaleDateString('zh-CN')}
               </span>
+              <Popconfirm
+                title="确定删除该对话？"
+                onConfirm={(e) => handleDeleteConv(c.id, e as unknown as React.MouseEvent)}
+                onCancel={(e) => e?.stopPropagation()}
+              >
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ marginLeft: 'auto', flexShrink: 0 }}
+                />
+              </Popconfirm>
             </div>
           ))}
           {convList.length === 0 && (
             <Typography.Text type="secondary">暂无历史对话</Typography.Text>
+          )}
+          {convHasMore && (
+            <Button
+              size="small"
+              block
+              type="link"
+              onClick={async () => {
+                if (!kbId) return
+                const more = (await chatApi.listConversations(kbId, 20, convList.length)).data
+                setConvList((prev) => [...prev, ...more])
+                setConvHasMore(more.length >= 20)
+              }}
+            >
+              加载更多
+            </Button>
           )}
         </div>
       )}
@@ -317,7 +373,10 @@ export default function ChatAgent() {
         title="提炼为知识"
         open={extractModal}
         onOk={confirmExtract}
-        onCancel={() => { setExtractModal(false); setExtractData(null) }}
+        onCancel={() => {
+          setExtractModal(false)
+          setExtractData(null)
+        }}
         okText="确认录入"
         cancelText="取消"
       >
@@ -330,18 +389,18 @@ export default function ChatAgent() {
             {extractData.manual_required ? (
               <Typography.Text type="warning">知识缺失类缺口，请到补全任务人工添加</Typography.Text>
             ) : (
-            <Typography.Paragraph
-              ellipsis={{ rows: 6, expandable: true }}
-              style={{
-                whiteSpace: 'pre-wrap',
-                background: 'var(--bg-void)',
-                padding: 12,
-                borderRadius: 8,
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              {extractData.content}
-            </Typography.Paragraph>
+              <Typography.Paragraph
+                ellipsis={{ rows: 6, expandable: true }}
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  background: 'var(--bg-void)',
+                  padding: 12,
+                  borderRadius: 8,
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                {extractData.content}
+              </Typography.Paragraph>
             )}
           </Space>
         )}

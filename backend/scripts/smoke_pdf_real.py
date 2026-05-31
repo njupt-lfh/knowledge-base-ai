@@ -33,8 +33,6 @@ async def main() -> int:
         print("FAIL: PDF_IMAGE_EXTRACTION_ENABLED=false")
         return 1
 
-    from sqlalchemy import select
-
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
@@ -43,6 +41,7 @@ async def main() -> int:
     from app.services.document_service import _process_document
     from app.services.embedding_service import EmbeddingService
     from app.services.pdf_image_extractor import extract_pdf_images
+    from sqlalchemy import select
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]
@@ -68,7 +67,9 @@ async def main() -> int:
     print(f"复制: {dest}")
     print(f"预检内嵌图: {len(extracted)} 张")
     for img in extracted[:5]:
-        print(f"  - 第{img.page_num}页 图{img.image_index} {img.width}x{img.height} -> {Path(img.path).name}")
+        print(
+            f"  - 第{img.page_num}页 图{img.image_index} {img.width}x{img.height} -> {Path(img.path).name}"
+        )
     if len(extracted) > 5:
         print(f"  ... 另有 {len(extracted) - 5} 张")
 
@@ -116,25 +117,31 @@ async def main() -> int:
             return 1
 
         chunks = (
-            await db.execute(
-                select(Chunk)
-                .where(Chunk.document_id == doc_id)
-                .order_by(Chunk.chunk_index)
+            (
+                await db.execute(
+                    select(Chunk).where(Chunk.document_id == doc_id).order_by(Chunk.chunk_index)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         text_chunks = [c for c in chunks if not c.content.startswith("[PDF图片]")]
         img_chunks = [c for c in chunks if c.content.startswith("[PDF图片]")]
 
-        print(f"\n--- 入库结果 ---")
-        print(f"状态: {doc.status} | 总 chunk: {doc.chunk_count} | 文本: {len(text_chunks)} | PDF图: {len(img_chunks)}")
+        print("\n--- 入库结果 ---")
+        print(
+            f"状态: {doc.status} | 总 chunk: {doc.chunk_count} | 文本: {len(text_chunks)} | PDF图: {len(img_chunks)}"
+        )
         print(f"重复跳过: {doc.ingest_duplicate_count} | 冲突: {doc.ingest_conflict_count}")
 
         if text_chunks:
             print(f"\n[文本 chunk 0 预览] ({len(text_chunks[0].content)} 字)")
-            print(text_chunks[0].content[:400] + ("..." if len(text_chunks[0].content) > 400 else ""))
+            print(
+                text_chunks[0].content[:400] + ("..." if len(text_chunks[0].content) > 400 else "")
+            )
 
-        for i, c in enumerate(img_chunks[:3]):
+        for _i, c in enumerate(img_chunks[:3]):
             print(f"\n[PDF图 chunk {c.chunk_index} 预览]")
             print(c.content[:500] + ("..." if len(c.content) > 500 else ""))
 
@@ -145,8 +152,10 @@ async def main() -> int:
             print(f"\nChroma 首图块: media_type={meta.get('media_type')} page={meta.get('page')}")
 
             embed_svc = EmbeddingService()
-            q = "图表" if not img_chunks[0].content else img_chunks[0].content[20:40]
-            res = coll.query(query_embeddings=[embed_svc.embed_query("文档中的图片和图表")], n_results=min(3, len(chunks)))
+            res = coll.query(
+                query_embeddings=[embed_svc.embed_query("文档中的图片和图表")],
+                n_results=min(3, len(chunks)),
+            )
             ids = res["ids"][0] if res.get("ids") else []
             print(f"检索「文档中的图片和图表」Top-{len(ids)}: {ids[:3]}")
 

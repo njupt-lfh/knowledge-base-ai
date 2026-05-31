@@ -96,14 +96,18 @@ class HybridRetriever:
         ]
 
         chunks = (
-            await db.execute(
-                select(Chunk).where(
-                    Chunk.id.in_(candidate_ids),
-                    Chunk.knowledge_base_id == kb_id,
-                    Chunk.is_active.is_(True),
+            (
+                await db.execute(
+                    select(Chunk).where(
+                        Chunk.id.in_(candidate_ids),
+                        Chunk.knowledge_base_id == kb_id,
+                        Chunk.is_active.is_(True),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         chunk_map = {c.id: c for c in chunks}
 
         candidates: list[dict[str, Any]] = []
@@ -154,14 +158,18 @@ class HybridRetriever:
             return []
 
         chunks = (
-            await db.execute(
-                select(Chunk).where(
-                    Chunk.id.in_(vector_ids),
-                    Chunk.knowledge_base_id == kb_id,
-                    Chunk.is_active.is_(True),
+            (
+                await db.execute(
+                    select(Chunk).where(
+                        Chunk.id.in_(vector_ids),
+                        Chunk.knowledge_base_id == kb_id,
+                        Chunk.is_active.is_(True),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         chunk_map = {c.id: c for c in chunks}
 
         sources: list[dict[str, Any]] = []

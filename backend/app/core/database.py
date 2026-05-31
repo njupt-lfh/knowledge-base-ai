@@ -10,7 +10,18 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
-engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG)
+
+def _sqlite_connect_args(url: str) -> dict:
+    if "sqlite" not in url:
+        return {}
+    return {"timeout": 30}
+
+
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    connect_args=_sqlite_connect_args(settings.DATABASE_URL),
+)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -72,6 +83,9 @@ async def init_db() -> None:
     logger.info("init_db: registering %d tables: %s", len(table_names), ", ".join(table_names))
 
     async with engine.begin() as conn:
+        if "sqlite" in settings.DATABASE_URL:
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            await conn.execute(text("PRAGMA busy_timeout=30000"))
         await conn.run_sync(Base.metadata.create_all)
         await _apply_sqlite_migrations(conn)
         from .fts_init import init_fts_on_connection

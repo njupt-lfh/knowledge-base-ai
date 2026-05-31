@@ -1,6 +1,5 @@
 import pytest
-
-from app.services.fts_service import build_fts_query, upsert_chunk_fts, search_fts
+from app.services.fts_service import build_fts_query, search_fts, upsert_chunk_fts
 
 
 def test_build_fts_query_chinese():

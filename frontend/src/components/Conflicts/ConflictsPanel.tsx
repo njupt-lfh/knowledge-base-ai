@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Space, Table, Tag, Typography, message } from 'antd'
+import { Button, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
 import { ReloadOutlined, WarningOutlined } from '@ant-design/icons'
 import { conflictsApi, type KnowledgeConflict } from '../../api/conflicts'
 import './ConflictsPanel.css'
@@ -79,9 +79,11 @@ export default function ConflictsPanel({ kbId }: ConflictsPanelProps) {
           <Button size="small" onClick={() => resolve(row.id, 'resolved_keep_old')}>
             保留已有
           </Button>
-          <Button size="small" danger onClick={() => resolve(row.id, 'dismissed')}>
-            忽略
-          </Button>
+          <Popconfirm title="确定忽略此冲突？" onConfirm={() => resolve(row.id, 'dismissed')}>
+            <Button size="small" danger>
+              忽略
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -100,7 +102,14 @@ export default function ConflictsPanel({ kbId }: ConflictsPanelProps) {
       {rows.length === 0 && !loading && (
         <Typography.Text type="secondary">暂无待裁决冲突</Typography.Text>
       )}
-      <Table rowKey="id" size="small" loading={loading} columns={columns} dataSource={rows} pagination={{ pageSize: 8 }} />
+      <Table
+        rowKey="id"
+        size="small"
+        loading={loading}
+        columns={columns}
+        dataSource={rows}
+        pagination={{ pageSize: 8 }}
+      />
     </Space>
   )
 }

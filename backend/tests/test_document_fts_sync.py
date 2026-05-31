@@ -4,10 +4,14 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import text
-
-from app.services.document_service import DocumentService, _process_document, _process_manual, _sync_chunks_to_fts
+from app.services.document_service import (
+    DocumentService,
+    _process_document,
+    _process_manual,
+    _sync_chunks_to_fts,
+)
 from app.services.fts_service import FTS_TABLE, search_fts
+from sqlalchemy import text
 
 
 @pytest.mark.asyncio
@@ -209,9 +213,7 @@ async def test_toggle_status_syncs_fts():
             )
         )
         await db.commit()
-        await _sync_chunks_to_fts(db, kb_id, [
-            (await db.get(Chunk, chunk_id))
-        ])
+        await _sync_chunks_to_fts(db, kb_id, [(await db.get(Chunk, chunk_id))])
 
     fake_collection = MagicMock()
     with patch("app.services.document_service.get_collection", return_value=fake_collection):

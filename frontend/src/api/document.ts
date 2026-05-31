@@ -3,7 +3,9 @@ import type { Document } from '../types'
 
 export const documentApi = {
   list: (kbId: string, params?: { page?: number; page_size?: number }) =>
-    request.get<{ items: Document[]; total: number }>(`/api/knowledge-bases/${kbId}/documents`, { params }),
+    request.get<{ items: Document[]; total: number }>(`/api/knowledge-bases/${kbId}/documents`, {
+      params,
+    }),
 
   upload: (kbId: string, file: File) => {
     const formData = new FormData()
@@ -27,4 +29,7 @@ export const documentApi = {
     formData.append('is_active', String(isActive))
     return request.put<Document>(`/api/knowledge-bases/${kbId}/documents/${docId}/status`, formData)
   },
+
+  reindex: (kbId: string, docId: string) =>
+    request.post<Document>(`/api/knowledge-bases/${kbId}/documents/${docId}/reindex`),
 }

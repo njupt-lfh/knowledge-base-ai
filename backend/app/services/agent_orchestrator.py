@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,11 +72,17 @@ class AgentOrchestrator:
 
         if self._should_use_graph(route, query):
             graph_sources, graph_paths = await self.graph.search(db, kb_id, query, top_k=top_k)
-            merged = merge_source_lists([graph_sources, hybrid_sources], top_k=top_k) if graph_sources else hybrid_sources
+            merged = (
+                merge_source_lists([graph_sources, hybrid_sources], top_k=top_k)
+                if graph_sources
+                else hybrid_sources
+            )
             merged = apply_retrieval_abstention(query, merged, route, graph_paths=graph_paths)
             return merged, graph_paths
 
-        hybrid_sources = apply_retrieval_abstention(query, hybrid_sources, route, graph_paths=graph_paths)
+        hybrid_sources = apply_retrieval_abstention(
+            query, hybrid_sources, route, graph_paths=graph_paths
+        )
         return hybrid_sources, graph_paths
 
     async def retrieve_for_eval(
@@ -171,9 +178,13 @@ class AgentOrchestrator:
 
         retry_query = expand_query_for_retry(query, route)
         retry_k = min(k + 3, 12)
-        sources2, graph_paths2 = await self._retrieve(db, kb_id, retry_query, route=route, top_k=retry_k)
-        graph_used = graph_used or bool(graph_paths2) or any(
-            s.get("source", "").startswith("graph") for s in sources2
+        sources2, graph_paths2 = await self._retrieve(
+            db, kb_id, retry_query, route=route, top_k=retry_k
+        )
+        graph_used = (
+            graph_used
+            or bool(graph_paths2)
+            or any(s.get("source", "").startswith("graph") for s in sources2)
         )
         graph_paths = graph_paths2 or graph_paths
         eval2 = evaluate_sufficiency(query, sources2, route)

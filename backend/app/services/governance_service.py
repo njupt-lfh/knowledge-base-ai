@@ -76,18 +76,22 @@ class GovernanceService:
     async def _scan_cold_stale(self, kb_id: str) -> list[dict]:
         cutoff = datetime.utcnow() - timedelta(days=COLD_DAYS)
         rows = (
-            await self.db.execute(
-                select(Chunk)
-                .where(
-                    Chunk.knowledge_base_id == kb_id,
-                    Chunk.is_active.is_(True),
-                    Chunk.hit_count == 0,
-                    Chunk.created_at <= cutoff,
+            (
+                await self.db.execute(
+                    select(Chunk)
+                    .where(
+                        Chunk.knowledge_base_id == kb_id,
+                        Chunk.is_active.is_(True),
+                        Chunk.hit_count == 0,
+                        Chunk.created_at <= cutoff,
+                    )
+                    .order_by(Chunk.created_at)
+                    .limit(50)
                 )
-                .order_by(Chunk.created_at)
-                .limit(50)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         out: list[dict] = []
         for c in rows:
@@ -155,13 +159,17 @@ class GovernanceService:
 
     async def _scan_duplicates(self, kb_id: str) -> list[dict]:
         rows = (
-            await self.db.execute(
-                select(Chunk)
-                .where(Chunk.knowledge_base_id == kb_id, Chunk.is_active.is_(True))
-                .order_by(Chunk.created_at.desc())
-                .limit(DUPLICATE_SCAN_LIMIT)
+            (
+                await self.db.execute(
+                    select(Chunk)
+                    .where(Chunk.knowledge_base_id == kb_id, Chunk.is_active.is_(True))
+                    .order_by(Chunk.created_at.desc())
+                    .limit(DUPLICATE_SCAN_LIMIT)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         out: list[dict] = []
         seen_pairs: set[frozenset[str]] = set()

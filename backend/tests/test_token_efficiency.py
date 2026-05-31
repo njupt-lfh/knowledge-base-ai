@@ -3,7 +3,6 @@
 import uuid
 
 import pytest
-
 from app.services.embedding_cache import EmbeddingCache
 from app.services.embedding_service import EmbeddingService, get_embedding_cache
 from app.services.history_memory_service import (
@@ -58,7 +57,7 @@ def test_compress_history_keeps_recent():
 
 def test_history_compression_saves_tokens():
     long_hist = []
-    for i in range(12):
+    for _i in range(12):
         long_hist.append({"role": "user", "content": "X" * 200})
         long_hist.append({"role": "assistant", "content": "Y" * 250})
 
@@ -70,13 +69,12 @@ def test_history_compression_saves_tokens():
 
 @pytest.mark.asyncio
 async def test_fts_incremental_sync():
-    from sqlalchemy import text
-
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document
     from app.models.knowledge_base import KnowledgeBase
     from app.services.fts_service import FTS_TABLE, ensure_fts_schema, sync_fts_incremental
+    from sqlalchemy import text
 
     await init_db()
     suffix = uuid.uuid4().hex[:8]
@@ -87,9 +85,7 @@ async def test_fts_incremental_sync():
     async with async_session() as db:
         async with db.bind.connect() as conn:
             await ensure_fts_schema(conn)
-            before = (
-                await conn.execute(text(f"SELECT COUNT(*) FROM {FTS_TABLE}"))
-            ).scalar_one()
+            before = (await conn.execute(text(f"SELECT COUNT(*) FROM {FTS_TABLE}"))).scalar_one()
 
         kb = KnowledgeBase(
             id=kb_id,
@@ -122,9 +118,7 @@ async def test_fts_incremental_sync():
         async with db.bind.connect() as conn:
             synced = await sync_fts_incremental(conn)
             await conn.commit()
-            after = (
-                await conn.execute(text(f"SELECT COUNT(*) FROM {FTS_TABLE}"))
-            ).scalar_one()
+            after = (await conn.execute(text(f"SELECT COUNT(*) FROM {FTS_TABLE}"))).scalar_one()
 
         assert synced >= 1
         assert after >= before + 1

@@ -26,7 +26,9 @@ export interface IngestPrecheckResult {
 
 export const conflictsApi = {
   list: (kbId: string, status = 'pending') =>
-    request.get<KnowledgeConflict[]>(`/api/knowledge-bases/${kbId}/conflicts`, { params: { status } }),
+    request.get<KnowledgeConflict[]>(`/api/knowledge-bases/${kbId}/conflicts`, {
+      params: { status },
+    }),
 
   resolve: (kbId: string, conflictId: string, resolution: string) =>
     request.post<KnowledgeConflict>(
@@ -35,5 +37,7 @@ export const conflictsApi = {
     ),
 
   precheck: (kbId: string, content: string) =>
-    request.post<IngestPrecheckResult>(`/api/knowledge-bases/${kbId}/ingestion/precheck`, { content }),
+    request.post<IngestPrecheckResult>(`/api/knowledge-bases/${kbId}/ingestion/precheck`, {
+      content,
+    }),
 }

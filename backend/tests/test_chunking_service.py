@@ -1,3 +1,4 @@
+import pytest
 from app.services.chunking_service import DocumentParser, TextChunker
 
 
@@ -22,8 +23,5 @@ def test_document_parser_txt(tmp_txt):
 
 
 def test_document_parser_unsupported_type():
-    try:
+    with pytest.raises(ValueError, match="不支持"):
         DocumentParser.parse("x.bin", "bin")
-        assert False, "expected ValueError"
-    except ValueError as e:
-        assert "不支持" in str(e)

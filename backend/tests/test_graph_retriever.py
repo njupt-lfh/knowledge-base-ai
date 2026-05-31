@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.services.graph_retriever import GraphRetriever
 from app.services.hybrid_retriever import merge_source_lists
 
@@ -42,8 +40,18 @@ async def test_graph_retriever_search():
     content = "React与Vue是前端框架，React属于JavaScript生态。"
 
     async with async_session() as db:
-        db.add(KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50))
-        db.add(Document(id=doc_id, knowledge_base_id=kb_id, filename="t", file_type="txt", status="completed"))
+        db.add(
+            KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
+        )
+        db.add(
+            Document(
+                id=doc_id,
+                knowledge_base_id=kb_id,
+                filename="t",
+                file_type="txt",
+                status="completed",
+            )
+        )
         db.add(
             Chunk(
                 id=chunk_id,

@@ -5,11 +5,12 @@ export const chatApi = {
   createConversation: (kbId: string) =>
     request.post<Conversation>(`/api/knowledge-bases/${kbId}/chat`),
 
-  listConversations: (kbId: string) =>
-    request.get<Conversation[]>(`/api/knowledge-bases/${kbId}/conversations`),
+  listConversations: (kbId: string, limit?: number, offset?: number) =>
+    request.get<Conversation[]>(`/api/knowledge-bases/${kbId}/conversations`, {
+      params: { limit, offset },
+    }),
 
-  getMessages: (convId: string) =>
-    request.get<Message[]>(`/api/conversations/${convId}/messages`),
+  getMessages: (convId: string) => request.get<Message[]>(`/api/conversations/${convId}/messages`),
 
   sendMessage: async function* (convId: string, message: string) {
     const base = import.meta.env.VITE_API_BASE || 'http://localhost:8082'
@@ -47,6 +48,5 @@ export const chatApi = {
   share: (convId: string) =>
     request.post<{ share_token: string; share_url: string }>(`/api/conversations/${convId}/share`),
 
-  getByShareToken: (token: string) =>
-    request.get<Conversation>(`/api/share/${token}`),
+  getByShareToken: (token: string) => request.get<Conversation>(`/api/share/${token}`),
 }

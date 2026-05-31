@@ -12,9 +12,7 @@ from ..core.database import Base
 class Conversation(Base):
     __tablename__ = "conversations"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     knowledge_base_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False
     )
@@ -32,9 +30,7 @@ class Conversation(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
     )
@@ -43,6 +39,4 @@ class Message(Base):
     sources: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    conversation: Mapped["Conversation"] = relationship(
-        "Conversation", back_populates="messages"
-    )
+    conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")

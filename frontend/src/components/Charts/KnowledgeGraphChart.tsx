@@ -16,7 +16,14 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
     return (
       <HudPanel className="chart-panel">
         <h3 className="chart-panel__title">知识图谱（实体关系）</h3>
-        <p style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13, padding: '40px 0' }}>
+        <p
+          style={{
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 13,
+            padding: '40px 0',
+          }}
+        >
           暂无图谱数据。上传或录入含实体关系的文档后，系统会自动抽取三元组。
         </p>
       </HudPanel>
@@ -71,6 +78,7 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
         links: edges.map((e) => ({
           source: e.source,
           target: e.target,
+          predicate: e.predicate,
           lineStyle: {
             color: 'rgba(255,107,53,0.5)',
             curveness: 0.2,
@@ -106,8 +114,10 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
   )
 }
 
-export default memo(KnowledgeGraphChart, (prev, next) =>
-  prev.relationCount === next.relationCount &&
-  prev.nodes.length === next.nodes.length &&
-  prev.edges.length === next.edges.length
+export default memo(
+  KnowledgeGraphChart,
+  (prev, next) =>
+    prev.relationCount === next.relationCount &&
+    prev.nodes.length === next.nodes.length &&
+    prev.edges.length === next.edges.length,
 )

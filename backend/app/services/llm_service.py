@@ -1,7 +1,7 @@
 """LLM 调用服务 — 火山引擎豆包 Chat API"""
 
 import json
-from typing import AsyncGenerator, Dict, List
+from collections.abc import AsyncGenerator
 
 import httpx
 
@@ -15,7 +15,7 @@ class LLMService:
         self.model_name = model_name or settings.VOLCENGINE_LLM_MODEL
         self.mock_mode = settings.LLM_MOCK_MODE
 
-    async def chat_stream(self, messages: List[Dict]) -> AsyncGenerator[str, None]:
+    async def chat_stream(self, messages: list[dict]) -> AsyncGenerator[str, None]:
         if self.mock_mode:
             mock_reply = "Mock 模式已启用。请在 .env 中设置 LLM_MOCK_MODE=false"
             yield f"data: {json.dumps({'type': 'text', 'content': mock_reply})}\n\n"
@@ -55,7 +55,7 @@ class LLMService:
 
     async def chat_completion(
         self,
-        messages: List[Dict],
+        messages: list[dict],
         *,
         temperature: float = 0.3,
         max_tokens: int = 512,

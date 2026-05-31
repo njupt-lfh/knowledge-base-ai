@@ -34,12 +34,9 @@ export const syncApi = {
   updateWatch: (watchId: string, data: { enabled?: boolean; recursive?: boolean }) =>
     request.patch<FolderWatch>(`/api/sync/watches/${watchId}`, data),
 
-  deleteWatch: (watchId: string) =>
-    request.delete(`/api/sync/watches/${watchId}`),
+  deleteWatch: (watchId: string) => request.delete(`/api/sync/watches/${watchId}`),
 
-  scanWatch: (watchId: string) =>
-    request.post<ScanResult>(`/api/sync/watches/${watchId}/scan`),
+  scanWatch: (watchId: string) => request.post<ScanResult>(`/api/sync/watches/${watchId}/scan`),
 
-  scanKb: (kbId: string) =>
-    request.post<ScanResult[]>(`/api/sync/knowledge-bases/${kbId}/scan`),
+  scanKb: (kbId: string) => request.post<ScanResult[]>(`/api/sync/knowledge-bases/${kbId}/scan`),
 }
