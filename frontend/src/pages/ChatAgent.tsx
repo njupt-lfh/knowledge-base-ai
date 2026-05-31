@@ -18,6 +18,8 @@ import type { ChatMessageData } from '../components/Chat/MessageBubble'
 import type { Conversation, Message } from '../types'
 import '../components/Chat/Chat.css'
 
+const CONV_LIST_PAGE_SIZE = 50
+
 export default function ChatAgent() {
   const { kbId } = useParams<{ kbId: string }>()
   const navigate = useNavigate()
@@ -33,9 +35,9 @@ export default function ChatAgent() {
   const loadConvList = useCallback(async () => {
     if (!kbId) return []
     try {
-      const list = (await chatApi.listConversations(kbId, 5, 0)).data
+      const list = (await chatApi.listConversations(kbId, CONV_LIST_PAGE_SIZE, 0)).data
       setConvList(list)
-      setConvHasMore(list.length >= 20)
+      setConvHasMore(list.length >= CONV_LIST_PAGE_SIZE)
       return list
     } catch {
       return []
@@ -309,53 +311,57 @@ export default function ChatAgent() {
               关闭
             </Button>
           </div>
-          {convList.map((c) => (
-            <div
-              key={c.id}
-              className={`chat-history-item ${c.id === conversation?.id ? 'chat-history-item--active' : ''}`}
-              onClick={() => switchConversation(c)}
-              onKeyDown={(e) => e.key === 'Enter' && switchConversation(c)}
-              role="button"
-              tabIndex={0}
-            >
-              <span className="chat-history-item__title">{c.title || '新对话'}</span>
-              <span className="chat-history-item__date">
-                {new Date(c.created_at).toLocaleDateString('zh-CN')}
-              </span>
-              <Popconfirm
-                title="确定删除该对话？"
-                onConfirm={(e) => handleDeleteConv(c.id, e as unknown as React.MouseEvent)}
-                onCancel={(e) => e?.stopPropagation()}
+          <div className="chat-history-panel__list">
+            {convList.map((c) => (
+              <div
+                key={c.id}
+                className={`chat-history-item ${c.id === conversation?.id ? 'chat-history-item--active' : ''}`}
+                onClick={() => switchConversation(c)}
+                onKeyDown={(e) => e.key === 'Enter' && switchConversation(c)}
+                role="button"
+                tabIndex={0}
               >
-                <Button
-                  size="small"
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ marginLeft: 'auto', flexShrink: 0 }}
-                />
-              </Popconfirm>
-            </div>
-          ))}
-          {convList.length === 0 && (
-            <Typography.Text type="secondary">暂无历史对话</Typography.Text>
-          )}
-          {convHasMore && (
-            <Button
-              size="small"
-              block
-              type="link"
-              onClick={async () => {
-                if (!kbId) return
-                const more = (await chatApi.listConversations(kbId, 20, convList.length)).data
-                setConvList((prev) => [...prev, ...more])
-                setConvHasMore(more.length >= 20)
-              }}
-            >
-              加载更多
-            </Button>
-          )}
+                <span className="chat-history-item__title">{c.title || '新对话'}</span>
+                <span className="chat-history-item__date">
+                  {new Date(c.created_at).toLocaleDateString('zh-CN')}
+                </span>
+                <Popconfirm
+                  title="确定删除该对话？"
+                  onConfirm={(e) => handleDeleteConv(c.id, e as unknown as React.MouseEvent)}
+                  onCancel={(e) => e?.stopPropagation()}
+                >
+                  <Button
+                    size="small"
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ marginLeft: 'auto', flexShrink: 0 }}
+                  />
+                </Popconfirm>
+              </div>
+            ))}
+            {convList.length === 0 && (
+              <Typography.Text type="secondary">暂无历史对话</Typography.Text>
+            )}
+            {convHasMore && (
+              <Button
+                size="small"
+                block
+                type="link"
+                onClick={async () => {
+                  if (!kbId) return
+                  const more = (
+                    await chatApi.listConversations(kbId, CONV_LIST_PAGE_SIZE, convList.length)
+                  ).data
+                  setConvList((prev) => [...prev, ...more])
+                  setConvHasMore(more.length >= CONV_LIST_PAGE_SIZE)
+                }}
+              >
+                加载更多
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

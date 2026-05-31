@@ -13,7 +13,7 @@ export const chatApi = {
   getMessages: (convId: string) => request.get<Message[]>(`/api/conversations/${convId}/messages`),
 
   sendMessage: async function* (convId: string, message: string) {
-    const base = import.meta.env.VITE_API_BASE || 'http://localhost:8082'
+    const base = import.meta.env.VITE_API_BASE || 'http://localhost:8080'
     const response = await fetch(`${base}/api/conversations/${convId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

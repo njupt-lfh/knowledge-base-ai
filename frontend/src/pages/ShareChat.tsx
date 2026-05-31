@@ -10,7 +10,7 @@ import type { ChatMessageData } from '../components/Chat/MessageBubble'
 import type { Conversation, Message, SourceItem } from '../types'
 import '../components/Chat/Chat.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8082'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080'
 
 async function* streamChat(convId: string, msg: string) {
   const r = await fetch(`${API_BASE}/api/conversations/${convId}/chat`, {

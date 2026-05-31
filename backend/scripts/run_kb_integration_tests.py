@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BASE_URL = "http://localhost:8082"
+BASE_URL = "http://localhost:8080"
 TIMEOUT_CHAT = 180
 TIMEOUT_DEFAULT = 60
 
