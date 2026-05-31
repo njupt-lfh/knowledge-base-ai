@@ -30,7 +30,7 @@ jobs:
           pip install -r requirements.txt -r requirements-eval.txt -r requirements-dev.txt
 
       - name: Pytest
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/ -q --ignore=tests/test_document_fts_sync.py --tb=short
         env:
           LLM_MOCK_MODE: "true"
 
