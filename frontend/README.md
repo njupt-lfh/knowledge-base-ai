@@ -14,13 +14,13 @@ npm run dev            # http://localhost:5173
 
 ## 常用命令
 
-| 命令 | 说明 |
-|------|------|
-| `npm run dev` | 开发服务器（端口 5173） |
-| `npm run build` | 生产构建（含 `tsc -b` 类型检查） |
-| `npm run check` | TypeScript + ESLint + Prettier（CI 一致） |
-| `npm run lint` | ESLint 检查 |
-| `npm run format` | Prettier 格式化 |
+| 命令             | 说明                                      |
+| ---------------- | ----------------------------------------- |
+| `npm run dev`    | 开发服务器（端口 5173）                   |
+| `npm run build`  | 生产构建（含 `tsc -b` 类型检查）          |
+| `npm run check`  | TypeScript + ESLint + Prettier（CI 一致） |
+| `npm run lint`   | ESLint 检查                               |
+| `npm run format` | Prettier 格式化                           |
 
 ## 主要页面
 
