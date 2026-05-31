@@ -1,5 +1,6 @@
 """校验 eval_qa_dataset.json 格式、多库规模与 chunk 引用"""
 
+import argparse
 import asyncio
 import json
 import sys
@@ -58,6 +59,10 @@ async def _check_chunks(samples: list[dict]) -> list[str]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skip-db", action="store_true", help="skip chunk ID DB validation")
+    args = parser.parse_args()
+
     if not DATA_FILE.exists():
         print(f"FAIL: missing {DATA_FILE}")
         return 1
@@ -78,13 +83,15 @@ def main() -> int:
             print(f"FAIL: {e}")
         return 1
 
-    chunk_errors = asyncio.run(_check_chunks(samples))
-    if chunk_errors:
-        for e in chunk_errors:
-            print(f"FAIL: {e}")
-        return 1
+    if not args.skip_db:
+        chunk_errors = asyncio.run(_check_chunks(samples))
+        if chunk_errors:
+            for e in chunk_errors:
+                print(f"FAIL: {e}")
+            return 1
 
-    print("PASS: eval_qa_dataset.json")
+    mode = "schema-only" if args.skip_db else "schema+chunks"
+    print(f"PASS ({mode}): eval_qa_dataset.json")
     print(f"  samples: {len(samples)}")
     print(f"  knowledge_bases: {len(kb_counts)}")
     print(f"  per_kb: {dict(kb_counts)}")

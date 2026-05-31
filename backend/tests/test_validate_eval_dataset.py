@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,9 +10,14 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "validate_eval_datase
 
 
 def test_eval_dataset_file_exists_and_valid():
+    """校验数据集格式（CI 空库跳过 chunk ID 验证）。"""
     assert DATA.exists()
+    skip_db = os.environ.get("CI", "") != ""
+    cmd = [sys.executable, str(SCRIPT)]
+    if skip_db:
+        cmd.append("--skip-db")
     proc = subprocess.run(
-        [sys.executable, str(SCRIPT)],
+        cmd,
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,

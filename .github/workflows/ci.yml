@@ -30,7 +30,7 @@ jobs:
           pip install -r requirements.txt -r requirements-eval.txt -r requirements-dev.txt
 
       - name: Pytest
-        run: python -m pytest tests/ -v -k "not (test_document_fts_sync or test_validate_eval_dataset)" --tb=short 2>&1
+        run: python -m pytest tests/ -v -k "not test_document_fts_sync" --tb=short 2>&1
         env:
           LLM_MOCK_MODE: "true"
 
