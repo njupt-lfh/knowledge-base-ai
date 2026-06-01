@@ -13,6 +13,7 @@
     - DocumentService.ingest_manual_immediate：Gap 批准入库
     - EmbeddingService：弱命中探测
 """
+
 from __future__ import annotations
 
 import json

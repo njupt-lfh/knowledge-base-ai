@@ -12,6 +12,7 @@
     - GapService：对话后缺口入队
     - ConversationExtractService：手动提炼
 """
+
 import json
 import uuid
 

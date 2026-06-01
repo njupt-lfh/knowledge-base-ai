@@ -166,7 +166,9 @@ async def test_process_document_syncs_fts():
     fake_collection = MagicMock()
     with patch("app.services.document_service.resolve_upload_path", return_value="/tmp/sample.txt"):
         with patch("app.core.chroma_client.get_collection", return_value=fake_collection):
-            with patch("app.services.document_service.get_collection", return_value=fake_collection):
+            with patch(
+                "app.services.document_service.get_collection", return_value=fake_collection
+            ):
                 with patch(
                     "app.services.embedding_service.EmbeddingService.embed_documents",
                     return_value=[[0.1] * 256],
