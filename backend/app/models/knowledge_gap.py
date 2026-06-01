@@ -24,6 +24,7 @@ GAP_TYPES = (
 GAP_STATUSES = (
     "pending",
     "suggested",
+    "processing",
     "approved",
     "rejected",
     "manual_required",

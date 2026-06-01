@@ -225,9 +225,21 @@ class DocumentService:
         return DocumentResponse.model_validate(doc)
 
     async def ingest_manual_immediate(
-        self, kb_id: str, title: str, content: str
+        self,
+        kb_id: str,
+        title: str,
+        content: str,
+        *,
+        skip_gate: bool = False,
     ) -> tuple[DocumentResponse, IngestStats]:
-        """同步入库（Gap 批准 / 对话提炼确认），经门禁后写入。"""
+        """同步入库（Gap 批准 / 对话提炼确认），经门禁后写入。
+
+        参数:
+            kb_id: 知识库 ID
+            title: 文档标题
+            content: 正文
+            skip_gate: True 时跳过门禁检查（用于已人工审核的 Gap 入库）
+        """
         from .chunking_service import TextChunker
 
         doc_id = str(uuid.uuid4())
@@ -251,7 +263,22 @@ class DocumentService:
         chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         chunks = chunker.split(content) or [content]
 
-        chunk_records, gate_stats = await ingest_text_chunks(self.db, kb_id, doc_id, chunks)
+        if skip_gate:
+            chunk_records = [
+                Chunk(
+                    id=str(uuid.uuid4()),
+                    document_id=doc_id,
+                    knowledge_base_id=kb_id,
+                    content=c,
+                    chunk_index=i,
+                    char_count=len(c),
+                )
+                for i, c in enumerate(chunks)
+            ]
+            gate_stats = IngestStats(allowed=len(chunk_records))
+        else:
+            chunk_records, gate_stats = await ingest_text_chunks(self.db, kb_id, doc_id, chunks)
+
         if chunk_records:
             from .embedding_service import EmbeddingService
 

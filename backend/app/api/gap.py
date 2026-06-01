@@ -5,9 +5,11 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
+from ..models.knowledge_gap import KnowledgeGap
 from ..schemas.gap import GapCreateRequest, GapIngestRequest, GapResponse, GapStatusUpdate
 from ..services.gap_service import GapService
 from ..services.rag_service import RAGService
@@ -104,12 +106,13 @@ async def ingest_gap(
     """
     svc = GapService(db)
     try:
-        return await svc.ingest_gap(
+        result = await svc.ingest_gap(
             kb_id,
             gap_id,
             manual_content=body.manual_content,
             manual_title=body.manual_title,
         )
+        return JSONResponse(status_code=202, content=result)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -142,3 +145,32 @@ async def update_gap_status(
     if not gap or not resolver.gap_kb_matches(gap.kb_id, canonical):
         raise HTTPException(status_code=404, detail="gap not found")
     return GapResponse.model_validate(gap)
+
+
+@router.delete("/{gap_id}", status_code=204)
+async def delete_gap(
+    kb_id: str,
+    gap_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """删除缺口工单。
+
+    参数:
+        kb_id: 知识库 ID（用于校验 gap 归属）。
+        gap_id: 缺口 ID。
+        db: 数据库会话。
+
+    返回:
+        204 No Content；不存在或不归属 404。
+    """
+    svc = GapService(db)
+    resolver = KbIdResolver(db)
+    try:
+        canonical = await resolver.resolve(kb_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    gap = await db.get(KnowledgeGap, gap_id)
+    if not gap or not resolver.gap_kb_matches(gap.kb_id, canonical):
+        raise HTTPException(status_code=404, detail="gap not found")
+    await svc.delete_gap(gap_id)
+    return None

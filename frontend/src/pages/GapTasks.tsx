@@ -34,6 +34,7 @@ const GAP_TYPE_LABEL: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   pending: '待处理',
   suggested: '待审批',
+  processing: '入库中...',
   approved: '已入库',
   rejected: '已拒绝',
   manual_required: '待人工添加',
@@ -42,6 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   pending: 'gold',
   suggested: 'blue',
+  processing: 'processing',
   approved: 'green',
   rejected: 'red',
   manual_required: 'orange',
@@ -88,6 +90,14 @@ export default function GapTasks() {
     fetchGaps()
   }, [fetchGaps])
 
+  // 当列表中存在 processing 状态的 gap 时，每 3 秒自动刷新
+  useEffect(() => {
+    const hasProcessing = gaps.some((g) => g.status === 'processing')
+    if (!hasProcessing) return
+    const timer = setInterval(fetchGaps, 3000)
+    return () => clearInterval(timer)
+  }, [gaps, fetchGaps])
+
   const onStatus = async (gapId: string, status: string) => {
     if (!kbId) return
     try {
@@ -99,19 +109,23 @@ export default function GapTasks() {
     }
   }
 
+  const onDelete = async (gapId: string) => {
+    if (!kbId) return
+    try {
+      await gapApi.delete(kbId, gapId)
+      message.success('已删除')
+      fetchGaps()
+    } catch {
+      message.error('删除失败')
+    }
+  }
+
   const onIngest = async (gap: KnowledgeGap, manual?: string) => {
     if (!kbId) return
     setIngestingId(gap.id)
     try {
-      const res = await gapApi.ingest(kbId, gap.id, manual ? { manual_content: manual } : undefined)
-      const { ingest_allowed, ingest_duplicates, ingest_conflicts } = res.data
-      if (ingest_allowed > 0) {
-        message.success(`已入库（${ingest_allowed} 块通过门禁）`)
-      } else {
-        message.warning(
-          `未新增内容块（重复 ${ingest_duplicates}，冲突 ${ingest_conflicts}）。请改写后再试。`,
-        )
-      }
+      await gapApi.ingest(kbId, gap.id, manual ? { manual_content: manual } : undefined)
+      message.success('已加入入库队列，后台处理中...')
       setManualModal(null)
       setManualContent('')
       fetchGaps()
@@ -180,13 +194,15 @@ export default function GapTasks() {
     },
     {
       title: '操作',
-      width: 260,
+      width: 300,
       render: (_: unknown, row: KnowledgeGap) => (
         <Space wrap>
+          {row.status === 'processing' && <Tag color="processing">后台入库中，请稍后刷新...</Tag>}
           {row.gap_type === 'KNOWLEDGE_ABSENT' && row.status === 'manual_required' && (
             <Button
               size="small"
-              type="primary"
+              variant="filled"
+              color="geekblue"
               onClick={() => {
                 setManualModal(row)
                 setManualContent('')
@@ -200,7 +216,8 @@ export default function GapTasks() {
               <>
                 <Button
                   size="small"
-                  type="primary"
+                  variant="filled"
+                  color="green"
                   loading={ingestingId === row.id}
                   disabled={!row.source_ref}
                   onClick={() => onIngest(row)}
@@ -208,7 +225,7 @@ export default function GapTasks() {
                   批准入库
                 </Button>
                 <Popconfirm title="确定拒绝？" onConfirm={() => onStatus(row.id, 'rejected')}>
-                  <Button size="small" danger>
+                  <Button size="small" variant="filled" color="danger">
                     拒绝
                   </Button>
                 </Popconfirm>
@@ -218,7 +235,8 @@ export default function GapTasks() {
             <>
               <Button
                 size="small"
-                type="primary"
+                variant="filled"
+                color="primary"
                 onClick={() => {
                   setManualModal(row)
                   setManualContent('')
@@ -227,11 +245,18 @@ export default function GapTasks() {
                 补全知识
               </Button>
               <Popconfirm title="确定拒绝？" onConfirm={() => onStatus(row.id, 'rejected')}>
-                <Button size="small" danger>
+                <Button size="small" variant="filled" color="danger">
                   拒绝
                 </Button>
               </Popconfirm>
             </>
+          )}
+          {row.status !== 'approved' && row.status !== 'processing' && (
+            <Popconfirm title="确定删除？" onConfirm={() => onDelete(row.id)}>
+              <Button size="small" variant="filled" color="volcano">
+                删除
+              </Button>
+            </Popconfirm>
           )}
         </Space>
       ),

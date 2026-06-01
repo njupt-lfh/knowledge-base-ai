@@ -16,17 +16,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.chroma_client import get_collection
+from ..core.database import async_session
 from ..models.knowledge_gap import GAP_STATUSES, GAP_TYPES, KnowledgeGap
 from ..utils.kb_id import KbIdResolver
 from .conversation_extract_service import AUTO_INGEST_GAP_TYPES, ConversationExtractService
 from .document_service import DocumentService
 from .embedding_service import EmbeddingService
+
+logger = logging.getLogger(__name__)
 
 # 弱命中：向量距离换算 score 高于此值，但未进入最终 context
 WEAK_HIT_SCORE = 0.25
@@ -162,11 +167,17 @@ class GapService:
         crag_sufficient: bool,
         crag_refused: bool,
         gap_type: str,
+        answer: str = "",
     ) -> bool:
-        """CRAG 已判定检索充分且未拒答时，不再记「知识缺失/检索未命中」类假缺口。"""
+        """CRAG 充分且未拒答时跳过，但 LLM 实际回答包含拒答话术时仍然入队。"""
         if not crag_sufficient or crag_refused:
             return False
-        return gap_type in ("KNOWLEDGE_ABSENT", "RETRIEVAL_MISS")
+        if gap_type not in ("KNOWLEDGE_ABSENT", "RETRIEVAL_MISS"):
+            return False
+        # CRAG 认为充分但 LLM 实际回答称"暂无相关信息" → 不跳过
+        if any(p in (answer or "") for p in NO_INFO_PHRASES):
+            return False
+        return True
 
     @staticmethod
     def should_enqueue(
@@ -313,6 +324,7 @@ class GapService:
             crag_sufficient=crag_sufficient,
             crag_refused=crag_refused,
             gap_type=gap_type,
+            answer=answer,
         ):
             return None
 
@@ -388,7 +400,7 @@ class GapService:
         manual_content: str | None = None,
         manual_title: str | None = None,
     ) -> dict:
-        """批准 Gap 并同步入库。
+        """批准 Gap 并异步入库（后台处理，立即返回）。
 
         参数:
             kb_id: 知识库 ID
@@ -397,7 +409,7 @@ class GapService:
             manual_title: 可选标题
 
         返回:
-            含 document_id、ingest 统计的 dict
+            含 gap_id、status=processing 的 dict
 
         Raises:
             ValueError: Gap 不存在或内容不合法
@@ -434,18 +446,29 @@ class GapService:
         else:
             raise ValueError(f"gap_type {gap.gap_type} 不支持自动入库")
 
-        doc_svc = DocumentService(self.db)
-        doc, stats = await doc_svc.ingest_manual_immediate(canonical, f"[Gap] {title}", content)
-        gap.status = "approved"
+        # 先置为 processing 并提交，后台异步执行耗时的入库操作
+        gap.status = "processing"
         gap.source_ref = source_ref
         await self.db.commit()
         await self.db.refresh(gap)
+
+        asyncio.create_task(
+            _process_gap_ingest(
+                gap_id=gap.id,
+                kb_id=canonical,
+                title=f"[Gap] {title}",
+                content=content,
+            )
+        )
+        logger.info("gap ingest enqueued gap_id=%s kb_id=%s", gap.id, canonical)
+
         return {
             "gap_id": gap.id,
-            "document_id": doc.id,
-            "ingest_allowed": stats.allowed,
-            "ingest_duplicates": stats.duplicates,
-            "ingest_conflicts": stats.conflicts,
+            "status": "processing",
+            "document_id": None,
+            "ingest_allowed": 0,
+            "ingest_duplicates": 0,
+            "ingest_conflicts": 0,
         }
 
     async def list_gaps(
@@ -499,3 +522,66 @@ class GapService:
         await self.db.commit()
         await self.db.refresh(gap)
         return gap
+
+    async def delete_gap(self, gap_id: str) -> bool:
+        """删除 Gap 工单。
+
+        参数:
+            gap_id: Gap ID
+
+        返回:
+            True 表示成功删除，False 表示不存在
+        """
+        gap = await self.db.get(KnowledgeGap, gap_id)
+        if not gap:
+            return False
+        await self.db.delete(gap)
+        await self.db.commit()
+        return True
+
+
+async def _process_gap_ingest(
+    gap_id: str,
+    kb_id: str,
+    title: str,
+    content: str,
+) -> None:
+    """后台处理 Gap 批准入库（分块 → 嵌入 → Chroma → FTS/图谱）。
+
+    使用独立数据库会话，通过 asyncio.create_task 调用，不阻塞 HTTP 响应。
+
+    参数:
+        gap_id: Gap 工单 ID
+        kb_id: 知识库 ID
+        title: 文档标题
+        content: 入库正文
+    """
+    async with async_session() as db:
+        try:
+            doc_svc = DocumentService(db)
+            # Gap 已人工审核，跳过门禁检查以提速度
+            doc, stats = await doc_svc.ingest_manual_immediate(
+                kb_id, title, content, skip_gate=True
+            )
+
+            gap = await db.get(KnowledgeGap, gap_id)
+            if gap:
+                gap.status = "approved"
+                gap.source_ref = content[:300] if not gap.source_ref else gap.source_ref
+                await db.commit()
+
+            logger.info(
+                "gap ingest completed gap_id=%s doc_id=%s allowed=%d",
+                gap_id,
+                doc.id,
+                stats.allowed,
+            )
+        except Exception:
+            logger.exception("gap ingest failed gap_id=%s kb_id=%s", gap_id, kb_id)
+            try:
+                gap = await db.get(KnowledgeGap, gap_id)
+                if gap:
+                    gap.status = "suggested"
+                    await db.commit()
+            except Exception:
+                logger.exception("failed to revert gap status gap_id=%s", gap_id)

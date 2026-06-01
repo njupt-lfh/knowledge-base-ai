@@ -43,4 +43,8 @@ export const gapApi = {
       ingest_duplicates: number
       ingest_conflicts: number
     }>(`/api/knowledge-bases/${kbId}/gaps/${gapId}/ingest`, body || {}),
+
+  /** 删除缺口工单 */
+  delete: (kbId: string, gapId: string) =>
+    request.delete(`/api/knowledge-bases/${kbId}/gaps/${gapId}`),
 }

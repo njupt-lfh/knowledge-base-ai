@@ -36,7 +36,9 @@ async def test_kb_resolver_prefix_to_full():
 
 @pytest.mark.asyncio
 async def test_ingest_gap_accepts_full_url_with_legacy_gap_kb():
-    """验证 Gap 入库约束。"""
+    """验证 Gap 入库立即返回 processing 状态（后台异步执行）。"""
+    import asyncio
+
     full = "e3752f00-b894-429e-a982-43142c5f0d8a"
     svc = GapService(db=MagicMock())
     gap = MagicMock()
@@ -50,20 +52,25 @@ async def test_ingest_gap_accepts_full_url_with_legacy_gap_kb():
     svc._canonical_kb_id = AsyncMock(return_value=full)
     svc._kb_resolver.gap_kb_matches = lambda g, c: g == "e3752f00" and c == full
 
-    mock_doc = MagicMock()
-    mock_doc.id = "doc-1"
-    mock_stats = MagicMock(allowed=1, duplicates=0, conflicts=0)
+    svc.db.commit = AsyncMock()
+    svc.db.refresh = AsyncMock()
 
-    with patch("app.services.gap_service.DocumentService") as DocSvc:
-        DocSvc.return_value.ingest_manual_immediate = AsyncMock(return_value=(mock_doc, mock_stats))
-        svc.db.commit = AsyncMock()
-        svc.db.refresh = AsyncMock()
+    with patch("app.services.gap_service.asyncio.create_task") as mock_create_task:
         result = await svc.ingest_gap(
             full, "gap-1", manual_content="人工补全正文，用于测试入库路径。"
         )
 
-    assert result["gap_id"] == "gap-1"
+    # 验证同步阶段：状态已设为 processing
+    assert gap.status == "processing"
     assert gap.kb_id == full
-    DocSvc.return_value.ingest_manual_immediate.assert_awaited_once_with(
-        full, "[Gap] test query", "人工补全正文，用于测试入库路径。"
-    )
+    assert result["gap_id"] == "gap-1"
+    assert result["status"] == "processing"
+
+    # 验证后台任务已创建
+    mock_create_task.assert_called_once()
+
+    # 验证后台任务参数（从 coro 中提取）
+    call_args = mock_create_task.call_args[0]
+    assert len(call_args) == 1
+    coro = call_args[0]
+    assert asyncio.iscoroutine(coro)

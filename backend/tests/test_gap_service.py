@@ -98,3 +98,19 @@ def test_no_skip_gap_when_insufficient():
         crag_refused=False,
         gap_type="KNOWLEDGE_ABSENT",
     )
+
+
+def test_no_skip_gap_when_answer_says_no_info():
+    """CRAG 充分但 LLM 回答称"暂无相关信息"时不应跳过 Gap。"""
+    assert not GapService.should_skip_gap_after_sufficient_answer(
+        crag_sufficient=True,
+        crag_refused=False,
+        gap_type="RETRIEVAL_MISS",
+        answer="目前知识库中暂无相关信息，建议补充相关内容。",
+    )
+    assert not GapService.should_skip_gap_after_sufficient_answer(
+        crag_sufficient=True,
+        crag_refused=False,
+        gap_type="KNOWLEDGE_ABSENT",
+        answer="知识库中暂无相关内容。",
+    )
