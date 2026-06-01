@@ -1,4 +1,9 @@
-"""SQLAlchemy 数据库连接管理"""
+"""SQLAlchemy 异步数据库连接与 Schema 初始化。
+
+导出 `engine`、`async_session`、`Base` 及 `get_db` 依赖注入工厂。
+应用启动时由 `init_db()` 建表、执行 SQLite 增量迁移并初始化 FTS5 索引，
+是 ORM 模型层与 API/服务层之间的持久化基础设施。
+"""
 
 import logging
 
@@ -12,6 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 def _sqlite_connect_args(url: str) -> dict:
+    """为 SQLite 连接附加超时参数，降低并发写入时的锁冲突概率。
+
+    参数:
+        url: 数据库连接 URL。
+
+    返回:
+        SQLite 专用 connect_args 字典；非 SQLite 返回空字典。
+    """
     if "sqlite" not in url:
         return {}
     return {"timeout": 30}
@@ -26,6 +39,8 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 
 
 class Base(DeclarativeBase):
+    """所有 ORM 模型的声明式基类。"""
+
     pass
 
 
@@ -35,11 +50,21 @@ def import_all_models() -> None:
 
 
 def expected_table_names() -> set[str]:
+    """返回 ORM 定义中期望存在的全部表名。
+
+    返回:
+        表名字符串集合。
+    """
     import_all_models()
     return set(Base.metadata.tables.keys())
 
 
 async def existing_table_names() -> set[str]:
+    """查询 SQLite 中当前已存在的用户表名。
+
+    返回:
+        已存在表名字符串集合（不含 sqlite_ 系统表）。
+    """
     async with engine.connect() as conn:
         result = await conn.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
@@ -48,13 +73,22 @@ async def existing_table_names() -> set[str]:
 
 
 async def verify_schema() -> list[str]:
-    """返回缺失的表名；空列表表示 schema 完整。"""
+    """校验数据库 Schema 是否与 ORM 定义一致。
+
+    返回:
+        缺失的表名列表；空列表表示 schema 完整。
+    """
     expected = expected_table_names()
     existing = await existing_table_names()
     return sorted(expected - existing)
 
 
 async def get_db() -> AsyncSession:
+    """FastAPI 依赖：为每个请求提供异步数据库会话并在结束时关闭。
+
+    返回:
+        异步生成器，yield 一个 `AsyncSession` 实例。
+    """
     async with async_session() as session:
         try:
             yield session
@@ -77,7 +111,11 @@ async def _apply_sqlite_migrations(conn) -> None:
 
 
 async def init_db() -> None:
-    """创建所有缺失表，并校验 schema 与 ORM 一致。"""
+    """创建所有缺失表，并校验 schema 与 ORM 一致。
+
+    流程：启用 WAL → create_all → 增量列迁移 → FTS5 初始化 → 校验表完整性。
+    Schema 不完整时抛出 RuntimeError 提示运行修复脚本。
+    """
     import_all_models()
     table_names = sorted(Base.metadata.tables.keys())
     logger.info("init_db: registering %d tables: %s", len(table_names), ", ".join(table_names))

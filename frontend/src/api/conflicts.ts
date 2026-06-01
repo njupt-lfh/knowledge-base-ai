@@ -1,5 +1,11 @@
+/**
+ * 入库冲突 API
+ * 相似度区间内的矛盾检测与人工裁决
+ * 主要导出：KnowledgeConflict、IngestPrecheckResult、conflictsApi
+ */
 import request from './request'
 
+/** 待裁决的知识冲突记录 */
 export interface KnowledgeConflict {
   id: string
   kb_id: string
@@ -16,6 +22,7 @@ export interface KnowledgeConflict {
   resolved_at: string | null
 }
 
+/** 手动录入前的门禁预检结果 */
 export interface IngestPrecheckResult {
   status: string
   duplicate_of: string | null

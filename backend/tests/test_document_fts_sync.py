@@ -1,4 +1,13 @@
-"""文档入库 FTS 同步 — Phase 2 审计 bug 回归"""
+"""文档入库 FTS 同步 — Phase 2 审计 bug 回归
+
+验证内容：
+  - 文档入库/手动录入/toggle 与 FTS5 同步
+
+运行方式（在 backend 目录）:
+  pytest tests/test_document_fts_sync.py -v
+
+预期结果：全部用例通过。
+"""
 
 import uuid
 from unittest.mock import MagicMock, patch
@@ -16,6 +25,7 @@ from sqlalchemy import text
 
 @pytest.mark.asyncio
 async def test_sync_chunks_to_fts_helper():
+    """测试：sync chunks to fts helper。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document
@@ -65,6 +75,7 @@ async def test_sync_chunks_to_fts_helper():
 
 @pytest.mark.asyncio
 async def test_process_manual_syncs_fts():
+    """测试：process manual syncs fts。"""
     from app.core.database import async_session, init_db
     from app.models.document import Document
     from app.models.knowledge_base import KnowledgeBase
@@ -97,12 +108,13 @@ async def test_process_manual_syncs_fts():
         await db.commit()
 
     fake_collection = MagicMock()
-    with patch("app.services.document_service.get_collection", return_value=fake_collection):
-        with patch(
-            "app.services.embedding_service.EmbeddingService.embed_documents",
-            return_value=[[0.1] * 256],
-        ):
-            await _process_manual(doc_id, kb_id, "manual", content)
+    with patch("app.core.chroma_client.get_collection", return_value=fake_collection):
+        with patch("app.services.document_service.get_collection", return_value=fake_collection):
+            with patch(
+                "app.services.embedding_service.EmbeddingService.embed_documents",
+                return_value=[[0.1] * 256],
+            ):
+                await _process_manual(doc_id, kb_id, "manual", content)
 
     async with async_session() as db:
         hits = await search_fts(db, kb_id, "uniquekeywordxyz", limit=5)
@@ -119,6 +131,7 @@ async def test_process_manual_syncs_fts():
 
 @pytest.mark.asyncio
 async def test_process_document_syncs_fts():
+    """验证文档/PDF 入库流程。"""
     from app.core.database import async_session, init_db
     from app.models.document import Document
     from app.models.knowledge_base import KnowledgeBase
@@ -151,16 +164,18 @@ async def test_process_document_syncs_fts():
         await db.commit()
 
     fake_collection = MagicMock()
-    with patch("app.services.document_service.get_collection", return_value=fake_collection):
-        with patch(
-            "app.services.embedding_service.EmbeddingService.embed_documents",
-            return_value=[[0.1] * 256],
-        ):
-            with patch(
-                "app.services.chunking_service.DocumentParser.parse",
-                return_value=f"上传文档内容 {upload_kw} 应同步到 FTS。",
-            ):
-                await _process_document(doc_id, kb_id, "txt", "/tmp/sample.txt")
+    with patch("app.services.document_service.resolve_upload_path", return_value="/tmp/sample.txt"):
+        with patch("app.core.chroma_client.get_collection", return_value=fake_collection):
+            with patch("app.services.document_service.get_collection", return_value=fake_collection):
+                with patch(
+                    "app.services.embedding_service.EmbeddingService.embed_documents",
+                    return_value=[[0.1] * 256],
+                ):
+                    with patch(
+                        "app.services.chunking_service.DocumentParser.parse",
+                        return_value=f"上传文档内容 {upload_kw} 应同步到 FTS。",
+                    ):
+                        await _process_document(doc_id, kb_id, "txt", "/tmp/sample.txt")
 
     async with async_session() as db:
         hits = await search_fts(db, kb_id, upload_kw, limit=5)
@@ -169,6 +184,7 @@ async def test_process_document_syncs_fts():
 
 @pytest.mark.asyncio
 async def test_toggle_status_syncs_fts():
+    """验证文档启停与 FTS 同步。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document

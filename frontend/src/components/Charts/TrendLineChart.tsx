@@ -1,3 +1,8 @@
+/**
+ * RAG 引用趋势折线图（ECharts）
+ * 展示近 7 日对话引用命中趋势
+ * 主要导出：默认 TrendLineChart 组件
+ */
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { TrendPoint } from '../../api/stats'
@@ -8,6 +13,7 @@ interface TrendLineChartProps {
   points: TrendPoint[]
 }
 
+/** 7 日 RAG 引用趋势线，带渐变面积填充 */
 export default function TrendLineChart({ points }: TrendLineChartProps) {
   const option: EChartsOption = {
     backgroundColor: 'transparent',

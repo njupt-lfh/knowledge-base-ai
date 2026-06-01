@@ -1,3 +1,8 @@
+/**
+ * 全局 TOP3 热知识卡片
+ * 展示命中次数最高的三条 chunk 摘要
+ * 主要导出：默认 Top3Cards 组件
+ */
 import { motion } from 'framer-motion'
 import { FireOutlined } from '@ant-design/icons'
 import HudPanel from '../common/HudPanel'
@@ -7,6 +12,7 @@ interface Top3CardsProps {
   items: { content: string; hits: number }[]
 }
 
+/** 驾驶舱全局最热三条知识文本卡片 */
 export default function Top3Cards({ items }: Top3CardsProps) {
   const top3 = items.slice(0, 3)
 

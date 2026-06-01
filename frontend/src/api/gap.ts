@@ -1,5 +1,11 @@
+/**
+ * 知识缺口（Gap）补全任务 API
+ * 检索未命中、用户纠正等待入库队列
+ * 主要导出：KnowledgeGap、gapApi
+ */
 import request from './request'
 
+/** 单条补全任务 */
 export interface KnowledgeGap {
   id: string
   kb_id: string
@@ -24,6 +30,7 @@ export const gapApi = {
   updateStatus: (kbId: string, gapId: string, status: string) =>
     request.patch<KnowledgeGap>(`/api/knowledge-bases/${kbId}/gaps/${gapId}/status`, { status }),
 
+  /** 将 gap 建议内容经门禁入库，可选手动正文 */
   ingest: (
     kbId: string,
     gapId: string,

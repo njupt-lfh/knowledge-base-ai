@@ -1,4 +1,8 @@
-"""文档模型"""
+"""文档 ORM 模型。
+
+定义 `Document` 表，表示知识库中的单个源文件或手工录入条目，
+跟踪入库状态、分块统计及入库去重/冲突计数。
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,12 @@ if TYPE_CHECKING:
 
 
 class Document(Base):
+    """文档实体。
+
+    关键字段：file_type（pdf/md/txt/manual 等）、status（processing/completed/error）、
+    is_active 控制是否参与检索；ingest_*_count 记录入库门禁统计。
+    """
+
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

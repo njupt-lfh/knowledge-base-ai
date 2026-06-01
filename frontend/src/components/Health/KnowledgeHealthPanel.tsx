@@ -1,3 +1,8 @@
+/**
+ * 知识库健康度摘要条
+ * 展示等级、冷知识、缺口、冲突等快捷入口
+ * 主要导出：默认 KnowledgeHealthPanel 组件
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Card, Space, Tag, Typography } from 'antd'
 import {
@@ -21,6 +26,11 @@ interface KnowledgeHealthPanelProps {
   onNavigate?: (tab: 'governance' | 'conflicts' | 'gaps') => void
 }
 
+/**
+ * 知识库详情页顶部健康条
+ * @param refreshToken 父组件递增以触发重新拉取
+ * @param onNavigate 点击指标跳转到对应 Tab 或缺口页
+ */
 export default function KnowledgeHealthPanel({
   kbId,
   refreshToken = 0,

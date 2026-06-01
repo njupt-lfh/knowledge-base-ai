@@ -1,4 +1,8 @@
-"""知识缺口队列 API"""
+"""知识缺口队列 API 路由（Phase 1）。
+
+提供缺口列表、创建、批准入库与状态更新端点，
+结合 RAG 检索结果自动分类缺口类型。
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +24,18 @@ async def list_gaps(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
+    """列出知识库缺口工单，可按类型与状态过滤。
+
+    参数:
+        kb_id: 知识库 ID（支持前缀解析）。
+        gap_type: 可选缺口类型过滤。
+        status: 可选状态过滤。
+        limit: 最大返回条数。
+        db: 数据库会话。
+
+    返回:
+        GapResponse 列表；知识库不存在时 404。
+    """
     svc = GapService(db)
     try:
         gaps = await svc.list_gaps(kb_id, gap_type=gap_type, status=status, limit=limit)
@@ -34,6 +50,16 @@ async def create_gap(
     body: GapCreateRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    """创建缺口工单：先检索再自动或指定 gap_type。
+
+    参数:
+        kb_id: 知识库 ID。
+        body: 查询文本及可选类型、来源、纠错文本。
+        db: 数据库会话。
+
+    返回:
+        新建的 GapResponse。
+    """
     svc = GapService(db)
     try:
         canonical = await KbIdResolver(db).resolve(kb_id)
@@ -65,7 +91,17 @@ async def ingest_gap(
     body: GapIngestRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """批准入库：仅 USER_PROVIDED/USER_CORRECTION（需 source_ref）；KNOWLEDGE_ABSENT 仅人工正文。"""
+    """批准缺口入库：仅 USER_PROVIDED/USER_CORRECTION（需 source_ref）；KNOWLEDGE_ABSENT 仅人工正文。
+
+    参数:
+        kb_id: 知识库 ID。
+        gap_id: 缺口工单 ID。
+        body: 可选人工标题与正文覆盖。
+        db: 数据库会话。
+
+    返回:
+        入库结果字典；业务校验失败时 400。
+    """
     svc = GapService(db)
     try:
         return await svc.ingest_gap(
@@ -85,6 +121,17 @@ async def update_gap_status(
     body: GapStatusUpdate,
     db: AsyncSession = Depends(get_db),
 ):
+    """更新缺口工单状态。
+
+    参数:
+        kb_id: 知识库 ID（用于校验 gap 归属，含历史前缀）。
+        gap_id: 缺口 ID。
+        body: 新 status。
+        db: 数据库会话。
+
+    返回:
+        更新后的 GapResponse；不存在或不归属该库时 404。
+    """
     svc = GapService(db)
     resolver = KbIdResolver(db)
     try:

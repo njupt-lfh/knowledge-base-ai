@@ -1,4 +1,14 @@
-"""对话历史压缩 — Phase 2.3 summary memory（无额外 LLM 调用）"""
+"""对话历史压缩服务（Phase 2.3 summary memory，无额外 LLM 调用）。
+
+职责：
+    将较早对话轮次压缩为一条 system 摘要消息，
+    控制 RAG 生成时的 context token 预算。
+
+在流水线中的位置：
+    AgentOrchestrator.generate_stream → compress_history
+
+依赖：无
+"""
 
 from __future__ import annotations
 
@@ -11,9 +21,15 @@ def compress_history(
     recent_turns: int | None = None,
     max_summary_chars: int | None = None,
 ) -> list[dict]:
-    """
-    保留最近 N 轮完整对话，更早轮次压缩为一条摘要 system 消息。
-    返回可直接拼入 LLM messages 的列表。
+    """保留最近 N 轮完整对话，更早轮次压缩为一条摘要 system 消息。
+
+    参数:
+        history: [{role, content}, ...] 历史消息
+        recent_turns: 保留的最近轮数（每轮=user+assistant）
+        max_summary_chars: 摘要最大字符数
+
+    返回:
+        可直接拼入 LLM messages 的列表
     """
     if not history:
         return []
@@ -53,11 +69,27 @@ def compress_history(
 
 
 def estimate_messages_chars(messages: list[dict]) -> int:
+    """估算消息列表总字符数。
+
+    参数:
+        messages: 消息列表
+
+    返回:
+        字符总数
+    """
     return sum(len(m.get("content") or "") for m in messages)
 
 
 def history_compression_ratio(full: list[dict], compressed: list[dict]) -> float:
-    """相对完整历史的字符节省比例。"""
+    """相对完整历史的字符节省比例。
+
+    参数:
+        full: 完整历史
+        compressed: 压缩后历史
+
+    返回:
+        节省比例 [0, 1]
+    """
     if len(full) <= 4:
         return 0.0
     full_len = estimate_messages_chars(full)

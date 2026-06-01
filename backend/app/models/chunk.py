@@ -1,4 +1,8 @@
-"""知识块模型"""
+"""知识块 ORM 模型。
+
+定义 `Chunk` 表，存储文档分块后的文本片段及检索统计（hit_count），
+是向量索引、FTS 与 RAG 上下文的核心数据单元。
+"""
 
 from __future__ import annotations
 
@@ -16,6 +20,12 @@ if TYPE_CHECKING:
 
 
 class Chunk(Base):
+    """知识块实体。
+
+    关键字段：content/chunk_index 标识片段内容与顺序；knowledge_base_id 冗余
+    便于按库查询；is_active 与 hit_count 分别控制检索开关与热度统计。
+    """
+
     __tablename__ = "chunks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

@@ -1,4 +1,10 @@
+/**
+ * RAG 评测基线仪表盘
+ * 对比 Phase 0 与当前基线报告，雷达图与 KPI 卡片
+ * 主要导出：默认 EvalDashboard 页面组件；内部 MetricCard、RadarChart、PhaseChangeTable
+ */
 import { useEffect, useState } from 'react'
+
 import { Card, Col, Row, Statistic, Table, Tag, Typography, message, Space, Alert } from 'antd'
 import {
   CheckCircleOutlined,
@@ -24,6 +30,7 @@ const BOTTLENECK_LABEL: Record<string, string> = {
 }
 
 /* ───── 对比小卡片 ───── */
+/** 单指标 KPI 卡片，相对 Phase 0 显示涨跌百分比 */
 function MetricCard({
   label,
   value,
@@ -85,6 +92,7 @@ function MetricCard({
 }
 
 /* ───── 雷达图 ───── */
+/** 六维能力雷达：Phase 0 虚线 vs 当前实线 */
 function RadarChart({
   metrics,
 }: {
@@ -126,12 +134,14 @@ function RadarChart({
 }
 
 /* ───── 主页面 ───── */
+/** RAG 评测基线可视化页 */
 export default function EvalDashboard() {
   const [report, setReport] = useState<EvalBaselineReport | null>(null)
   const [phase0, setPhase0] = useState<EvalBaselineReport | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // 并行加载当前基线与 Phase 0 备份（用于对比）
     Promise.allSettled([
       evalApi.getBaseline(),
       request
@@ -152,13 +162,13 @@ export default function EvalDashboard() {
   const sampleCount = report ? getReportSampleCount(report) : undefined
   const bottleneck = report?.diagnosis?.primary_bottleneck
 
-  // Helper to get Phase 0 baseline value
+  // 从 Phase 0 aggregate 安全读取数值
   const p0 = (field: string): number | null => {
     const v = p0agg[field]
     return typeof v === 'number' && !Number.isNaN(v) ? v : null
   }
 
-  // Radar chart data
+  // 雷达图六维指标映射
   const radarMetrics = [
     {
       label: '召回率',
@@ -382,6 +392,7 @@ export default function EvalDashboard() {
 }
 
 /* ───── Phase 变化明细表 ───── */
+/** Phase 0 → 当前各指标变化百分比表格 */
 function PhaseChangeTable({
   agg,
   p0agg,

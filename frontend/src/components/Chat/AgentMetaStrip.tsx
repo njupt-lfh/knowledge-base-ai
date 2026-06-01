@@ -1,5 +1,11 @@
+/**
+ * Agent 检索元信息条
+ * 展示路由类型、检索轮次、SIM-RAG、图谱、拒答等 SSE agent_meta 字段
+ * 主要导出：AgentMeta 类型、默认 AgentMetaStrip 组件
+ */
 import { Tag, Typography } from 'antd'
 
+/** 流式事件中 agent_meta 载荷 */
 export interface AgentMeta {
   route?: string
   rounds?: number
@@ -18,6 +24,10 @@ const ROUTE_LABEL: Record<string, string> = {
   chitchat: '闲聊',
 }
 
+/**
+ * 助手消息下方的 Agent 决策标签条
+ * @param meta agent_meta 事件解析结果
+ */
 export default function AgentMetaStrip({ meta }: { meta: AgentMeta }) {
   if (!meta) return null
 

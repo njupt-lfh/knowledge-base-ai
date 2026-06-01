@@ -1,5 +1,11 @@
+/**
+ * 文件夹同步 API
+ * 管理本地目录监听与扫描入库
+ * 主要导出：FolderWatch、ScanResult、syncApi
+ */
 import request from './request'
 
+/** 单个文件夹监听配置 */
 export interface FolderWatch {
   id: string
   knowledge_base_id: string
@@ -10,6 +16,7 @@ export interface FolderWatch {
   last_error?: string | null
 }
 
+/** 单次扫描统计结果 */
 export interface ScanResult {
   watch_id: string
   kb_id: string

@@ -1,9 +1,12 @@
 /**
- * 检索评测阶段对比（只读快照）
+ * 检索评测阶段对比静态数据（只读快照）
  * 来源：工作记录/答辩-检索评测对比表.md · 2026-05-26
  * 评测集：5 库 × 20 条 = 100 条 · 口径：run_rag_eval.py --retrieval-only
+ * 主要导出：PhaseKey、PhaseComparisonRow、EVAL_COMPARISON_META、
+ *   RETRIEVAL_COMPARISON_ROWS、MULTIHOP_COMPARISON_ROWS、PHASE_LABELS
  */
 
+/** 演进阶段标识 */
 export type PhaseKey = 'phase0' | 'phase2' | 'phase3'
 
 export interface PhaseComparisonRow {

@@ -1,4 +1,8 @@
-"""RAGAS 评测 + Volcengine 嵌入适配 + LLM Judge 回退"""
+"""RAGAS 评测运行器与 Volcengine 嵌入适配。
+
+提供 `run_ragas_eval` 四指标评测、`VolcengineEmbeddings` 适配层，
+以及 API 限额时的单条 LLM 忠实度回退打分。
+"""
 
 from __future__ import annotations
 
@@ -22,13 +26,37 @@ class VolcengineEmbeddings(Embeddings):
         self._svc = EmbeddingService()
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """批量嵌入文档文本。
+
+        参数:
+            texts: 待嵌入字符串列表。
+
+        返回:
+            与 texts 等长的向量列表。
+        """
         return self._svc.embed_documents(texts)
 
     def embed_query(self, text: str) -> list[float]:
+        """嵌入单条查询文本。
+
+        参数:
+            text: 查询字符串。
+
+        返回:
+            嵌入向量。
+        """
         return self._svc.embed_query(text)
 
 
 def _safe_mean(scores: dict[str, Any]) -> dict[str, float | None]:
+    """将 RAGAS 聚合分数字典中的 NaN/Inf 转为 None 并四舍五入。
+
+    参数:
+        scores: 原始指标名到数值的映射。
+
+    返回:
+        清洗后的指标字典。
+    """
     out: dict[str, float | None] = {}
     for k, v in scores.items():
         if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
@@ -42,9 +70,13 @@ def _safe_mean(scores: dict[str, Any]) -> dict[str, float | None]:
 
 
 def run_ragas_eval(rows: list[dict]) -> dict[str, Any]:
-    """
-    对非负样本运行 RAGAS 四指标。
-    返回 {"scores": {...}, "errors": [...], "sample_count": n}
+    """对非负样本运行 RAGAS 四指标（faithfulness 等）。
+
+    参数:
+        rows: 含 question/answer/contexts/ground_truth/q_type 的评测行。
+
+    返回:
+        {"scores": {...}, "errors": [...], "sample_count": n}
     """
     from datasets import Dataset
     from langchain_openai import ChatOpenAI
@@ -74,6 +106,7 @@ def run_ragas_eval(rows: list[dict]) -> dict[str, Any]:
     if not eval_rows:
         return {"scores": {}, "errors": errors or ["no eligible rows"], "sample_count": 0}
 
+    # RAGAS 内部依赖 OpenAI 环境变量名，此处映射到火山引擎 Key
     os.environ.setdefault("OPENAI_API_KEY", settings.VOLCENGINE_API_KEY)
 
     llm = ChatOpenAI(
@@ -111,7 +144,17 @@ async def llm_judge_faithfulness(
     contexts: list[str],
     ground_truth: str,
 ) -> float | None:
-    """API 限额时回退：单条忠实度 0-1 打分。"""
+    """API 限额时回退：单条忠实度 0–1 打分。
+
+    参数:
+        question: 用户问题。
+        answer: 待评回答。
+        contexts: 参考上下文列表。
+        ground_truth: 标准答案（辅助 Judge）。
+
+    返回:
+        0.0–1.0 忠实度分数；失败时返回 None。
+    """
     import httpx
 
     from app.core.config import settings

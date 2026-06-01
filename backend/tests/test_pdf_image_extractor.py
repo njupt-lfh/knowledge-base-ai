@@ -1,4 +1,13 @@
-"""PDF 内嵌图提取 — Phase 4.2"""
+"""PDF 内嵌图提取 — Phase 4.2
+
+验证内容：
+  - extract_pdf_images 尺寸过滤与去重
+
+运行方式（在 backend 目录）:
+  pytest tests/test_pdf_image_extractor.py -v
+
+预期结果：全部用例通过。
+"""
 
 from pathlib import Path
 
@@ -7,6 +16,7 @@ from app.services.pdf_image_extractor import extract_pdf_images
 
 
 def _make_pdf_with_image(path: Path, width: int = 64, height: int = 64) -> None:
+    """构造指定尺寸内嵌图的 PDF。"""
     doc = fitz.open()
     page = doc.new_page(width=200, height=200)
     pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, width, height))
@@ -17,6 +27,7 @@ def _make_pdf_with_image(path: Path, width: int = 64, height: int = 64) -> None:
 
 
 def test_extract_pdf_images_filters_small(tmp_path: Path):
+    """验证 PDF/对话/实体抽取。"""
     pdf = tmp_path / "mixed.pdf"
     doc = fitz.open()
     page = doc.new_page()
@@ -35,6 +46,7 @@ def test_extract_pdf_images_filters_small(tmp_path: Path):
 
 
 def test_extract_pdf_images_dedup(tmp_path: Path):
+    """验证 PDF/对话/实体抽取。"""
     pdf = tmp_path / "dup.pdf"
     _make_pdf_with_image(pdf)
     out = tmp_path / "out"

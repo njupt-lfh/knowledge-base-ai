@@ -1,4 +1,13 @@
-"""sync.py API — Phase 4.4 审计补充"""
+"""sync.py API — Phase 4.4 审计补充
+
+验证内容：
+  - sync.py 文件夹监听 CRUD 与 webhook 鉴权
+
+运行方式（在 backend 目录）:
+  pytest tests/test_sync_api.py -v
+
+预期结果：全部用例通过。
+"""
 
 import os
 import uuid
@@ -17,6 +26,7 @@ from app.services.folder_sync_service import SyncScanResult
 
 @pytest.fixture
 async def kb_id():
+    """kb_id 函数。"""
     await init_db()
     kid = f"kb-sync-api-{uuid.uuid4().hex[:8]}"
     async with async_session() as db:
@@ -35,6 +45,7 @@ async def kb_id():
 
 @pytest.mark.asyncio
 async def test_sync_watch_crud_and_scan(kb_id: str, tmp_path):
+    """验证文件夹扫描导入。"""
     transport = ASGITransport(app=app)
     folder = tmp_path / "watch"
     folder.mkdir()
@@ -89,6 +100,7 @@ async def test_sync_watch_crud_and_scan(kb_id: str, tmp_path):
 
 @pytest.mark.asyncio
 async def test_webhook_requires_secret_when_configured(kb_id: str, monkeypatch):
+    """验证 webhook 鉴权。"""
     monkeypatch.setattr("app.api.sync.settings.SYNC_WEBHOOK_SECRET", "test-secret")
 
     transport = ASGITransport(app=app)

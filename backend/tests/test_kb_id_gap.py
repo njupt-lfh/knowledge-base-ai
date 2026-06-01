@@ -1,4 +1,13 @@
-"""Gap 入库与 kb_id 前缀兼容"""
+"""Gap 入库与 kb_id 前缀兼容
+
+验证内容：
+  - KbIdResolver 前缀解析与 Gap 入库 kb_id 兼容
+
+运行方式（在 backend 目录）:
+  pytest tests/test_kb_id_gap.py -v
+
+预期结果：全部用例通过。
+"""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,6 +18,7 @@ from app.utils.kb_id import KbIdResolver
 
 @pytest.mark.asyncio
 async def test_kb_resolver_prefix_to_full():
+    """验证 kb_id 前缀解析。"""
     db = MagicMock()
     full = "e3752f00-b894-429e-a982-43142c5f0d8a"
     kb = MagicMock()
@@ -26,6 +36,7 @@ async def test_kb_resolver_prefix_to_full():
 
 @pytest.mark.asyncio
 async def test_ingest_gap_accepts_full_url_with_legacy_gap_kb():
+    """验证 Gap 入库约束。"""
     full = "e3752f00-b894-429e-a982-43142c5f0d8a"
     svc = GapService(db=MagicMock())
     gap = MagicMock()

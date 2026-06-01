@@ -1,3 +1,9 @@
+"""用户反馈 API 路由（Phase 1.2）。
+
+接收对助手消息/chunk 的点赞、点踩与纠错，委托 `FeedbackService`
+持久化反馈并重算 chunk 质量分。
+"""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +20,16 @@ async def submit_feedback(
     body: FeedbackCreate,
     db: AsyncSession = Depends(get_db),
 ):
+    """提交单条用户反馈。
+
+    参数:
+        kb_id: 知识库 ID。
+        body: 反馈类型、关联 message/chunk 及可选纠错文本。
+        db: 数据库会话。
+
+    返回:
+        FeedbackResponse；校验失败时 400。
+    """
     svc = FeedbackService(db)
     try:
         row = await svc.create_feedback(

@@ -1,3 +1,8 @@
+/**
+ * 数字递增动画组件
+ * 用于统计卡片等场景的 CountUp 效果
+ * 主要导出：默认 CountUpNumber 组件
+ */
 import { useEffect, useState } from 'react'
 
 interface CountUpNumberProps {
@@ -7,6 +12,12 @@ interface CountUpNumberProps {
   className?: string
 }
 
+/**
+ * 从 0 动画递增到目标值
+ * @param end 目标数值
+ * @param duration 动画时长（秒）
+ * @param suffix 数字后后缀
+ */
 export default function CountUpNumber({
   end,
   duration = 1.2,

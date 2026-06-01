@@ -1,4 +1,18 @@
-"""图片类 chunk 入库（Vision 描述 + embed_image）— Phase 4.1/4.2 共用"""
+"""图片类 chunk 入库（Vision 描述 + embed_image）— Phase 4.1/4.2 共用。
+
+职责：
+    将图片（含 PDF 内嵌图）转为「描述文本 chunk + 图片向量」双轨入库，
+    文本走 FTS/图谱，向量走 embed_image 多模态空间。
+
+在流水线中的位置：
+    document_service._process_image / _process_document(PDF)
+
+依赖服务：
+    - vision_caption_service：图片描述
+    - ingestion_gate_service：文本门禁
+    - embedding_service：图片向量
+    - pdf_image_extractor：PDF 内嵌图提取
+"""
 
 from __future__ import annotations
 
@@ -20,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ImageChunkSpec:
+    """单张图片入库规格。"""
+
     image_path: str
     content_header: str
     filename_hint: str
@@ -36,7 +52,19 @@ async def ingest_image_chunk_specs(
     start_chunk_index: int = 0,
     exclude_chunk_ids: set[str] | None = None,
 ) -> tuple[list[Chunk], list[str], IngestStats]:
-    """按 spec 生成描述文本 chunk，并用对应图片路径做 embed_image。"""
+    """按 spec 生成描述文本 chunk，并用对应图片路径做 embed_image。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        doc_id: 文档 ID
+        specs: 图片规格列表
+        start_chunk_index: 起始 chunk 序号
+        exclude_chunk_ids: 门禁排除 ID
+
+    返回:
+        (Chunk 列表, 图片路径列表, IngestStats)
+    """
     if not specs:
         return [], [], IngestStats()
 
@@ -48,6 +76,7 @@ async def ingest_image_chunk_specs(
     next_index = start_chunk_index
 
     for spec in specs:
+        # Vision 生成可检索的中文描述
         caption = await describe_image(spec.image_path, filename=spec.filename_hint)
         text = f"{spec.content_header}\n\n{caption}"
         batch, batch_stats = await ingest_text_chunks(
@@ -73,6 +102,7 @@ async def ingest_image_chunk_specs(
             "media_type": spec.media_type,
             **spec.extra_metadata,
         }
+        # 向量使用原图 embed_image（与描述文本互补）
         vec = embed_svc.embed_image(spec.image_path)
         collection.add(
             ids=[rec.id],
@@ -98,7 +128,20 @@ async def ingest_pdf_embedded_images(
     start_chunk_index: int = 0,
     exclude_chunk_ids: set[str] | None = None,
 ) -> tuple[list[Chunk], IngestStats]:
-    """提取 PDF 内嵌图并入库为独立 chunk。"""
+    """提取 PDF 内嵌图并入库为独立 chunk。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        doc_id: 文档 ID
+        pdf_path: PDF 路径
+        filename: 展示用文件名
+        start_chunk_index: 起始序号
+        exclude_chunk_ids: 门禁排除 ID
+
+    返回:
+        (Chunk 列表, IngestStats)
+    """
     from .pdf_image_extractor import extract_pdf_images
 
     if not settings.PDF_IMAGE_EXTRACTION_ENABLED:

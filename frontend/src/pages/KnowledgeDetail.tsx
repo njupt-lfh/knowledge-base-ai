@@ -1,4 +1,10 @@
+/**
+ * 知识库详情页
+ * 文档管理、冲突/治理/图谱/同步/检索测试等多 Tab
+ * 主要导出：默认 KnowledgeDetail 页面组件
+ */
 import { useEffect, useState, useCallback } from 'react'
+
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -49,6 +55,7 @@ import './KnowledgeDetail.css'
 
 const { Dragger } = Upload
 
+/** 单知识库文档、治理、图谱与检索测试工作台 */
 export default function KnowledgeDetail() {
   const { kbId } = useParams<{ kbId: string }>()
   const navigate = useNavigate()
@@ -111,7 +118,7 @@ export default function KnowledgeDetail() {
     try {
       setTags((await request.get(`/api/knowledge-bases/${kbId}/tags`)).data)
     } catch {
-      /* tags not critical */
+      /* 标签加载失败非阻塞 */
     }
   }, [kbId])
 
@@ -139,11 +146,11 @@ export default function KnowledgeDetail() {
     try {
       setColdStats((await statsApi.coldKnowledge(kbId)).data)
     } catch {
-      /* optional */
+      /* 冷知识统计可选 */
     }
   }, [kbId])
 
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- kbId 变化时并行加载详情数据 */
   useEffect(() => {
     fetchKb()
     fetchDocs()
@@ -152,6 +159,7 @@ export default function KnowledgeDetail() {
   }, [fetchKb, fetchDocs, fetchTags, fetchColdStats])
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  // 存在 processing 文档时每 3 秒轮询刷新状态
   useEffect(() => {
     const hasProcessing = docs.some((d) => d.status === 'processing')
     if (!hasProcessing) return
@@ -172,9 +180,11 @@ export default function KnowledgeDetail() {
     }
   }
 
+  /** 手动录入：先预检去重/冲突，再提交入库门禁 */
   const handleManualCreate = async () => {
     if (!kbId || !manualTitle || !manualContent) return
     try {
+      // 入库前预检：向量相似度兜底 + 语义重复/冲突判断
       const pre = await conflictsApi.precheck(kbId, manualContent)
       if (pre.data.status === 'duplicate') {
         message.warning(pre.data.message || '内容与已有知识高度相似，仍将提交由门禁过滤')
@@ -225,6 +235,7 @@ export default function KnowledgeDetail() {
     }
   }
 
+  /** 批量启用/禁用：前端传 doc_ids 数组，后端遍历同步 Chroma */
   const handleBatchToggle = async (isActive: boolean) => {
     if (!kbId || selectedRowKeys.length === 0) return
     try {
@@ -240,6 +251,7 @@ export default function KnowledgeDetail() {
     }
   }
 
+  /** 批量删除：后端级联清理 Chroma 向量 + 上传文件 */
   const handleBatchDelete = async () => {
     if (!kbId || selectedRowKeys.length === 0) return
     try {
@@ -313,6 +325,7 @@ export default function KnowledgeDetail() {
     }
   }
 
+  /** 检索测试：调用 Hybrid 检索 API，结果用于雷达图展示相似度 */
   const handleSearch = async (query: string) => {
     if (!query.trim() || !kbId) return
     setSearchQuery(query)

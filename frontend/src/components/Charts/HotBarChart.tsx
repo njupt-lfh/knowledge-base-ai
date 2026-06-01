@@ -1,3 +1,8 @@
+/**
+ * 知识热度 TOP 横向柱状图（ECharts）
+ * 单库热门 chunk 命中次数排行
+ * 主要导出：默认 HotBarChart 组件
+ */
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import HudPanel from '../common/HudPanel'
@@ -7,6 +12,7 @@ interface HotBarChartProps {
   items: { content: string; hit_count: number }[]
 }
 
+/** 单库 TOP 热知识横向条形图，tooltip 展示内容摘要 */
 export default function HotBarChart({ items }: HotBarChartProps) {
   const option: EChartsOption = {
     backgroundColor: 'transparent',

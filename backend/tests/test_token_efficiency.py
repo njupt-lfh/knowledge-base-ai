@@ -1,4 +1,13 @@
-"""Phase 2.3 单元测试 — Embedding 缓存 + 历史压缩 + FTS 增量"""
+"""Phase 2.3 单元测试 — Embedding 缓存 + 历史压缩 + FTS 增量
+
+验证内容：
+  - Embedding 缓存、历史压缩、FTS 增量同步
+
+运行方式（在 backend 目录）:
+  pytest tests/test_token_efficiency.py -v
+
+预期结果：全部用例通过。
+"""
 
 import uuid
 
@@ -13,6 +22,7 @@ from app.services.history_memory_service import (
 
 
 def test_embedding_cache_hit():
+    """验证 Embedding 缓存命中。"""
     cache = EmbeddingCache(maxsize=10)
     cache.set("hello", [1.0, 2.0])
     assert cache.get("hello") == [1.0, 2.0]
@@ -22,6 +32,7 @@ def test_embedding_cache_hit():
 
 
 def test_embed_query_uses_cache():
+    """验证 Embedding 缓存命中。"""
     cache = get_embedding_cache()
     cache.clear()
     svc = EmbeddingService()
@@ -32,6 +43,7 @@ def test_embed_query_uses_cache():
 
 
 def test_embed_documents_dedupes():
+    """验证重复图片去重。"""
     cache = get_embedding_cache()
     cache.clear()
     svc = EmbeddingService()
@@ -42,6 +54,7 @@ def test_embed_documents_dedupes():
 
 
 def test_compress_history_keeps_recent():
+    """验证上下文压缩预算。"""
     long_hist = []
     for i in range(8):
         long_hist.append({"role": "user", "content": "问题" * 30 + str(i)})
@@ -56,6 +69,7 @@ def test_compress_history_keeps_recent():
 
 
 def test_history_compression_saves_tokens():
+    """验证上下文压缩预算。"""
     long_hist = []
     for _i in range(12):
         long_hist.append({"role": "user", "content": "X" * 200})
@@ -69,6 +83,7 @@ def test_history_compression_saves_tokens():
 
 @pytest.mark.asyncio
 async def test_fts_incremental_sync():
+    """验证 FTS 增量同步。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document

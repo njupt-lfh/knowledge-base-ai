@@ -1,3 +1,8 @@
+/**
+ * 知识库治理建议面板
+ * 扫描冷知识/重复/低质量 chunk 并执行归档、禁用等动作
+ * 主要导出：默认 GovernancePanel 组件
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
 import { ReloadOutlined, ToolOutlined } from '@ant-design/icons'
@@ -42,6 +47,10 @@ interface GovernancePanelProps {
   onApplied?: () => void
 }
 
+/**
+ * 知识库详情「治理建议」Tab 内容
+ * @param onApplied 治理动作成功后通知父组件刷新健康度/冷知识统计
+ */
 export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProps) {
   const [data, setData] = useState<GovernanceScanResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -50,6 +59,7 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
   const fetchScan = useCallback(async () => {
     setLoading(true)
     try {
+      // scanDuplicates=false 加快扫描，重复项由专门流程处理
       const res = await governanceApi.scan(kbId, false)
       setData(res.data)
     } catch {
@@ -123,7 +133,7 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       width: 200,
       render: (_: unknown, row: GovernanceSuggestion) => {
         const actions = [row.recommended_action]
-        // 对于低质量和冷知识，额外提供归档和禁用的交叉选项
+        // 低质量、冷知识类型提供归档/禁用的交叉选项
         if (row.type === 'low_quality') {
           if (!actions.includes('archive')) actions.push('archive')
         }

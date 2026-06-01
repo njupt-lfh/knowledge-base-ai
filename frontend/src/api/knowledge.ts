@@ -1,3 +1,7 @@
+/**
+ * 知识库 CRUD API
+ * 主要导出：knowledgeApi
+ */
 import request from './request'
 import type { KnowledgeBase } from '../types'
 

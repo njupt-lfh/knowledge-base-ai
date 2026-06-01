@@ -1,3 +1,14 @@
+"""FeedbackService 多 chunk 反馈单元测试。
+
+验证内容：
+  - 多 chunk 反馈解析与 QualityService 联动
+
+运行方式（在 backend 目录）:
+  pytest tests/test_feedback_multi_chunk.py -v
+
+预期结果：全部用例通过。
+"""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -6,6 +17,7 @@ from app.services.feedback_service import FeedbackService
 
 @pytest.mark.asyncio
 async def test_resolve_chunk_ids_prefers_chunk_ids_list():
+    """显式 chunk_ids 列表应优先于单 chunk_id，并去重保序。"""
     svc = FeedbackService(db=MagicMock())
     msg = MagicMock()
     msg.sources = [
@@ -20,6 +32,7 @@ async def test_resolve_chunk_ids_prefers_chunk_ids_list():
 
 @pytest.mark.asyncio
 async def test_resolve_chunk_ids_all_sources_when_no_explicit():
+    """未指定 chunk 时，应使用 message.sources 中全部 chunk_id。"""
     svc = FeedbackService(db=MagicMock())
     msg = MagicMock()
     msg.sources = [{"chunk_id": "a"}, {"chunk_id": "b"}]
@@ -29,6 +42,7 @@ async def test_resolve_chunk_ids_all_sources_when_no_explicit():
 
 @pytest.mark.asyncio
 async def test_create_feedback_updates_all_chunks():
+    """dislike 反馈应对所有解析出的 chunk 调用 apply_feedback。"""
     svc = FeedbackService(db=MagicMock())
     msg = MagicMock()
     msg.conversation_id = "conv1"

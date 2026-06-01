@@ -1,4 +1,8 @@
-"""入库冲突记录 — Phase 1.4"""
+"""入库冲突记录 ORM 模型（Phase 1.4）。
+
+定义 `KnowledgeConflict` 表，记录在入库门禁中检测到的新内容与已有 chunk
+语义冲突，等待人工裁决（保留新/旧或驳回）。
+"""
 
 from __future__ import annotations
 
@@ -14,6 +18,12 @@ CONFLICT_STATUSES = ("pending", "resolved_keep_new", "resolved_keep_old", "dismi
 
 
 class KnowledgeConflict(Base):
+    """知识冲突工单实体。
+
+    关键字段：existing_chunk_id 与 new_content 对比；similarity/llm_reason 辅助决策；
+    status 跟踪裁决结果；resolved_chunk_id 记录最终保留的 chunk。
+    """
+
     __tablename__ = "knowledge_conflicts"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

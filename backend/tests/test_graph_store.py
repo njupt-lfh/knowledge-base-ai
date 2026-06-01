@@ -1,4 +1,13 @@
-"""Phase 3 轻量知识图谱 — 单元测试"""
+"""Phase 3 轻量知识图谱 — 单元测试
+
+验证内容：
+  - 三元组抽取、sync_chunk_graph、图谱扩展
+
+运行方式（在 backend 目录）:
+  pytest tests/test_graph_store.py -v
+
+预期结果：全部用例通过。
+"""
 
 from __future__ import annotations
 
@@ -16,6 +25,7 @@ from app.services.graph_store_service import (
 
 @pytest.mark.asyncio
 async def test_mock_extract_triples():
+    """验证 PDF/对话/实体抽取。"""
     triples = await extract_triples_from_chunk("Python和Java是两种编程语言，Python属于脚本语言。")
     assert len(triples) >= 1
     assert any(t["subject"] in ("Python", "Java") or "Python" in t["subject"] for t in triples)
@@ -23,6 +33,7 @@ async def test_mock_extract_triples():
 
 @pytest.mark.asyncio
 async def test_sync_and_expand_graph():
+    """验证图谱相关检索/存储。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document
@@ -74,6 +85,7 @@ async def test_sync_and_expand_graph():
 
 
 async def _entity_names(db, kb_id):
+    """查询知识库实体名列表（测试辅助）。"""
     from app.services.graph_store_service import list_entity_names
 
     return await list_entity_names(db, kb_id)

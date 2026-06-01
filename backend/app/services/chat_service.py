@@ -1,5 +1,17 @@
-"""对话服务"""
+"""对话服务（Conversation + SSE 流式 RAG 聊天）。
 
+职责：
+    管理对话 CRUD、SSE 流式聊天（委托 RAGService）、
+    对话后 Gap 入队、手动知识提炼与分享链接。
+
+在流水线中的位置：
+    API chat 路由 → ChatService
+
+依赖服务：
+    - RAGService：Agentic-lite RAG 生成
+    - GapService：对话后缺口入队
+    - ConversationExtractService：手动提炼
+"""
 import json
 import uuid
 
@@ -19,11 +31,21 @@ MAX_CONV_TITLE_LEN = 80
 
 
 class ChatService:
+    """对话与流式 RAG 聊天业务服务。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.rag_svc = RAGService()
 
     async def create_conversation(self, kb_id: str) -> ConversationResponse:
+        """创建新对话。
+
+        参数:
+            kb_id: 知识库 ID
+
+        返回:
+            ConversationResponse
+        """
         canonical = await KbIdResolver(self.db).resolve(kb_id)
         conv = Conversation(knowledge_base_id=canonical, title="新对话")
         self.db.add(conv)
@@ -34,6 +56,16 @@ class ChatService:
     async def list_conversations(
         self, kb_id: str, limit: int = 50, offset: int = 0
     ) -> list[ConversationResponse]:
+        """分页列出知识库对话（自动补全默认标题）。
+
+        参数:
+            kb_id: 知识库 ID
+            limit: 条数上限
+            offset: 偏移
+
+        返回:
+            ConversationResponse 列表
+        """
         resolver = KbIdResolver(self.db)
         canonical = await resolver.resolve(kb_id)
         legacy = resolver.legacy_prefix(canonical)
@@ -57,12 +89,28 @@ class ChatService:
         return [ConversationResponse.model_validate(c) for c in convs]
 
     async def get_messages(self, conv_id: str) -> list[MessageResponse]:
+        """获取对话全部消息（按时间升序）。
+
+        参数:
+            conv_id: 对话 ID
+
+        返回:
+            MessageResponse 列表
+        """
         result = await self.db.execute(
             select(Message).where(Message.conversation_id == conv_id).order_by(Message.created_at)
         )
         return [MessageResponse.model_validate(m) for m in result.scalars().all()]
 
     async def delete_conversation(self, conv_id: str) -> bool:
+        """删除对话及其消息（级联）。
+
+        参数:
+            conv_id: 对话 ID
+
+        返回:
+            是否删除成功
+        """
         conv = await self.db.get(Conversation, conv_id)
         if not conv:
             return False
@@ -71,7 +119,15 @@ class ChatService:
         return True
 
     async def chat_stream(self, conv_id: str, message: str):
-        """SSE 流式对话（Mock 或真实 RAG）"""
+        """SSE 流式对话（Mock 或真实 RAG + Gap 后处理）。
+
+        参数:
+            conv_id: 对话 ID
+            message: 用户消息
+
+        Yields:
+            SSE 事件字符串
+        """
         # 获取对话关联的知识库
         conv = await self.db.get(Conversation, conv_id)
         kb_id = conv.knowledge_base_id if conv else ""
@@ -92,7 +148,7 @@ class ChatService:
             await self.db.commit()
             await self.db.refresh(conv)
 
-        # 收集完整回复与来源（含 Agent CRAG 判定，供补全任务去重）
+        # 收集完整回复与来源（含 Agent CRAG 判定，供 Gap 去重）
         full_answer = ""
         sources_data = []
         crag_sufficient = False
@@ -156,6 +212,15 @@ class ChatService:
     async def _maybe_set_conversation_title(
         self, conv: Conversation, first_question: str | None = None
     ) -> bool:
+        """若仍为默认标题，用首条用户问题设置标题。
+
+        参数:
+            conv: 对话实体
+            first_question: 可选首问（chat_stream 传入）
+
+        返回:
+            是否更新了标题
+        """
         if conv.title and conv.title != DEFAULT_CONV_TITLE:
             return False
         text = (first_question or "").strip()
@@ -175,6 +240,14 @@ class ChatService:
         return True
 
     async def create_share(self, conv_id: str) -> ShareResponse:
+        """生成或返回对话分享链接。
+
+        参数:
+            conv_id: 对话 ID
+
+        返回:
+            ShareResponse
+        """
         conv = await self.db.get(Conversation, conv_id)
         if not conv.share_token:
             conv.share_token = str(uuid.uuid4())
@@ -186,7 +259,14 @@ class ChatService:
         )
 
     async def extract_knowledge(self, conv_id: str) -> dict:
-        """手动提炼最近一轮对话 → 结构化 Gap（含 source_ref）。"""
+        """手动提炼最近一轮对话 → 结构化 Gap（含 source_ref）。
+
+        参数:
+            conv_id: 对话 ID
+
+        返回:
+            has_knowledge、gap_id、content 等 dict
+        """
         result = await self.db.execute(
             select(Message)
             .where(Message.conversation_id == conv_id)
@@ -267,6 +347,14 @@ class ChatService:
         }
 
     async def get_by_share_token(self, share_token: str) -> ConversationResponse | None:
+        """通过分享 token 获取对话。
+
+        参数:
+            share_token: 分享令牌
+
+        返回:
+            ConversationResponse 或 None
+        """
         result = await self.db.execute(
             select(Conversation).where(Conversation.share_token == share_token)
         )

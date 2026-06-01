@@ -1,4 +1,19 @@
-"""文档服务"""
+"""文档上传、解析与入库服务。
+
+职责：
+    处理 PDF/MD/TXT/图片/手动录入的上传与后台入库流水线：
+    解析 → 分块 → 入库门禁 → Chroma 向量化 → FTS5/图谱同步。
+
+在流水线中的位置：
+    API documents 路由 → DocumentService
+    Gap 批准入库 → ingest_manual_immediate
+
+依赖服务：
+    - chunking_service：解析与分块
+    - ingestion_gate_service：去重冲突门禁
+    - image_chunk_ingest_service：图片/PDF 内嵌图
+    - embedding_service、fts_service、graph_store_service
+"""
 
 import logging
 import shutil
@@ -23,7 +38,17 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_upload_path(file_path: str | None) -> Path:
-    """解析 DB 中的 file_path（可能为相对路径 uploads/xxx）为可读的绝对路径。"""
+    """解析 DB 中的 file_path（可能为相对路径 uploads/xxx）为可读的绝对路径。
+
+    参数:
+        file_path: 数据库存储路径
+
+    返回:
+        绝对 Path
+
+    Raises:
+        FileNotFoundError: 路径无效或文件不存在
+    """
     if not file_path:
         raise FileNotFoundError("文档缺少 file_path")
     p = Path(file_path)
@@ -71,12 +96,24 @@ async def _sync_chunks_to_graph(db: AsyncSession, kb_id: str, chunk_records: lis
 
 
 class DocumentService:
+    """文档 CRUD、上传与同步入库入口。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def list_by_kb(
         self, kb_id: str, page: int, page_size: int
     ) -> tuple[list[DocumentResponse], int]:
+        """分页列出知识库文档。
+
+        参数:
+            kb_id: 知识库 ID
+            page: 页码（从 1 开始）
+            page_size: 每页条数
+
+        返回:
+            (文档列表, 总数)
+        """
         query = select(Document).where(Document.knowledge_base_id == kb_id)
         count_query = select(func.count(Document.id)).where(Document.knowledge_base_id == kb_id)
 
@@ -92,6 +129,19 @@ class DocumentService:
     async def upload(
         self, kb_id: str, file: UploadFile, background_tasks: BackgroundTasks
     ) -> DocumentResponse:
+        """上传文件并触发后台入库任务。
+
+        参数:
+            kb_id: 知识库 ID
+            file: 上传文件
+            background_tasks: FastAPI 后台任务
+
+        返回:
+            status=processing 的 DocumentResponse
+
+        Raises:
+            ValueError: 不支持的类型或超限
+        """
         ext = Path(file.filename or "").suffix.lower()
         text_map = {".pdf": "pdf", ".md": "md", ".txt": "txt"}
         if ext in IMAGE_EXTENSIONS:
@@ -149,6 +199,16 @@ class DocumentService:
     async def create_manual(
         self, kb_id: str, data: ManualDocumentCreate, background_tasks: BackgroundTasks
     ) -> DocumentResponse:
+        """手动录入文档（异步后台入库）。
+
+        参数:
+            kb_id: 知识库 ID
+            data: 标题与正文
+            background_tasks: 后台任务
+
+        返回:
+            DocumentResponse
+        """
         doc_id = str(uuid.uuid4())
         doc = Document(
             id=doc_id,
@@ -220,10 +280,23 @@ class DocumentService:
         return DocumentResponse.model_validate(doc), gate_stats
 
     async def get_by_id(self, doc_id: str) -> DocumentResponse | None:
+        """按 ID 获取文档。
+
+        参数:
+            doc_id: 文档 ID
+
+        返回:
+            DocumentResponse 或 None
+        """
         doc = await self.db.get(Document, doc_id)
         return DocumentResponse.model_validate(doc) if doc else None
 
     async def delete(self, doc_id: str):
+        """删除文档及其 Chroma 向量（级联删 chunk）。
+
+        参数:
+            doc_id: 文档 ID
+        """
         doc = await self.db.get(Document, doc_id)
         if doc:
             if doc.file_path:
@@ -231,7 +304,7 @@ class DocumentService:
                     Path(doc.file_path).unlink(missing_ok=True)
                 except Exception:
                     pass
-            # 清理 Chroma 中该文档的所有向量
+            # 清理 Chroma 中该文档的全部向量
             try:
                 from sqlalchemy import select as _select
 
@@ -252,12 +325,21 @@ class DocumentService:
             await self.db.commit()
 
     async def toggle_status(self, doc_id: str, is_active: bool) -> DocumentResponse:
+        """启用/禁用文档下全部 chunk 及向量索引。
+
+        参数:
+            doc_id: 文档 ID
+            is_active: 目标状态
+
+        返回:
+            更新后的 DocumentResponse
+        """
         doc = await self.db.get(Document, doc_id)
         doc.is_active = is_active
         await self.db.commit()
         await self.db.refresh(doc)
 
-        # 同步 Chroma：禁用时删除所有向量，启用时重新向量化
+        # 同步 Chroma：禁用时删除全部向量，启用时重新向量化
         from ..core.chroma_client import get_collection
         from ..models.chunk import Chunk
         from .embedding_service import EmbeddingService
@@ -292,7 +374,14 @@ class DocumentService:
 
 
 async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: str):
-    """后台处理上传的文档：解析 → 分块 → 向量化 → Chroma 写入；PDF 另提取内嵌图。"""
+    """后台处理上传的文档：解析 → 分块 → 门禁 → 向量化 → FTS/图谱同步。
+
+    参数:
+        doc_id: 文档 ID
+        kb_id: 知识库 ID
+        file_type: pdf | md | txt
+        file_path: 文件路径
+    """
     from .chunking_service import DocumentParser, TextChunker
     from .embedding_service import EmbeddingService
     from .image_chunk_ingest_service import ingest_pdf_embedded_images
@@ -395,7 +484,15 @@ async def _process_image(
     file_path: str,
     filename: str,
 ):
-    """后台处理图片：Vision 描述 → 单块入库 → 多模态向量写入 Chroma。"""
+    """后台处理图片：Vision 描述 → 单块入库 → 多模态向量写入 Chroma。
+
+    参数:
+        doc_id: 文档 ID
+        kb_id: 知识库 ID
+        file_type: image
+        file_path: 图片路径
+        filename: 原始文件名
+    """
     from .image_chunk_ingest_service import ImageChunkSpec, ingest_image_chunk_specs
 
     async with async_session() as db:
@@ -433,7 +530,14 @@ async def _process_image(
 
 
 async def recover_stuck_documents(min_stuck_minutes: int = 3) -> int:
-    """恢复 status=processing 的文档（服务重启 / reload 导致后台任务丢失）。"""
+    """恢复 status=processing 的文档（服务重启导致后台任务丢失）。
+
+    参数:
+        min_stuck_minutes: 超过此分钟数视为卡住
+
+    返回:
+        尝试恢复的文档数量
+    """
     from sqlalchemy import select
 
     from ..models.document import Document
@@ -475,7 +579,14 @@ async def recover_stuck_documents(min_stuck_minutes: int = 3) -> int:
 
 
 async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
-    """后台处理手动录入的知识"""
+    """后台处理手动录入的知识（分块 → 门禁 → Chroma → FTS/图谱）。
+
+    参数:
+        doc_id: 文档 ID
+        kb_id: 知识库 ID
+        title: 文档标题
+        content: 正文
+    """
     from .chunking_service import TextChunker
     from .embedding_service import EmbeddingService
 

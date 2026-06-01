@@ -1,4 +1,15 @@
-"""对话知识提炼 — Phase 1.5 结构化抽取"""
+"""对话知识提炼服务（Phase 1.5 结构化抽取）。
+
+职责：
+    从单轮对话中 LLM 抽取可入库的用户事实/纠正，
+    强制 source_ref verbatim 校验，防止编造。
+
+在流水线中的位置：
+    GapService.process_after_chat / ChatService.extract_knowledge
+
+依赖服务：
+    - LLMService：结构化 JSON 抽取
+"""
 
 from __future__ import annotations
 
@@ -15,6 +26,8 @@ AUTO_INGEST_GAP_TYPES = ("USER_PROVIDED", "USER_CORRECTION")
 
 
 class ConversationExtractService:
+    """对话轮次 → 结构化 Gap 建议。"""
+
     def __init__(self):
         self.llm = LLMService()
 
@@ -25,7 +38,16 @@ class ConversationExtractService:
         *,
         hint_gap_type: str | None = None,
     ) -> dict[str, Any] | None:
-        """结构化提炼；无 source_ref 时返回 None（拒绝编造）。"""
+        """结构化提炼；无 source_ref 时返回 None（拒绝编造）。
+
+        参数:
+            user_message: 用户消息
+            assistant_message: 助手回复
+            hint_gap_type: 预判 gap 类型
+
+        返回:
+            含 gap_type、content、source_ref 等的 dict，或 None
+        """
         if self.llm.mock_mode:
             if hint_gap_type in AUTO_INGEST_GAP_TYPES and len(user_message.strip()) >= 8:
                 return {
@@ -80,6 +102,14 @@ class ConversationExtractService:
 
     @staticmethod
     def _parse_json(raw: str) -> dict | None:
+        """从 LLM 输出中提取 JSON 对象。
+
+        参数:
+            raw: 原始文本
+
+        返回:
+            解析后的 dict 或 None
+        """
         text = raw.strip()
         if text.startswith("```"):
             text = re.sub(r"^```\w*\n?", "", text)
@@ -92,6 +122,16 @@ class ConversationExtractService:
 
     @staticmethod
     def _source_in_dialog(source_ref: str, user_message: str, assistant_message: str) -> bool:
+        """校验 source_ref 是否出现在对话原文中。
+
+        参数:
+            source_ref: 声称的引用
+            user_message: 用户消息
+            assistant_message: 助手消息
+
+        返回:
+            是否有效引用
+        """
         ref = source_ref.strip()
         if len(ref) < 4:
             return False
@@ -104,6 +144,14 @@ class ConversationExtractService:
 
     @staticmethod
     def pack_suggested(data: dict[str, Any]) -> str:
+        """将提炼结果序列化为 Gap.suggested_content JSON。
+
+        参数:
+            data: extract_from_turn 返回值
+
+        返回:
+            JSON 字符串
+        """
         return json.dumps(
             {
                 "title": data.get("title", ""),

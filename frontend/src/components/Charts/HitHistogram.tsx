@@ -1,3 +1,8 @@
+/**
+ * 热度分布直方图（ECharts）
+ * 按命中次数区间统计 chunk 数量
+ * 主要导出：默认 HitHistogram 组件
+ */
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { HitBucket } from '../../api/stats'
@@ -8,6 +13,7 @@ interface HitHistogramProps {
   buckets: HitBucket[]
 }
 
+/** 单库 chunk 命中次数分桶柱状图 */
 export default function HitHistogram({ buckets }: HitHistogramProps) {
   const option: EChartsOption = {
     backgroundColor: 'transparent',

@@ -1,8 +1,13 @@
+/**
+ * 明暗主题切换按钮
+ * 主要导出：默认 ThemeToggle 组件
+ */
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { Tooltip } from 'antd'
 import { useThemeStore } from '../../stores/themeStore'
 import './ThemeToggle.css'
 
+/** 顶栏/分享页使用的主题切换控件 */
 export default function ThemeToggle() {
   const { mode, toggle } = useThemeStore()
   const isDark = mode === 'dark'

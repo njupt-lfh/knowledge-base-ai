@@ -1,3 +1,8 @@
+/**
+ * 左侧主导航
+ * 知识库、数据驾驶舱、评测基线三个一级入口
+ * 主要导出：默认 SideNav 组件
+ */
 import { useNavigate, useLocation } from 'react-router-dom'
 import { DatabaseOutlined, DashboardOutlined, ExperimentOutlined } from '@ant-design/icons'
 import './SideNav.css'
@@ -12,6 +17,10 @@ interface SideNavProps {
   collapsed: boolean
 }
 
+/**
+ * 可折叠侧栏导航
+ * @param collapsed 是否仅显示图标
+ */
 export default function SideNav({ collapsed }: SideNavProps) {
   const navigate = useNavigate()
   const location = useLocation()

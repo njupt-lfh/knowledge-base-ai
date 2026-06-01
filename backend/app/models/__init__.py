@@ -1,3 +1,9 @@
+"""ORM 模型包聚合导出。
+
+集中 import 全部 SQLAlchemy 模型类，供 `database.import_all_models()` 在
+`create_all` 前注册 metadata，并作为 `from app.models import ...` 的统一入口。
+"""
+
 from .chunk import Chunk as Chunk  # noqa: F401
 from .chunk_feedback import ChunkFeedback as ChunkFeedback  # noqa: F401
 from .chunk_quality import ChunkQuality as ChunkQuality  # noqa: F401

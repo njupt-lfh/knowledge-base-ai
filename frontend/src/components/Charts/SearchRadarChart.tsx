@@ -1,3 +1,8 @@
+/**
+ * 检索相似度雷达图（ECharts）
+ * 检索测试页展示 Top-K 各条结果的 score 分布
+ * 主要导出：默认 SearchRadarChart 组件
+ */
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import HudPanel from '../common/HudPanel'
@@ -8,6 +13,7 @@ interface SearchRadarChartProps {
   query?: string
 }
 
+/** 单次检索 Top-N 相似度雷达，max 固定为 1 */
 export default function SearchRadarChart({ scores, query }: SearchRadarChartProps) {
   if (scores.length === 0) return null
 

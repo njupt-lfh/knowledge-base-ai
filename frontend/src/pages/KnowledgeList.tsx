@@ -1,3 +1,8 @@
+/**
+ * 知识库列表页
+ * 卡片网格展示、搜索、新建/编辑/删除知识库
+ * 主要导出：默认 KnowledgeList 页面组件
+ */
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input, Modal, Form, InputNumber, message, Spin } from 'antd'
@@ -6,6 +11,7 @@ import { knowledgeApi } from '../api/knowledge'
 import type { KnowledgeBase } from '../types'
 import KnowledgeCardGrid from '../components/KnowledgeCard/KnowledgeCardGrid'
 
+/** 知识库管理首页 */
 export default function KnowledgeList() {
   const navigate = useNavigate()
   const [data, setData] = useState<KnowledgeBase[]>([])
@@ -23,6 +29,7 @@ export default function KnowledgeList() {
       let page = 1
       let items: KnowledgeBase[] = []
       let count = 0
+      // 分页拉取直至拿全量（page_size=100）
       do {
         const res = await knowledgeApi.list({
           page,
@@ -41,7 +48,7 @@ export default function KnowledgeList() {
     setLoading(false)
   }, [searchText])
 
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- searchText 变化时重新拉列表 */
   useEffect(() => {
     fetchData()
   }, [fetchData])

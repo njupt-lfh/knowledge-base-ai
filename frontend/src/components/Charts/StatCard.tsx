@@ -1,3 +1,8 @@
+/**
+ * 统计数字卡片
+ * 驾驶舱顶部的 KPI 展示，带 CountUp 动画
+ * 主要导出：默认 StatCard 组件
+ */
 import { motion } from 'framer-motion'
 import type { ReactNode } from 'react'
 import CountUpNumber from '../common/CountUpNumber'
@@ -13,6 +18,7 @@ interface StatCardProps {
   index?: number
 }
 
+/** 单个 KPI 统计卡片 */
 export default function StatCard({
   title,
   value,

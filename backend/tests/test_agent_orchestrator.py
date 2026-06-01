@@ -1,4 +1,13 @@
-"""Phase 2.2 单元测试 — Query Router + CRAG-lite + AgentOrchestrator"""
+"""Phase 2.2 单元测试 — Query Router + CRAG-lite + AgentOrchestrator
+
+验证内容：
+  - Query Router、CRAG-lite、AgentOrchestrator 拒答与闲聊跳过检索
+
+运行方式（在 backend 目录）:
+  pytest tests/test_agent_orchestrator.py -v
+
+预期结果：全部用例通过。
+"""
 
 import json
 from unittest.mock import AsyncMock, patch
@@ -10,43 +19,52 @@ from app.services.query_router import expand_query_for_retry, retrieval_top_k_fo
 
 
 def test_route_factual():
+    """验证 Query Router 路由类型。"""
     assert route_query("什么是 RAG 检索增强生成") == "factual"
 
 
 def test_route_relational():
+    """验证 Query Router 路由类型。"""
     assert route_query("Python 和 Java 的区别是什么") == "relational"
 
 
 def test_route_comprehensive():
+    """验证 Query Router 路由类型。"""
     assert route_query("请总结知识库中有哪些部署方式") == "comprehensive"
 
 
 def test_route_chitchat():
+    """验证 Query Router 路由类型。"""
     assert route_query("你好") == "chitchat"
 
 
 def test_retrieval_top_k_by_route():
+    """测试：retrieval top k by route。"""
     assert retrieval_top_k_for_route("chitchat", 5) == 0
     assert retrieval_top_k_for_route("relational", 5) >= 7
 
 
 def test_expand_query_for_retry():
+    """测试：expand query for retry。"""
     q = expand_query_for_retry("Python 和 Java 的区别", "relational")
     assert "Python" in q or "Java" in q
 
 
 def test_crag_sufficient_with_good_sources():
+    """验证 CRAG 充分性判定。"""
     sources = [{"content": "RAG 是检索增强生成技术", "score": 0.45}]
     r = evaluate_sufficiency("什么是 RAG", sources, "factual")
     assert r.sufficient is True
 
 
 def test_crag_insufficient_empty():
+    """验证空结果路径。"""
     r = evaluate_sufficiency("量子纠错", [], "factual")
     assert r.sufficient is False
 
 
 def test_crag_insufficient_weak_score():
+    """验证 CRAG 充分性判定。"""
     sources = [{"content": "无关内容", "score": 0.05}]
     r = evaluate_sufficiency("深度学习框架对比", sources, "factual")
     assert r.sufficient is False
@@ -74,6 +92,7 @@ def test_crag_sufficient_rrf_scale_with_overlap():
 
 @pytest.mark.asyncio
 async def test_agent_refuses_when_crag_fails():
+    """验证 CRAG 充分性判定。"""
     orch = AgentOrchestrator()
     db = AsyncMock()
 
@@ -89,6 +108,7 @@ async def test_agent_refuses_when_crag_fails():
 
 @pytest.mark.asyncio
 async def test_agent_skips_retrieval_for_chitchat():
+    """验证 AgentOrchestrator 行为。"""
     orch = AgentOrchestrator()
     db = AsyncMock()
 
@@ -102,6 +122,7 @@ async def test_agent_skips_retrieval_for_chitchat():
 
 @pytest.mark.asyncio
 async def test_agent_generate_refusal_stream():
+    """验证 AgentOrchestrator 行为。"""
     orch = AgentOrchestrator()
     db = AsyncMock()
 

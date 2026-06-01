@@ -1,4 +1,13 @@
-"""GraphRetriever 与 RRF 融合测试"""
+"""GraphRetriever 与 RRF 融合测试
+
+验证内容：
+  - GraphRetriever 检索与 RRF 融合
+
+运行方式（在 backend 目录）:
+  pytest tests/test_graph_retriever.py -v
+
+预期结果：全部用例通过。
+"""
 
 from __future__ import annotations
 
@@ -10,6 +19,7 @@ from app.services.hybrid_retriever import merge_source_lists
 
 
 def test_merge_source_lists_rrf():
+    """验证 RRF 融合排序。"""
     hybrid = [
         {"chunk_id": "a", "content": "A", "score": 0.9, "source": "hybrid"},
         {"chunk_id": "b", "content": "B", "score": 0.8, "source": "hybrid"},
@@ -26,6 +36,7 @@ def test_merge_source_lists_rrf():
 
 @pytest.mark.asyncio
 async def test_graph_retriever_search():
+    """验证图谱相关检索/存储。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document

@@ -1,3 +1,8 @@
+/**
+ * 入库冲突裁决面板
+ * 展示待处理相似度冲突并支持保留新/旧内容或忽略
+ * 主要导出：默认 ConflictsPanel 组件
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
 import { ReloadOutlined, WarningOutlined } from '@ant-design/icons'
@@ -8,6 +13,7 @@ interface ConflictsPanelProps {
   kbId: string
 }
 
+/** 知识库详情「入库冲突」Tab：LLM 矛盾检测队列 */
 export default function ConflictsPanel({ kbId }: ConflictsPanelProps) {
   const [rows, setRows] = useState<KnowledgeConflict[]>([])
   const [loading, setLoading] = useState(false)

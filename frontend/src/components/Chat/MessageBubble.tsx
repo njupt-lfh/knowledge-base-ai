@@ -1,3 +1,8 @@
+/**
+ * 单条聊天气泡
+ * 展示消息正文、Agent 元信息、引用来源与用户反馈
+ * 主要导出：ChatMessageData 类型、默认 MessageBubble 组件
+ */
 import { useState } from 'react'
 import { Button, Input, Space, message as antdMessage } from 'antd'
 import { DislikeOutlined, EditOutlined, LikeOutlined } from '@ant-design/icons'
@@ -7,6 +12,7 @@ import SourceTags from './SourceTags'
 import AgentMetaStrip, { type AgentMeta } from './AgentMetaStrip'
 import './Chat.css'
 
+/** 前端聊天消息结构（含流式与反馈状态） */
 export interface ChatMessageData {
   id?: string
   role: 'user' | 'assistant'
@@ -23,6 +29,11 @@ interface MessageBubbleProps {
   onFeedback?: (messageId: string, type: 'like' | 'dislike' | 'correction') => void
 }
 
+/**
+ * 渲染单条用户/助手消息
+ * @param kbId 知识库 ID，反馈 API 必需
+ * @param onFeedback 反馈成功后的本地状态更新回调
+ */
 export default function MessageBubble({ message, kbId, onFeedback }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const [correcting, setCorrecting] = useState(false)

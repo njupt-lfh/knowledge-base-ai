@@ -1,3 +1,8 @@
+/**
+ * 应用主布局
+ * 顶栏 + 侧栏 + 带路由过渡动画的内容区
+ * 主要导出：默认 AppLayout 组件
+ */
 import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -8,6 +13,7 @@ import SideNav from './SideNav'
 import StatusIndicator from './StatusIndicator'
 import './AppLayout.css'
 
+/** 主应用壳层，子路由通过 Outlet 渲染 */
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()

@@ -1,4 +1,13 @@
-"""Phase 4.1 图片入库 — mock 集成测试"""
+"""Phase 4.1 图片入库 — mock 集成测试
+
+验证内容：
+  - mock 模式下 _process_image 创建 chunk 与 Chroma 向量
+
+运行方式（在 backend 目录）:
+  pytest tests/test_phase4_image_ingest.py -v
+
+预期结果：全部用例通过。
+"""
 
 import os
 import uuid
@@ -12,6 +21,7 @@ os.environ["LLM_MOCK_MODE"] = "true"
 
 @pytest.mark.asyncio
 async def test_process_image_creates_chunk_and_vector():
+    """验证图片入库流程。"""
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk

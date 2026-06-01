@@ -1,3 +1,8 @@
+/**
+ * RAG 引用来源折叠列表
+ * 展示检索到的 chunk 摘要与相似度分数
+ * 主要导出：默认 SourceTags 组件
+ */
 import { useState } from 'react'
 import { DownOutlined, UpOutlined, LinkOutlined } from '@ant-design/icons'
 import type { SourceItem } from '../../types'
@@ -7,6 +12,7 @@ interface SourceTagsProps {
   sources: SourceItem[]
 }
 
+/** 可展开/收起的知识链路引用区 */
 export default function SourceTags({ sources }: SourceTagsProps) {
   const [expanded, setExpanded] = useState(false)
 

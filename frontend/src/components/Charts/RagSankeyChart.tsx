@@ -1,3 +1,8 @@
+/**
+ * RAG 知识链路桑基图（ECharts）
+ * 问题 → chunk → 回答 的流量可视化
+ * 主要导出：默认 RagSankeyChart 组件
+ */
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { SankeyLink, SankeyNode } from '../../api/stats'
@@ -9,6 +14,7 @@ interface RagSankeyChartProps {
   links: SankeyLink[]
 }
 
+/** RAG 引用桑基图：q: 问题节点、c: chunk、其他为聚合节点 */
 export default function RagSankeyChart({ nodes, links }: RagSankeyChartProps) {
   if (nodes.length === 0 || links.length === 0) {
     return (

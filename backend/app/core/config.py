@@ -1,4 +1,9 @@
-"""应用配置管理"""
+"""应用配置管理模块。
+
+从环境变量与 `.env` 加载运行时参数，导出 `Settings` 单例 `settings`。
+涵盖 LLM/Embedding、SQLite、Chroma、检索策略、图谱、多模态与同步等开关，
+供 `main.py`、服务层与评测脚本统一读取，避免硬编码。
+"""
 
 import os
 from pathlib import Path
@@ -10,7 +15,13 @@ load_dotenv(BASE_DIR.parent / ".env")
 
 
 def _normalize_upload_dir() -> str:
-    """相对路径固定解析到 backend 目录，避免 uvicorn 工作目录变化导致找不到文件。"""
+    """将上传目录解析为绝对路径。
+
+    相对路径固定相对于 backend 目录，避免 uvicorn 工作目录变化导致找不到文件。
+
+    返回:
+        归一化后的上传目录绝对路径字符串。
+    """
     raw = os.getenv("UPLOAD_DIR", str(BASE_DIR.parent / "uploads"))
     p = Path(raw)
     if not p.is_absolute():
@@ -21,6 +32,12 @@ def _normalize_upload_dir() -> str:
 
 
 class Settings:
+    """应用全局配置项集合。
+
+    所有字段在实例化时从环境变量读取，未设置则使用合理默认值。
+    按 Phase 分组：基础服务、Hybrid 检索、Agent/CRAG、图谱、多模态、文件夹同步等。
+    """
+
     APP_NAME: str = "AI 知识库管理平台"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True

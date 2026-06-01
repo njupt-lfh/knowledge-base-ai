@@ -1,5 +1,11 @@
+/**
+ * RAG 评测基线 API
+ * 读取 run_rag_eval.py 生成的基线报告
+ * 主要导出：EvalBaselineReport、getReportSampleCount、evalApi
+ */
 import request from './request'
 
+/** 评测基线报告结构（与后端 JSON 对齐） */
 export interface EvalBaselineReport {
   version: string
   generated_at: string
@@ -28,7 +34,12 @@ export interface EvalBaselineReport {
   samples?: unknown[]
 }
 
-/** 样本数：优先 aggregate，其次 config / samples 长度 */
+/**
+ * 从报告中解析样本数
+ * 优先级：aggregate > config > samples 数组长度
+ * @param report 基线报告
+ * @returns 样本数量或 undefined
+ */
 export function getReportSampleCount(report: EvalBaselineReport): number | undefined {
   return (
     report.aggregate?.sample_count ??

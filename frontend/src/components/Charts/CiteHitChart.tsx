@@ -1,3 +1,8 @@
+/**
+ * 命中 vs 引用双柱对比图（ECharts）
+ * 对比检索命中与对话实际引用次数
+ * 主要导出：默认 CiteHitChart 组件
+ */
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { CiteHitItem } from '../../api/stats'
@@ -8,6 +13,7 @@ interface CiteHitChartProps {
   items: CiteHitItem[]
 }
 
+/** TOP chunk 的检索命中与对话引用并排柱状图 */
 export default function CiteHitChart({ items }: CiteHitChartProps) {
   if (items.length === 0) {
     return (

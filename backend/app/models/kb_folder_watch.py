@@ -1,4 +1,8 @@
-"""知识库文件夹监听配置 — Phase 4.4"""
+"""知识库文件夹监听配置 ORM 模型（Phase 4.4）。
+
+定义 `KbFolderWatch` 表，配置本地目录自动扫描与增量导入，
+由后台 watch 循环或 Webhook 触发同步服务。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,12 @@ from ..core.database import Base
 
 
 class KbFolderWatch(Base):
+    """文件夹监听配置行。
+
+    关键字段：folder_path 监听路径；enabled/recursive 控制是否扫描及子目录；
+    last_scan_at/last_error 记录最近执行状态。
+    """
+
     __tablename__ = "kb_folder_watches"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

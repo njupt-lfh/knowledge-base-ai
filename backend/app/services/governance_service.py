@@ -1,4 +1,16 @@
-"""冷知识治理 — Phase 1.3"""
+"""冷知识治理服务（Phase 1.3）。
+
+职责：
+    扫描冷知识、低质量、重复 chunk 等，生成治理建议，
+    并支持归档/禁用/FAQ 加权等批量操作。
+
+在流水线中的位置：
+    API governance 路由 → GovernanceService
+
+依赖服务：
+    - stats_service.cold_knowledge_count
+    - ChunkService、QualityService、EmbeddingService
+"""
 
 from __future__ import annotations
 
@@ -36,11 +48,22 @@ ACTION_BOOST_FAQ = "boost_faq"
 
 
 class GovernanceService:
+    """知识库治理扫描与建议执行。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.embed_svc = EmbeddingService()
 
     async def scan_suggestions(self, kb_id: str, *, scan_duplicates: bool = True) -> dict[str, Any]:
+        """全量扫描并返回治理建议列表。
+
+        参数:
+            kb_id: 知识库 ID
+            scan_duplicates: 是否执行向量重复扫描
+
+        返回:
+            含 health 摘要与 suggestions 的字典
+        """
         suggestions: list[dict[str, Any]] = []
         suggestions.extend(await self._scan_cold_stale(kb_id))
         suggestions.extend(await self._scan_quality_issues(kb_id))
@@ -74,6 +97,14 @@ class GovernanceService:
         }
 
     async def _scan_cold_stale(self, kb_id: str) -> list[dict]:
+        """扫描长期零命中的冷知识块。
+
+        参数:
+            kb_id: 知识库 ID
+
+        返回:
+            建议 dict 列表
+        """
         cutoff = datetime.utcnow() - timedelta(days=COLD_DAYS)
         rows = (
             (
@@ -109,6 +140,14 @@ class GovernanceService:
         return out
 
     async def _scan_quality_issues(self, kb_id: str) -> list[dict]:
+        """扫描低质量、高质量零命中、归档候选。
+
+        参数:
+            kb_id: 知识库 ID
+
+        返回:
+            建议 dict 列表
+        """
         out: list[dict] = []
         q_rows = (
             await self.db.execute(
@@ -158,6 +197,14 @@ class GovernanceService:
         return out
 
     async def _scan_duplicates(self, kb_id: str) -> list[dict]:
+        """向量近邻扫描疑似重复 chunk。
+
+        参数:
+            kb_id: 知识库 ID
+
+        返回:
+            重复建议 dict 列表
+        """
         rows = (
             (
                 await self.db.execute(
@@ -220,6 +267,19 @@ class GovernanceService:
         return out
 
     async def apply_action(self, kb_id: str, action: str, chunk_ids: list[str]) -> dict[str, Any]:
+        """执行治理建议动作。
+
+        参数:
+            kb_id: 知识库 ID
+            action: archive | deactivate | boost_faq | merge
+            chunk_ids: 目标 chunk ID 列表
+
+        返回:
+            执行结果摘要
+
+        Raises:
+            ValueError: chunk_ids 为空或未知 action
+        """
         if not chunk_ids:
             raise ValueError("chunk_ids required")
 
@@ -263,6 +323,20 @@ def _suggestion(
     severity: str,
     preview: str,
 ) -> dict[str, Any]:
+    """构造单条治理建议 dict。
+
+    参数:
+        stype: 建议类型
+        title: 标题
+        description: 说明
+        chunk_ids: 关联 chunk
+        action: 推荐动作
+        severity: info | warning | error
+        preview: 内容预览
+
+    返回:
+        建议 dict
+    """
     return {
         "id": f"{stype}:{uuid.uuid4().hex[:12]}",
         "type": stype,

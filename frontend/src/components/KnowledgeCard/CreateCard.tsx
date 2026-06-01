@@ -1,3 +1,8 @@
+/**
+ * 新建知识库占位卡片
+ * 点击触发创建弹窗
+ * 主要导出：默认 CreateCard 组件
+ */
 import { motion } from 'framer-motion'
 import { PlusOutlined } from '@ant-design/icons'
 
@@ -6,6 +11,7 @@ interface CreateCardProps {
   index?: number
 }
 
+/** 网格首位的「+ 新建知识库」入口 */
 export default function CreateCard({ onClick, index = 0 }: CreateCardProps) {
   return (
     <motion.button

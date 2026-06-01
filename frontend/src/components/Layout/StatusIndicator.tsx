@@ -1,7 +1,13 @@
+/**
+ * 后端健康状态指示器
+ * 定时轮询 /api/health 显示在线/离线
+ * 主要导出：默认 StatusIndicator 组件
+ */
 import { useEffect, useState } from 'react'
 import request from '../../api/request'
 import './StatusIndicator.css'
 
+/** 每 30 秒检测一次后端连通性 */
 export default function StatusIndicator() {
   const [online, setOnline] = useState<boolean | null>(null)
 

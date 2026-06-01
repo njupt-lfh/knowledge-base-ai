@@ -1,4 +1,16 @@
-"""轻量知识图谱存储 — SQLite 三元组 + NetworkX 内存图"""
+"""轻量知识图谱存储（SQLite 三元组 + NetworkX 内存图）。
+
+职责：
+    入库时从 chunk 抽取三元组写入 KgRelation，检索时构建 NetworkX 有向图，
+    支持实体 linking 与 BFS 多跳路径扩展。
+
+在流水线中的位置：
+    入库：document_service / chunk_service → sync_chunk_graph
+    检索：GraphRetriever → build_networkx_graph / expand_graph_paths
+
+依赖服务：
+    - entity_extraction_service：chunk 级三元组抽取
+"""
 
 from __future__ import annotations
 
@@ -17,11 +29,20 @@ from .entity_extraction_service import extract_triples_from_chunk
 
 logger = logging.getLogger(__name__)
 
+# LRU 图缓存：避免每次检索全量 load relations
 _graph_cache: OrderedDict[str, nx.DiGraph] = OrderedDict()
 _CACHE_MAX = 8
 
 
 def _cache_get(kb_id: str) -> nx.DiGraph | None:
+    """从 LRU 缓存获取 NetworkX 图。
+
+    参数:
+        kb_id: 知识库 ID
+
+    返回:
+        缓存的 DiGraph 或 None
+    """
     g = _graph_cache.get(kb_id)
     if g is not None:
         _graph_cache.move_to_end(kb_id)
@@ -29,6 +50,12 @@ def _cache_get(kb_id: str) -> nx.DiGraph | None:
 
 
 def _cache_set(kb_id: str, graph: nx.DiGraph) -> None:
+    """写入 LRU 图缓存。
+
+    参数:
+        kb_id: 知识库 ID
+        graph: NetworkX 有向图
+    """
     _graph_cache[kb_id] = graph
     _graph_cache.move_to_end(kb_id)
     while len(_graph_cache) > _CACHE_MAX:
@@ -36,12 +63,24 @@ def _cache_set(kb_id: str, graph: nx.DiGraph) -> None:
 
 
 def invalidate_graph_cache(kb_id: str) -> None:
+    """使指定知识库的图缓存失效（三元组变更后调用）。
+
+    参数:
+        kb_id: 知识库 ID
+    """
     _graph_cache.pop(kb_id, None)
 
 
 async def delete_relations_for_chunk(
     db: AsyncSession, chunk_id: str, *, commit: bool = True
 ) -> None:
+    """删除 chunk 关联的全部三元组。
+
+    参数:
+        db: 数据库会话
+        chunk_id: chunk ID
+        commit: 是否立即提交
+    """
     await db.execute(delete(KgRelation).where(KgRelation.chunk_id == chunk_id))
     if commit:
         await db.commit()
@@ -57,7 +96,20 @@ async def sync_chunk_graph(
     active: bool = True,
     commit: bool = True,
 ) -> int:
-    """抽取并写入 chunk 关联三元组；返回写入条数。"""
+    """抽取并写入 chunk 关联三元组。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        chunk_id: chunk ID
+        document_id: 文档 ID
+        content: chunk 正文
+        active: 是否活跃（非活跃则只删不写）
+        commit: 是否提交
+
+    返回:
+        写入的三元组条数
+    """
     if not getattr(settings, "GRAPH_ENABLED", True):
         return 0
 
@@ -99,6 +151,16 @@ async def sync_chunks_graph(
     kb_id: str,
     chunk_records: list[Chunk],
 ) -> int:
+    """批量同步多个 chunk 的图谱三元组。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        chunk_records: chunk 记录列表
+
+    返回:
+        累计写入三元组条数
+    """
     total = 0
     for c in chunk_records:
         total += await sync_chunk_graph(
@@ -113,6 +175,15 @@ async def sync_chunks_graph(
 
 
 async def load_relations(db: AsyncSession, kb_id: str) -> list[KgRelation]:
+    """加载知识库下所有活跃三元组（chunk 亦须活跃）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+
+    返回:
+        KgRelation 列表
+    """
     result = await db.execute(
         select(KgRelation)
         .join(Chunk, Chunk.id == KgRelation.chunk_id)
@@ -126,6 +197,15 @@ async def load_relations(db: AsyncSession, kb_id: str) -> list[KgRelation]:
 
 
 async def build_networkx_graph(db: AsyncSession, kb_id: str) -> nx.DiGraph:
+    """构建（或从缓存读取）NetworkX 有向图。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+
+    返回:
+        节点为实体、边含 predicate/chunk_id 的 DiGraph
+    """
     cached = _cache_get(kb_id)
     if cached is not None:
         return cached
@@ -147,6 +227,15 @@ async def build_networkx_graph(db: AsyncSession, kb_id: str) -> nx.DiGraph:
 
 
 async def list_entity_names(db: AsyncSession, kb_id: str) -> list[str]:
+    """列出知识库全部实体名（按长度降序，优先长匹配）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+
+    返回:
+        实体名称列表
+    """
     relations = await load_relations(db, kb_id)
     names: set[str] = set()
     for rel in relations:
@@ -156,6 +245,16 @@ async def list_entity_names(db: AsyncSession, kb_id: str) -> list[str]:
 
 
 def link_entities_in_query(query: str, entity_names: list[str], *, min_len: int = 2) -> list[str]:
+    """从 query 中链接图谱实体（子串/词项匹配）。
+
+    参数:
+        query: 用户查询
+        entity_names: 图谱实体名列表（建议长名优先）
+        min_len: 实体名最小长度
+
+    返回:
+        匹配到的实体名列表
+    """
     import re
 
     q = query.strip()
@@ -186,7 +285,16 @@ def expand_graph_paths(
     *,
     max_hops: int = 2,
 ) -> tuple[dict[str, float], list[dict[str, Any]]]:
-    """BFS 扩展，返回 chunk_id 分数与路径列表。"""
+    """BFS 多跳扩展，聚合 chunk 分数与路径列表。
+
+    参数:
+        graph: NetworkX 有向图
+        seed_entities: 种子实体列表
+        max_hops: 最大跳数
+
+    返回:
+        (chunk_id → 分数, 路径 dict 列表)
+    """
     chunk_scores: dict[str, float] = {}
     paths: list[dict[str, Any]] = []
     if not seed_entities or graph.number_of_edges() == 0:
@@ -199,6 +307,7 @@ def expand_graph_paths(
         visited: set[str] = {seed}
         while frontier:
             node, depth = frontier.pop(0)
+            # 双向边：出边 + 入边
             edges = list(graph.out_edges(node, data=True))
             edges += [(v, u, d) for u, v, d in graph.in_edges(node, data=True)]
             for u, v, data in edges:
@@ -207,6 +316,7 @@ def expand_graph_paths(
                 pred = data.get("predicate", "关联")
                 hop = depth + 1
                 if cid:
+                    # 跳数越近分数越高
                     chunk_scores[cid] = max(chunk_scores.get(cid, 0.0), 1.0 / hop)
                     paths.append(
                         {
@@ -230,6 +340,16 @@ async def graph_snapshot(
     *,
     limit_nodes: int = 80,
 ) -> dict[str, Any]:
+    """生成图谱可视化快照（节点/边 JSON）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        limit_nodes: 节点数量上限
+
+    返回:
+        含 nodes、edges、relation_count 的字典
+    """
     relations = await load_relations(db, kb_id)
     node_set: set[str] = set()
     edges: list[dict[str, Any]] = []

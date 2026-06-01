@@ -1,3 +1,8 @@
+/**
+ * 知识库卡片
+ * 列表页单个知识库的 HUD 卡片，含热度条与快捷操作
+ * 主要导出：默认 KnowledgeCard 组件
+ */
 import { motion } from 'framer-motion'
 import { Typography, Popconfirm, Tooltip } from 'antd'
 import {
@@ -24,6 +29,7 @@ interface KnowledgeCardProps {
   onDelete: (id: string) => void
 }
 
+/** 单个知识库概览卡片，maxHits 用于相对热度条宽度 */
 export default function KnowledgeCard({
   kb,
   index,

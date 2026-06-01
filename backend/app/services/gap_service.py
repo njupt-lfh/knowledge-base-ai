@@ -1,5 +1,18 @@
-"""知识缺口队列服务 — classify_gap + 入库"""
+"""知识缺口（Gap）队列服务 — classify_gap + 对话后入队 + 批准入库。
 
+职责：
+    对话/RAG 后自动分类知识缺失类型，结合 CRAG 结果去重入队，
+    支持用户纠正/补充事实的结构化提炼与批准入库。
+
+在流水线中的位置：
+    ChatService.chat_stream → GapService.process_after_chat
+    API gaps 路由 → list / ingest_gap
+
+依赖服务：
+    - ConversationExtractService：可入库类型结构化抽取
+    - DocumentService.ingest_manual_immediate：Gap 批准入库
+    - EmbeddingService：弱命中探测
+"""
 from __future__ import annotations
 
 import json
@@ -34,15 +47,33 @@ NO_INFO_PHRASES = (
 
 
 class GapService:
+    """知识缺口分类、入队与批准入库。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.embed_svc = EmbeddingService()
         self._kb_resolver = KbIdResolver(db)
 
     async def _canonical_kb_id(self, kb_id: str) -> str:
+        """解析为规范知识库 ID（兼容 legacy 前缀）。
+
+        参数:
+            kb_id: 原始 ID
+
+        返回:
+            规范 ID
+        """
         return await self._kb_resolver.resolve(kb_id)
 
     def _gap_kb_clause(self, canonical: str):
+        """构建 Gap 查询的 kb_id IN 子句（含 legacy）。
+
+        参数:
+            canonical: 规范 ID
+
+        返回:
+            SQLAlchemy 布尔表达式
+        """
         legacy = KbIdResolver.legacy_prefix(canonical)
         ids = [canonical] if legacy == canonical else [canonical, legacy]
         return KnowledgeGap.kb_id.in_(ids)
@@ -56,6 +87,18 @@ class GapService:
         correction_text: str | None = None,
         user_message: str | None = None,
     ) -> str:
+        """根据检索结果与用户输入分类 Gap 类型。
+
+        参数:
+            query: 用户问题
+            kb_id: 知识库 ID
+            retrieval_result: RAG 检索来源
+            correction_text: 纠正文本
+            user_message: 用户原话
+
+        返回:
+            GAP_TYPES 之一（如 KNOWLEDGE_ABSENT、RETRIEVAL_MISS）
+        """
         if correction_text and correction_text.strip():
             return "USER_CORRECTION"
 
@@ -74,6 +117,15 @@ class GapService:
         return "RETRIEVAL_MISS"
 
     def _probe_weak_hits(self, kb_id: str, query: str) -> bool:
+        """向量探测是否存在弱相关 chunk（区分 RETRIEVAL_MISS vs ABSENT）。
+
+        参数:
+            kb_id: 知识库 ID
+            query: 查询
+
+        返回:
+            是否存在弱命中
+        """
         try:
             collection = get_collection(kb_id)
             emb = self.embed_svc.embed_query(query)
@@ -89,6 +141,14 @@ class GapService:
 
     @staticmethod
     def _looks_like_user_fact(text: str) -> bool:
+        """启发式判断用户是否在陈述可入库事实。
+
+        参数:
+            text: 用户消息
+
+        返回:
+            是否像事实陈述
+        """
         t = text.strip()
         if len(t) < 12:
             return False
@@ -112,6 +172,15 @@ class GapService:
         retrieval_result: list[dict],
         answer: str,
     ) -> bool:
+        """判断是否应入 Gap 队列（低分或拒答话术）。
+
+        参数:
+            retrieval_result: 检索来源
+            answer: 助手回答
+
+        返回:
+            是否入队
+        """
         if not retrieval_result:
             return True
         max_score = max((s.get("score") or 0) for s in retrieval_result)
@@ -134,6 +203,25 @@ class GapService:
         retrieval_result: list[dict] | None = None,
         confidence: float | None = None,
     ) -> KnowledgeGap:
+        """创建 Gap 记录。
+
+        参数:
+            kb_id: 知识库 ID
+            query: 关联问题
+            gap_type: 缺口类型
+            conversation_id: 对话 ID
+            message_id: 消息 ID
+            source_ref: 来源引用
+            suggested_content: 建议入库 JSON
+            retrieval_result: 检索快照
+            confidence: 置信度
+
+        返回:
+            KnowledgeGap 实体
+
+        Raises:
+            ValueError: 非法 gap_type
+        """
         if gap_type not in GAP_TYPES:
             raise ValueError(f"invalid gap_type: {gap_type}")
 
@@ -169,6 +257,15 @@ class GapService:
         return gap
 
     async def _find_open_gap(self, kb_id: str, query: str) -> KnowledgeGap | None:
+        """查找同 query 的未关闭 Gap（去重用）。
+
+        参数:
+            kb_id: 知识库 ID
+            query: 问题文本
+
+        返回:
+            已存在的 Gap 或 None
+        """
         canonical = await self._canonical_kb_id(kb_id)
         existing = await self.db.execute(
             select(KnowledgeGap).where(
@@ -191,7 +288,21 @@ class GapService:
         crag_sufficient: bool = False,
         crag_refused: bool = False,
     ) -> KnowledgeGap | None:
-        """对话结束后：分类 → 结构化提炼（可入库类型）→ 入队。"""
+        """对话结束后：分类 → 结构化提炼（可入库类型）→ 入队。
+
+        参数:
+            kb_id: 知识库 ID
+            query: 用户问题
+            answer: 助手回答
+            sources: RAG 来源
+            conversation_id: 对话 ID
+            message_id: 消息 ID
+            crag_sufficient: CRAG 是否判定充分
+            crag_refused: 是否 CRAG 拒答
+
+        返回:
+            新建的 Gap 或 None（跳过/去重）
+        """
         if await self._find_open_gap(kb_id, query):
             return None
 
@@ -255,6 +366,10 @@ class GapService:
         conversation_id: str,
         message_id: str,
     ) -> KnowledgeGap | None:
+        """maybe_enqueue_from_chat 别名，兼容旧调用。
+
+        参数/返回: 同 process_after_chat
+        """
         return await self.process_after_chat(
             kb_id=kb_id,
             query=query,
@@ -272,6 +387,20 @@ class GapService:
         manual_content: str | None = None,
         manual_title: str | None = None,
     ) -> dict:
+        """批准 Gap 并同步入库。
+
+        参数:
+            kb_id: 知识库 ID
+            gap_id: Gap ID
+            manual_content: 人工填写内容（ABSENT 必填）
+            manual_title: 可选标题
+
+        返回:
+            含 document_id、ingest 统计的 dict
+
+        Raises:
+            ValueError: Gap 不存在或内容不合法
+        """
         canonical = await self._canonical_kb_id(kb_id)
         gap = await self.db.get(KnowledgeGap, gap_id)
         if not gap or not self._kb_resolver.gap_kb_matches(gap.kb_id, canonical):
@@ -326,6 +455,17 @@ class GapService:
         status: str | None = None,
         limit: int = 50,
     ) -> list[KnowledgeGap]:
+        """列出 Gap 队列。
+
+        参数:
+            kb_id: 知识库 ID
+            gap_type: 类型过滤
+            status: 状态过滤
+            limit: 最大条数
+
+        返回:
+            KnowledgeGap 列表
+        """
         canonical = await self._canonical_kb_id(kb_id)
         q = select(KnowledgeGap).where(self._gap_kb_clause(canonical))
         if gap_type:
@@ -337,6 +477,18 @@ class GapService:
         return list(result.scalars().all())
 
     async def update_status(self, gap_id: str, status: str) -> KnowledgeGap | None:
+        """更新 Gap 状态。
+
+        参数:
+            gap_id: Gap ID
+            status: 新状态
+
+        返回:
+            更新后的实体或 None
+
+        Raises:
+            ValueError: 非法 status
+        """
         if status not in GAP_STATUSES:
             raise ValueError(f"invalid status: {status}")
         gap = await self.db.get(KnowledgeGap, gap_id)

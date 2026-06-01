@@ -1,4 +1,8 @@
-"""对话模型"""
+"""对话 ORM 模型。
+
+定义 `Conversation` 与 `Message` 表，持久化 RAG 聊天会话、消息内容及
+检索来源（sources JSON），支持分享链接（share_token）。
+"""
 
 import uuid
 from datetime import datetime
@@ -10,6 +14,12 @@ from ..core.database import Base
 
 
 class Conversation(Base):
+    """对话会话实体。
+
+    关键字段：knowledge_base_id 绑定检索范围；share_token 用于只读分享；
+    messages 级联存储该会话下全部消息。
+    """
+
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -28,6 +38,11 @@ class Conversation(Base):
 
 
 class Message(Base):
+    """单条对话消息。
+
+    关键字段：role（user/assistant）、content 正文；sources 存 RAG 引用 chunk 列表。
+    """
+
     __tablename__ = "messages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

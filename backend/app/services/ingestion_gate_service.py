@@ -1,4 +1,16 @@
-"""入库质量门禁 — Phase 1.4：去重 + 冲突检测"""
+"""入库质量门禁（Phase 1.4：向量去重 + LLM 冲突检测）。
+
+职责：
+    新 chunk 入库前在 Chroma 中查找相似项：过高相似 →  duplicate 跳过；
+    中等相似 → LLM 判定语义冲突并记录 KnowledgeConflict。
+
+在流水线中的位置：
+    ingest_text_chunks / document_service 入库流水线
+
+依赖服务：
+    - EmbeddingService：相似度检索
+    - LLMService：冲突判定
+"""
 
 from __future__ import annotations
 
@@ -24,11 +36,21 @@ CONFLICT_MAX_DISTANCE = 0.7071067811865476
 
 
 def distance_to_similarity(distance: float) -> float:
+    """L2 距离转换为余弦相似度近似值。
+
+    参数:
+        distance: Chroma L2 距离
+
+    返回:
+        相似度 [0, 1]
+    """
     return round(max(0.0, 1.0 - distance * distance / 2.0), 4)
 
 
 @dataclass
 class GateCandidate:
+    """门禁相似候选 chunk。"""
+
     chunk_id: str
     distance: float
     similarity: float
@@ -37,6 +59,8 @@ class GateCandidate:
 
 @dataclass
 class ChunkGateResult:
+    """单条内容门禁判定结果。"""
+
     status: str  # allow | duplicate | conflict
     duplicate_of: str | None = None
     similarity: float | None = None
@@ -46,6 +70,8 @@ class ChunkGateResult:
 
 @dataclass
 class IngestStats:
+    """批量入库统计。"""
+
     allowed: int = 0
     duplicates: int = 0
     conflicts: int = 0
@@ -53,6 +79,8 @@ class IngestStats:
 
 
 class IngestionGateService:
+    """入库门禁：去重 + 冲突检测。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.embed_svc = EmbeddingService()
@@ -65,6 +93,16 @@ class IngestionGateService:
         *,
         exclude_chunk_ids: set[str] | None = None,
     ) -> ChunkGateResult:
+        """对单条待入库内容执行门禁检查。
+
+        参数:
+            kb_id: 知识库 ID
+            content: 待入库正文
+            exclude_chunk_ids: 排除的 chunk ID（同批已写入）
+
+        返回:
+            ChunkGateResult（allow / duplicate / conflict）
+        """
         exclude_chunk_ids = exclude_chunk_ids or set()
         text = content.strip()
         if not text:
@@ -75,6 +113,7 @@ class IngestionGateService:
             return ChunkGateResult(status="allow")
 
         best = candidates[0]
+        # 极高相似 → 视为重复，跳过入库
         if best.distance < DUPLICATE_MAX_DISTANCE:
             return ChunkGateResult(
                 status="duplicate",
@@ -82,6 +121,7 @@ class IngestionGateService:
                 similarity=best.similarity,
             )
 
+        # 中等相似区间 → LLM 冲突检测
         conflict_zone = [c for c in candidates if c.distance < CONFLICT_MAX_DISTANCE]
         if not conflict_zone:
             return ChunkGateResult(status="allow")
@@ -109,6 +149,16 @@ class IngestionGateService:
     async def _find_similar(
         self, kb_id: str, content: str, exclude_chunk_ids: set[str]
     ) -> list[GateCandidate]:
+        """在 Chroma 中检索与 content 最相似的 TOP_K chunk。
+
+        参数:
+            kb_id: 知识库 ID
+            content: 待查内容
+            exclude_chunk_ids: 排除 ID 集合
+
+        返回:
+            按距离升序的 GateCandidate 列表
+        """
         try:
             collection = get_collection(kb_id)
             emb = self.embed_svc.embed_query(content[:2000])
@@ -142,6 +192,15 @@ class IngestionGateService:
         return sorted(out, key=lambda c: c.distance)
 
     async def _llm_has_conflict(self, existing: str, new: str) -> bool:
+        """LLM 判定两段知识是否语义矛盾。
+
+        参数:
+            existing: 库内已有内容摘要
+            new: 待入库内容
+
+        返回:
+            True 表示存在冲突
+        """
         if self.llm_svc.mock_mode:
             return False
 
@@ -175,6 +234,18 @@ class IngestionGateService:
         source_document_id: str | None = None,
         llm_reason: str | None = None,
     ) -> KnowledgeConflict:
+        """将冲突写入 KnowledgeConflict 待裁决队列。
+
+        参数:
+            kb_id: 知识库 ID
+            new_content: 被拒绝的新内容
+            candidate: 冲突候选
+            source_document_id: 来源文档 ID
+            llm_reason: LLM 判定理由
+
+        返回:
+            新建的 KnowledgeConflict 实体
+        """
         row = KnowledgeConflict(
             id=str(uuid.uuid4()),
             knowledge_base_id=kb_id,
@@ -198,7 +269,19 @@ async def ingest_text_chunks(
     exclude_chunk_ids: set[str] | None = None,
     start_chunk_index: int = 0,
 ) -> tuple[list[Chunk], IngestStats]:
-    """分块文本经门禁后写入 DB（不含 Chroma，由调用方批量写入向量）。"""
+    """分块文本经门禁后写入 DB（不含 Chroma，由调用方批量写入向量）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        doc_id: 文档 ID
+        texts: 分块文本列表
+        exclude_chunk_ids: 门禁排除 ID
+        start_chunk_index: 起始 chunk_index
+
+    返回:
+        (通过的 Chunk 列表, IngestStats)
+    """
     gate = IngestionGateService(db)
     exclude = exclude_chunk_ids or set()
     stats = IngestStats()

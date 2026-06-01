@@ -1,3 +1,8 @@
+/**
+ * AI 专家对话页
+ * 管理会话历史、SSE 流式问答、知识提炼与分享
+ * 主要导出：默认 ChatAgent 页面组件
+ */
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button, Space, Typography, message, Modal, Popconfirm } from 'antd'
@@ -20,6 +25,7 @@ import '../components/Chat/Chat.css'
 
 const CONV_LIST_PAGE_SIZE = 50
 
+/** 知识库下的 RAG 对话主界面 */
 export default function ChatAgent() {
   const { kbId } = useParams<{ kbId: string }>()
   const navigate = useNavigate()
@@ -83,7 +89,7 @@ export default function ChatAgent() {
     }
   }
 
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/set-state-in-effect -- 初始化时加载最近会话并选中 */
   useEffect(() => {
     if (!kbId) return
     loadConvList().then((list) => {
@@ -127,8 +133,10 @@ export default function ChatAgent() {
     setSending(true)
 
     try {
+      // SSE 流：逐 event 消费，text 增量拼接、agent_meta/sources/done 即时更新助手气泡
       for await (const event of chatApi.sendMessage(conv.id, query)) {
         if (event.type === 'text') {
+          // 逐 token 增量：追加到助手消息末尾
           setMessages((prev) =>
             prev.map((msg, i) =>
               i === prev.length - 1 && msg.role === 'assistant'
@@ -137,6 +145,7 @@ export default function ChatAgent() {
             ),
           )
         } else if (event.type === 'agent_meta') {
+          // Agent 元信息：路由类型、CRAG 评分、图谱/SIM-RAG 使用标记
           setMessages((prev) =>
             prev.map((msg, i) =>
               i === prev.length - 1 && msg.role === 'assistant'
@@ -157,6 +166,7 @@ export default function ChatAgent() {
             ),
           )
         } else if (event.type === 'sources') {
+          // 检索来源列表：chunk 引用 + 相似度分数
           setMessages((prev) =>
             prev.map((msg, i) =>
               i === prev.length - 1 && msg.role === 'assistant'
@@ -165,6 +175,7 @@ export default function ChatAgent() {
             ),
           )
         } else if (event.type === 'done') {
+          // 流结束：清除闪烁光标动画，标记 isStreaming=false
           setMessages((prev) =>
             prev.map((msg, i) =>
               i === prev.length - 1 && msg.role === 'assistant'

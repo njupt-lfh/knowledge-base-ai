@@ -1,3 +1,10 @@
+/**
+ * 全局 TypeScript 类型定义
+ * 与后端 API 响应结构对齐，供页面与 API 层复用
+ * 主要导出：KnowledgeBase、Document、Chunk、Conversation、Message 等接口
+ */
+
+/** 知识库元数据与统计摘要 */
 export interface KnowledgeBase {
   id: string
   name: string
@@ -11,6 +18,7 @@ export interface KnowledgeBase {
   total_hits?: number
 }
 
+/** 已入库文档及其处理状态 */
 export interface Document {
   id: string
   knowledge_base_id: string
@@ -28,6 +36,7 @@ export interface Document {
   updated_at: string
 }
 
+/** 文档分块（向量检索最小单元） */
 export interface Chunk {
   id: string
   document_id: string
@@ -40,6 +49,7 @@ export interface Chunk {
   created_at: string
 }
 
+/** 检索 API 返回的单条结果 */
 export interface SearchResultItem {
   chunk_id: string
   content: string
@@ -48,6 +58,7 @@ export interface SearchResultItem {
   chunk_index: number
 }
 
+/** 对话会话 */
 export interface Conversation {
   id: string
   knowledge_base_id: string
@@ -56,6 +67,7 @@ export interface Conversation {
   created_at: string
 }
 
+/** RAG 引用来源（chunk 及相似度） */
 export interface SourceItem {
   chunk_id: string
   content: string
@@ -64,6 +76,7 @@ export interface SourceItem {
   document_id?: string
 }
 
+/** 对话消息（用户或助手） */
 export interface Message {
   id: string
   conversation_id: string

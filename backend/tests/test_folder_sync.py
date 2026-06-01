@@ -1,4 +1,13 @@
-"""文件夹同步 — Phase 4.4"""
+"""文件夹同步 — Phase 4.4
+
+验证内容：
+  - scan_watch 导入新 txt 文件
+
+运行方式（在 backend 目录）:
+  pytest tests/test_folder_sync.py -v
+
+预期结果：全部用例通过。
+"""
 
 import os
 import uuid
@@ -11,6 +20,7 @@ os.environ.setdefault("LLM_MOCK_MODE", "true")
 
 @pytest.mark.asyncio
 async def test_scan_watch_imports_new_txt(tmp_path: Path):
+    """测试：scan watch imports new txt。"""
     from app.core.database import async_session, init_db
     from app.models.kb_folder_watch import KbFolderWatch
     from app.models.knowledge_base import KnowledgeBase

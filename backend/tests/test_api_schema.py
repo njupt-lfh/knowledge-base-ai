@@ -1,4 +1,13 @@
-"""Gap / Feedback API 在完整 schema 下可正常响应（非 500）"""
+"""Gap / Feedback API 在完整 schema 下可正常响应（非 500）
+
+验证内容：
+  - Gap/Feedback API 在完整 schema 下非 500
+
+运行方式（在 backend 目录）:
+  pytest tests/test_api_schema.py -v
+
+预期结果：全部用例通过。
+"""
 
 import pytest
 from app.core.database import async_session, init_db
@@ -10,6 +19,7 @@ from sqlalchemy import select
 
 @pytest.mark.asyncio
 async def test_gap_and_feedback_routes_not_500():
+    """验证 Gap/Feedback 路由非 500。"""
     await init_db()
 
     async with async_session() as db:

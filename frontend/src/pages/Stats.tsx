@@ -1,3 +1,8 @@
+/**
+ * 数据驾驶舱页
+ * 全局 KPI、趋势/热力图及按库深度分析
+ * 主要导出：默认 Stats 页面组件；内部 KbSelector、KbDeepSection
+ */
 import { Spin } from 'antd'
 import { DatabaseOutlined, FileTextOutlined, BlockOutlined, EyeOutlined } from '@ant-design/icons'
 import { useStats } from '../hooks/useStats'
@@ -13,6 +18,7 @@ import ActivityHeatmap from '../components/Charts/ActivityHeatmap'
 import ColdKnowledgeBadge from '../components/Charts/ColdKnowledgeBadge'
 import '../components/Charts/StatCard.css'
 
+/** 统计仪表盘主页面 */
 export default function Stats() {
   const {
     overview,
@@ -100,6 +106,7 @@ export default function Stats() {
   )
 }
 
+/** 知识库切换标签组：全局 vs 单库深度分析 */
 function KbSelector({
   kbs,
   selectedKb,
@@ -162,6 +169,7 @@ function KbSelector({
   )
 }
 
+/** 选中知识库后的深度图表区（直方图、引用对比、桑基、热度 TOP） */
 function KbDeepSection({
   kbStats,
   kbAdvanced,

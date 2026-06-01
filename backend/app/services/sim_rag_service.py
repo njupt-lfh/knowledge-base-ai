@@ -1,4 +1,18 @@
-"""SIM-RAG 多轮检索 + 子问题覆盖度 Critic — Phase 4.3（无额外 LLM，严格子查询预算）"""
+"""SIM-RAG 多轮检索 + 子问题覆盖度 Critic（Phase 4.3，无 LLM，严格子查询预算）。
+
+职责：
+    将复合问题规则拆分为多个子 query，分别检索后 RRF 融合，
+    并以子问题覆盖度作为 CRAG 补充判据。
+
+在流水线中的位置：
+    AgentOrchestrator.run → should_use_sim_rag / sim_rag_retrieve
+
+依赖服务：
+    - HybridRetriever / merge_source_lists：子查询检索与融合
+    - crag_evaluator：基础充分性 + 覆盖度组合
+    - retrieval_gate：abstention（单个子查询场景）
+    - query_router.QueryRoute
+"""
 
 from __future__ import annotations
 
@@ -20,6 +34,8 @@ _SUB_JOINERS = ("以及", "并且", "还有", "另外", "同时")
 
 @dataclass
 class SimRagResult:
+    """SIM-RAG 单次运行结果。"""
+
     sources: list[dict[str, Any]]
     sub_queries: list[str]
     coverage: float
@@ -29,6 +45,15 @@ class SimRagResult:
 
 
 def should_use_sim_rag(route: QueryRoute, query: str) -> bool:
+    """判断是否启用 SIM-RAG（可拆分子问题或综合型长问）。
+
+    参数:
+        route: 问题路由
+        query: 用户问题
+
+    返回:
+        是否走 SIM-RAG 路径
+    """
     if not getattr(settings, "SIM_RAG_ENABLED", True):
         return False
     if route == "chitchat":
@@ -44,19 +69,29 @@ def should_use_sim_rag(route: QueryRoute, query: str) -> bool:
 
 
 def decompose_sub_queries(query: str, *, max_sub: int | None = None) -> list[str]:
-    """规则拆分子问题（不消耗 LLM token）。"""
+    """规则拆分子问题（不消耗 LLM token）。
+
+    参数:
+        query: 原始复合问题
+        max_sub: 最大子问题数
+
+    返回:
+        子问题列表；无法拆分时返回 [query]
+    """
     max_sub = max_sub or getattr(settings, "SIM_RAG_MAX_SUB_QUERIES", 3)
     text = (query or "").strip()
     if not text:
         return []
 
     parts: list[str] = []
+    # 按问号/分号切分
     for seg in _SUB_SPLIT.split(text):
         seg = seg.strip()
         if len(seg) >= 4:
             parts.append(seg)
 
     if len(parts) < 2:
+        # 按连接词切分
         for joiner in _SUB_JOINERS:
             if joiner in text:
                 chunks = [c.strip() for c in text.split(joiner) if len(c.strip()) >= 4]
@@ -80,6 +115,15 @@ def decompose_sub_queries(query: str, *, max_sub: int | None = None) -> list[str
 
 
 def _term_overlap(query: str, content: str) -> float:
+    """计算 query 与 chunk 内容的词项重叠率。
+
+    参数:
+        query: 子问题
+        content: chunk 正文
+
+    返回:
+        重叠比例 [0, 1]
+    """
     q_terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", (query or "").lower()))
     if not q_terms:
         return 0.0
@@ -88,7 +132,15 @@ def _term_overlap(query: str, content: str) -> float:
 
 
 def evaluate_subquery_coverage(sub_queries: list[str], sources: list[dict[str, Any]]) -> float:
-    """每个子问题是否至少有一条来源覆盖。"""
+    """每个子问题是否至少有一条来源覆盖（SIM-RAG Critic）。
+
+    参数:
+        sub_queries: 子问题列表
+        sources: 融合后的检索来源
+
+    返回:
+        覆盖比例 = 被覆盖子问题数 / 总子问题数
+    """
     if not sub_queries:
         return 0.0
     min_overlap = getattr(settings, "SIM_RAG_SUBQUERY_MIN_OVERLAP", 0.15)
@@ -108,6 +160,17 @@ def evaluate_sim_sufficiency(
     route: QueryRoute,
     sub_queries: list[str],
 ) -> SufficiencyResult:
+    """组合 CRAG 基础充分性与子问题覆盖度。
+
+    参数:
+        query: 原始问题
+        sources: 检索来源
+        route: 问题路由
+        sub_queries: 子问题列表
+
+    返回:
+        组合后的 SufficiencyResult
+    """
     base = evaluate_sufficiency(query, sources, route)
     coverage = evaluate_subquery_coverage(sub_queries, sources)
     min_cov = getattr(settings, "SIM_RAG_MIN_COVERAGE", 0.5)
@@ -137,9 +200,22 @@ async def sim_rag_retrieve(
     retrieve_fn,
     top_k: int,
 ) -> SimRagResult | None:
-    """
-    多子查询检索并融合。retrieve_fn 签名同 AgentOrchestrator._retrieve。
+    """多子查询检索并融合。
+
+    retrieve_fn 签名同 AgentOrchestrator._retrieve。
     仅当可拆成 2+ 子问题时启用；否则返回 None 由调用方走常规定径。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        query: 原始问题
+        route: 问题路由
+        hybrid: HybridRetriever 实例（保留参数供扩展）
+        retrieve_fn: 单轮检索 callable
+        top_k: 总条数预算
+
+    返回:
+        SimRagResult 或 None
     """
     sub_queries = decompose_sub_queries(query)
     if len(sub_queries) < 2:
@@ -151,6 +227,7 @@ async def sim_rag_retrieve(
     graph_paths: list[dict[str, Any]] = []
     seen_path_keys: set[str] = set()
 
+    # 每个子问题独立检索（可含 Graph）
     for sq in sub_queries:
         sources, paths = await retrieve_fn(db, kb_id, sq, route=route, top_k=per_k)
         batch_sources.append(sources)

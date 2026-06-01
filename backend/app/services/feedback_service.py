@@ -1,4 +1,16 @@
-"""用户反馈服务 — 关联 message / chunk，dislike/correction 可触发 Gap，并更新质量分"""
+"""用户反馈服务。
+
+职责：
+    记录用户对回答/ chunk 的 like/dislike/correction，
+    更新质量分并在 dislike/correction 时触发 Gap 入队。
+
+在流水线中的位置：
+    API feedback 路由 → FeedbackService
+
+依赖服务：
+    - QualityService：反馈 → 质量分
+    - GapService：负反馈 → 知识缺口
+"""
 
 import json
 
@@ -11,6 +23,8 @@ from .quality_service import QualityService
 
 
 class FeedbackService:
+    """Chunk 反馈创建与关联处理。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -24,6 +38,22 @@ class FeedbackService:
         chunk_ids: list[str] | None = None,
         correction_text: str | None = None,
     ) -> ChunkFeedback:
+        """创建反馈并触发质量分/Gap 副作用。
+
+        参数:
+            kb_id: 知识库 ID
+            message_id: 助手消息 ID
+            feedback_type: like | dislike | correction
+            chunk_id: 单 chunk ID
+            chunk_ids: 多 chunk ID
+            correction_text: 纠正正文
+
+        返回:
+            ChunkFeedback 实体
+
+        Raises:
+            ValueError: 非法 feedback_type 或消息不存在
+        """
         if feedback_type not in FEEDBACK_TYPES:
             raise ValueError(f"invalid feedback_type: {feedback_type}")
 
@@ -65,6 +95,15 @@ class FeedbackService:
         return row
 
     async def _find_user_query(self, conversation_id: str, assistant_message_id: str) -> str | None:
+        """查找助手消息对应的用户提问。
+
+        参数:
+            conversation_id: 对话 ID
+            assistant_message_id: 助手消息 ID
+
+        返回:
+            用户问题文本或 None
+        """
         from sqlalchemy import select
 
         from ..models.conversation import Message
@@ -88,6 +127,16 @@ class FeedbackService:
         explicit_chunk_id: str | None,
         explicit_chunk_ids: list[str] | None = None,
     ) -> list[str]:
+        """从参数或消息 sources 解析 chunk ID 列表。
+
+        参数:
+            msg: 助手消息
+            explicit_chunk_id: 显式单 ID
+            explicit_chunk_ids: 显式多 ID
+
+        返回:
+            去重后的 chunk ID 列表
+        """
         if explicit_chunk_ids:
             seen: set[str] = set()
             out: list[str] = []

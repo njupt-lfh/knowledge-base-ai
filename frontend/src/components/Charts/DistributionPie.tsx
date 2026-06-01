@@ -1,3 +1,8 @@
+/**
+ * 知识库文档分布环形图（ECharts）
+ * 按各库文档数占比展示
+ * 主要导出：默认 DistributionPie 组件
+ */
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import HudPanel from '../common/HudPanel'
@@ -18,6 +23,7 @@ const COLORS = [
   '#64748b',
 ]
 
+/** 全局知识库文档数量占比饼图 */
 export default function DistributionPie({ data }: DistributionPieProps) {
   const total = data.reduce((s, d) => s + d.doc_count, 0)
 

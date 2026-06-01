@@ -1,4 +1,10 @@
+/**
+ * 知识缺口补全任务页
+ * 管理 RETRIEVAL_MISS / USER_CORRECTION 等待入库队列
+ * 主要导出：默认 GapTasks 页面组件
+ */
 import { useCallback, useEffect, useState } from 'react'
+
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Button,
@@ -41,6 +47,7 @@ const STATUS_COLOR: Record<string, string> = {
   manual_required: 'orange',
 }
 
+/** 解析 suggested_content JSON 或纯文本 */
 function parseSuggested(raw: string | null): { title?: string; content?: string } | null {
   if (!raw) return null
   try {
@@ -50,6 +57,7 @@ function parseSuggested(raw: string | null): { title?: string; content?: string 
   }
 }
 
+/** 单知识库 Gap Queue 工作台 */
 export default function GapTasks() {
   const { kbId } = useParams<{ kbId: string }>()
   const navigate = useNavigate()

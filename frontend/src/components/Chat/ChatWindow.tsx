@@ -1,3 +1,8 @@
+/**
+ * 聊天窗口容器
+ * 消息列表 + 输入框，自动滚动到底部
+ * 主要导出：默认 ChatWindow 组件
+ */
 import { useRef, useEffect } from 'react'
 import { Input, Button } from 'antd'
 import { SendOutlined, RobotOutlined } from '@ant-design/icons'
@@ -17,6 +22,10 @@ interface ChatWindowProps {
   onFeedback?: (messageId: string, type: 'like' | 'dislike' | 'correction') => void
 }
 
+/**
+ * 可复用聊天 UI（ChatAgent 与 ShareChat 共用）
+ * @param disabled 禁用时不可输入（如分享页加载中）
+ */
 export default function ChatWindow({
   messages,
   input,
@@ -31,6 +40,7 @@ export default function ChatWindow({
 }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // 新消息或流式更新时平滑滚到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])

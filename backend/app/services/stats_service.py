@@ -1,4 +1,14 @@
-"""Phase 4 统计聚合 — 基于 Chunk / Message 真实数据"""
+"""Phase 4 统计聚合服务 — 基于 Chunk / Message 真实数据。
+
+职责：
+    为仪表盘提供命中分布、引用对比、RAG Sankey、活动热力图、
+    冷知识计数、RAG 引用趋势等聚合指标。
+
+在流水线中的位置：
+    API stats 路由、GovernanceService、health_service
+
+依赖：Chunk、Message、Conversation 模型
+"""
 
 from __future__ import annotations
 
@@ -14,6 +24,14 @@ from ..models.conversation import Conversation, Message
 
 
 def _parse_sources(raw) -> list[dict]:
+    """解析 Message.sources 字段为 dict 列表。
+
+    参数:
+        raw: JSON 字符串、list 或 None
+
+    返回:
+        来源 dict 列表
+    """
     if raw is None:
         return []
     if isinstance(raw, list):
@@ -28,6 +46,15 @@ def _parse_sources(raw) -> list[dict]:
 
 
 async def hit_distribution(db: AsyncSession, kb_id: str) -> list[dict]:
+    """Chunk 命中次数分布（分桶统计）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+
+    返回:
+        [{label, count}, ...]
+    """
     rows = (await db.execute(select(Chunk.hit_count).where(Chunk.knowledge_base_id == kb_id))).all()
 
     buckets = {"0次": 0, "1-5次": 0, "6-20次": 0, "20+次": 0}
@@ -46,6 +73,16 @@ async def hit_distribution(db: AsyncSession, kb_id: str) -> list[dict]:
 
 
 async def cite_vs_hit(db: AsyncSession, kb_id: str, limit: int = 10) -> list[dict]:
+    """对比 chunk 检索命中次数与对话引用次数。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        limit: Top N
+
+    返回:
+        含 hit_count、cite_count 的项列表
+    """
     cite_counts: dict[str, int] = defaultdict(int)
 
     msg_rows = (
@@ -111,6 +148,16 @@ async def cite_vs_hit(db: AsyncSession, kb_id: str, limit: int = 10) -> list[dic
 
 
 async def rag_sankey(db: AsyncSession, kb_id: str, limit: int = 15) -> dict:
+    """构建 RAG 问答-来源 Sankey 图数据（问→块→答）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+        limit: 最近 assistant 消息数
+
+    返回:
+        {nodes, links} ECharts Sankey 格式
+    """
     assistant_rows = (
         (
             await db.execute(
@@ -183,6 +230,16 @@ async def rag_sankey(db: AsyncSession, kb_id: str, limit: int = 15) -> dict:
 async def activity_heatmap(
     db: AsyncSession, kb_id: str | None = None, days: int = 30
 ) -> list[dict]:
+    """消息活动热力图（星期 × 小时）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 可选知识库过滤
+        days: 统计天数 [1, 90]
+
+    返回:
+        [{dow, hour, count}, ...]
+    """
     since = datetime.utcnow() - timedelta(days=max(1, min(days, 90)))
 
     query = (
@@ -200,7 +257,7 @@ async def activity_heatmap(
     query = query.group_by("dow", "hour")
     rows = (await db.execute(query)).all()
 
-    # ECharts heatmap: [hour, dow, count] — dow 0=Sun, remap to Mon=0..Sun=6
+    # ECharts 热力图: [hour, dow, count] — dow 0=周日, 重映射为 Mon=0..Sun=6
     dow_map = {0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
     result = []
     for dow_str, hour_str, cnt in rows:
@@ -211,6 +268,16 @@ async def activity_heatmap(
 
 
 async def cold_knowledge_count(db: AsyncSession, kb_id: str | None = None, days: int = 90) -> dict:
+    """统计零命中 chunk 数量（含超过 N 天的冷知识）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 可选知识库 ID
+        days: 冷知识天数阈值
+
+    返回:
+        cold_count_90d、cold_count_total 等
+    """
     cutoff = datetime.utcnow() - timedelta(days=days)
 
     query = select(func.count(Chunk.id)).where(
@@ -234,7 +301,16 @@ async def cold_knowledge_count(db: AsyncSession, kb_id: str | None = None, days:
 
 
 async def hit_trend(db: AsyncSession, kb_id: str | None = None, days: int = 7) -> list[dict]:
-    """每日 RAG 引用趋势：统计当天带 sources 的 assistant 消息数（真实对话数据）"""
+    """每日 RAG 引用趋势：统计当天带 sources 的 assistant 消息数。
+
+    参数:
+        db: 数据库会话
+        kb_id: 可选知识库 ID
+        days: 天数 [1, 30]
+
+    返回:
+        [{date, hits}, ...]
+    """
     days = max(1, min(days, 30))
     today = datetime.utcnow().date()
     points = []

@@ -1,3 +1,8 @@
+/**
+ * 文件夹同步配置面板
+ * 添加本地目录监听、手动扫描入库
+ * 主要导出：默认 FolderSyncPanel 组件
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Input, Space, Switch, Table, Typography, message } from 'antd'
 import { FolderOpenOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
@@ -9,6 +14,10 @@ interface Props {
   onSynced?: () => void
 }
 
+/**
+ * 知识库详情「文件夹同步」Tab
+ * @param onSynced 扫描入库成功后刷新文档列表与健康度
+ */
 export default function FolderSyncPanel({ kbId, onSynced }: Props) {
   const [watches, setWatches] = useState<FolderWatch[]>([])
   const [loading, setLoading] = useState(false)

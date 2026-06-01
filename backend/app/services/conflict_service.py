@@ -1,4 +1,15 @@
-"""知识冲突裁决 — Phase 1.4"""
+"""知识冲突裁决服务（Phase 1.4）。
+
+职责：
+    管理入库门禁产生的 KnowledgeConflict 待办，
+    支持保留新/旧/驳回等裁决并同步 Chroma。
+
+在流水线中的位置：
+    API conflicts 路由 → ConflictService
+
+依赖服务：
+    - EmbeddingService：裁决保留新版本时写入向量
+"""
 
 from __future__ import annotations
 
@@ -15,11 +26,22 @@ from ..services.embedding_service import EmbeddingService
 
 
 class ConflictService:
+    """知识冲突列表与裁决。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.embed_svc = EmbeddingService()
 
     async def list_pending(self, kb_id: str, *, status: str | None = "pending") -> list[dict]:
+        """列出冲突记录。
+
+        参数:
+            kb_id: 知识库 ID
+            status: 过滤状态，None 表示全部
+
+        返回:
+            冲突 dict 列表
+        """
         q = select(KnowledgeConflict).where(KnowledgeConflict.knowledge_base_id == kb_id)
         if status:
             q = q.where(KnowledgeConflict.status == status)
@@ -28,6 +50,19 @@ class ConflictService:
         return [await self._to_dict(row) for row in rows]
 
     async def resolve(self, kb_id: str, conflict_id: str, resolution: str) -> dict:
+        """裁决冲突。
+
+        参数:
+            kb_id: 知识库 ID
+            conflict_id: 冲突 ID
+            resolution: resolved_keep_new | resolved_keep_old | dismissed
+
+        返回:
+            更新后的冲突 dict
+
+        Raises:
+            ValueError: 冲突不存在或已裁决
+        """
         row = await self.db.get(KnowledgeConflict, conflict_id)
         if not row or row.knowledge_base_id != kb_id:
             raise ValueError("conflict not found")
@@ -71,6 +106,14 @@ class ConflictService:
         return await self._to_dict(row)
 
     async def _to_dict(self, row: KnowledgeConflict) -> dict:
+        """ORM 转 API dict。
+
+        参数:
+            row: KnowledgeConflict 实体
+
+        返回:
+            序列化字典
+        """
         existing = await self.db.get(Chunk, row.existing_chunk_id)
         return {
             "id": row.id,

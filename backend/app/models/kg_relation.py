@@ -1,4 +1,8 @@
-"""轻量知识图谱 — 实体关系三元组（Phase 3）"""
+"""轻量知识图谱 ORM 模型（Phase 3）。
+
+定义 `KgRelation` 表，存储从 chunk 抽取的主谓宾三元组，
+供图谱可视化与多跳检索扩展使用。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,13 @@ from ..core.database import Base
 
 
 class KgRelation(Base):
+    """实体关系三元组。
+
+    关键字段：subject/predicate/object_entity 构成图边；chunk_id/document_id
+    溯源；confidence/is_active 控制可信度与是否参与检索。
+    同一 chunk 下相同三元组通过唯一约束去重。
+    """
+
     __tablename__ = "kg_relations"
     __table_args__ = (
         UniqueConstraint(

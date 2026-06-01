@@ -1,4 +1,8 @@
-"""知识库模型"""
+"""知识库 ORM 模型。
+
+定义 `KnowledgeBase` 表，作为文档、分块、标签等业务数据的顶层容器，
+并存储分块与 Embedding 模型等 per-KB 配置。
+"""
 
 from __future__ import annotations
 
@@ -16,6 +20,12 @@ if TYPE_CHECKING:
 
 
 class KnowledgeBase(Base):
+    """知识库实体。
+
+    关键字段：name/description 展示信息；embedding_model/chunk_size/chunk_overlap
+    控制入库与检索行为；documents 关联该库下全部文档（级联删除）。
+    """
+
     __tablename__ = "knowledge_bases"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

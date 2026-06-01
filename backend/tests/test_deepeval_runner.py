@@ -1,4 +1,13 @@
-"""DeepEval 评测单元测试 — Phase 2.4（offline 代理指标 + 回归门禁）"""
+"""DeepEval 评测单元测试 — Phase 2.4（offline 代理指标 + 回归门禁）
+
+验证内容：
+  - DeepEval offline 代理指标与 retention 门禁
+
+运行方式（在 backend 目录）:
+  pytest tests/test_deepeval_runner.py -v
+
+预期结果：全部用例通过。
+"""
 
 import json
 from pathlib import Path
@@ -19,10 +28,12 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "eval_smoke_samples.jso
 
 @pytest.fixture
 def smoke_rows():
+    """smoke_rows 函数。"""
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 
 def test_offline_contextual_relevancy():
+    """验证 offline 代理指标。"""
     score = offline_contextual_relevancy(
         "向量数据库 embedding 检索",
         ["Chroma 存储 chunk embedding 做语义检索"],
@@ -31,6 +42,7 @@ def test_offline_contextual_relevancy():
 
 
 def test_offline_hallucination_score():
+    """验证 offline 代理指标。"""
     score = offline_hallucination_score(
         "RAG 检索增强生成",
         ["RAG 是 Retrieval Augmented Generation 检索增强生成"],
@@ -39,6 +51,7 @@ def test_offline_hallucination_score():
 
 
 def test_run_deepeval_offline_smoke(smoke_rows):
+    """验证 DeepEval 指标或门禁。"""
     out = run_deepeval_offline(smoke_rows)
     assert out["mode"] == "offline"
     assert out["hallucination_mean"] is not None
@@ -47,12 +60,14 @@ def test_run_deepeval_offline_smoke(smoke_rows):
 
 
 def test_deepeval_gates_pass(smoke_rows):
+    """验证 DeepEval 指标或门禁。"""
     scores = run_deepeval_offline(smoke_rows)
     gates = check_deepeval_gates(scores)
     assert gates["passed"] is True
 
 
 def test_knowledge_retention_pass():
+    """验证 Knowledge Retention 回归。"""
     r = check_knowledge_retention(
         {"context_recall_mean": 0.81, "context_precision_mean": 0.27},
         {"context_recall_mean": 0.75, "context_precision_mean": 0.25},
@@ -61,6 +76,7 @@ def test_knowledge_retention_pass():
 
 
 def test_knowledge_retention_fail_on_recall_drop():
+    """验证 context_recall 计算。"""
     r = check_knowledge_retention(
         {"context_recall_mean": 0.81},
         {"context_recall_mean": 0.40},
@@ -69,6 +85,7 @@ def test_knowledge_retention_fail_on_recall_drop():
 
 
 def test_run_deepeval_prefers_offline_in_mock_mode(smoke_rows):
+    """验证 DeepEval 指标或门禁。"""
     with patch("app.core.config.settings") as mock_settings:
         mock_settings.LLM_MOCK_MODE = True
         mock_settings.VOLCENGINE_API_KEY = "key"
@@ -77,6 +94,7 @@ def test_run_deepeval_prefers_offline_in_mock_mode(smoke_rows):
 
 
 def test_build_llm_test_cases_skips_negative(smoke_rows):
+    """验证负例检索指标。"""
     from app.eval.deepeval_runner import build_llm_test_cases
 
     cases = build_llm_test_cases(smoke_rows)
@@ -85,6 +103,7 @@ def test_build_llm_test_cases_skips_negative(smoke_rows):
 
 
 def test_run_deepeval_live_mocked(smoke_rows):
+    """验证 DeepEval 指标或门禁。"""
     from app.eval.deepeval_runner import run_deepeval_live
 
     fake_metric = MagicMock()

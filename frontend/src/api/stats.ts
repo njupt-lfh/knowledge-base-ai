@@ -1,3 +1,8 @@
+/**
+ * 统计数据 API
+ * 全局概览、趋势、热力图及单库深度指标
+ * 主要导出：StatsOverview、TrendPoint、KBStats、statsApi 等类型与 API
+ */
 import request from './request'
 
 export interface StatsOverview {
@@ -63,6 +68,7 @@ export interface ColdKnowledgeStats {
   threshold_days: number
 }
 
+/** 单库高级统计聚合（分布、引用对比、桑基、冷知识） */
 export interface KBAdvancedStats {
   distribution: HitBucket[]
   citeVsHit: CiteHitItem[]
@@ -94,6 +100,8 @@ export const statsApi = {
     }),
   coldKnowledge: (kbId?: string) =>
     request.get<ColdKnowledgeStats>('/api/stats/cold-knowledge', { params: { kb_id: kbId } }),
+
+  /** 并行拉取单库四项深度指标并组装为 KBAdvancedStats */
   kbAdvanced: async (kbId: string): Promise<KBAdvancedStats> => {
     const [dist, cite, sankey, cold] = await Promise.all([
       statsApi.hitDistribution(kbId),

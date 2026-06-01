@@ -1,3 +1,8 @@
+/**
+ * 知识库卡片网格布局
+ * 首格为新建卡片，其余为 KnowledgeCard
+ * 主要导出：默认 KnowledgeCardGrid 组件
+ */
 import type { KnowledgeBase } from '../../types'
 import KnowledgeCard from './KnowledgeCard'
 import CreateCard from './CreateCard'
@@ -13,6 +18,7 @@ interface KnowledgeCardGridProps {
   onDelete: (id: string) => void
 }
 
+/** 知识库列表页卡片网格 */
 export default function KnowledgeCardGrid({
   data,
   loading,

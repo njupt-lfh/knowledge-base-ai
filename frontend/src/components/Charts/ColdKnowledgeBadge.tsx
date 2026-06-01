@@ -1,3 +1,8 @@
+/**
+ * 冷知识预警徽章
+ * 展示 N 天内零命中的 chunk 数量，可跳转治理 Tab
+ * 主要导出：默认 ColdKnowledgeBadge 组件
+ */
 import { AlertOutlined } from '@ant-design/icons'
 import type { ColdKnowledgeStats } from '../../api/stats'
 import './ColdKnowledgeBadge.css'
@@ -8,6 +13,11 @@ interface ColdKnowledgeBadgeProps {
   onClick?: () => void
 }
 
+/**
+ * 冷知识统计展示
+ * @param compact 紧凑单行样式（用于详情页顶栏）
+ * @param onClick 点击跳转治理建议
+ */
 export default function ColdKnowledgeBadge({
   data,
   compact = false,

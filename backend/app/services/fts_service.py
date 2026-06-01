@@ -1,4 +1,15 @@
-"""SQLite FTS5 全文索引 — Phase 2.1"""
+"""SQLite FTS5 全文索引服务（Phase 2.1）。
+
+职责：
+    维护 chunks_fts 虚拟表，支持 BM25 关键词检索，
+    与 Chroma 向量检索组成 Hybrid 双路。
+
+在流水线中的位置：
+    HybridRetriever.search → search_fts
+    入库：document_service / chunk_service → upsert_chunk_fts
+
+依赖：无（直接 SQL + SQLite FTS5）
+"""
 
 from __future__ import annotations
 
@@ -14,7 +25,14 @@ FTS_TABLE = "chunks_fts"
 
 
 async def ensure_fts_schema(conn) -> bool:
-    """创建 FTS5 虚拟表（若不存在）。返回是否新建。"""
+    """创建 FTS5 虚拟表（若不存在）。
+
+    参数:
+        conn: 数据库连接
+
+    返回:
+        True 表示本次新建，False 表示已存在
+    """
     result = await conn.execute(
         text("SELECT name FROM sqlite_master WHERE type='table' AND name=:n"),
         {"n": FTS_TABLE},
@@ -38,7 +56,14 @@ async def ensure_fts_schema(conn) -> bool:
 
 
 async def sync_fts_incremental(conn) -> int:
-    """增量同步：补缺失、删失效、更新内容变更的 chunk。"""
+    """增量同步：补缺失、删失效、更新内容变更的 chunk。
+
+    参数:
+        conn: 数据库连接
+
+    返回:
+        新增 + 刷新的行数
+    """
     await conn.execute(
         text(
             f"""
@@ -94,6 +119,14 @@ async def sync_fts_incremental(conn) -> int:
 
 
 async def backfill_fts(conn) -> int:
+    """全量重建 FTS 索引。
+
+    参数:
+        conn: 数据库连接
+
+    返回:
+        写入行数
+    """
     await conn.execute(text(f"DELETE FROM {FTS_TABLE}"))
     result = await conn.execute(
         text(
@@ -111,6 +144,15 @@ async def backfill_fts(conn) -> int:
 async def upsert_chunk_fts(
     db: AsyncSession, chunk_id: str, kb_id: str, content: str, *, active: bool = True
 ) -> None:
+    """单 chunk FTS  upsert（先删后插）。
+
+    参数:
+        db: 异步会话
+        chunk_id: chunk ID
+        kb_id: 知识库 ID
+        content: 索引正文
+        active: 是否活跃（非活跃则只删除）
+    """
     await db.execute(text(f"DELETE FROM {FTS_TABLE} WHERE chunk_id = :cid"), {"cid": chunk_id})
     if active and content.strip():
         await db.execute(
@@ -123,11 +165,24 @@ async def upsert_chunk_fts(
 
 
 async def delete_chunk_fts(db: AsyncSession, chunk_id: str) -> None:
+    """从 FTS 索引删除指定 chunk。
+
+    参数:
+        db: 异步会话
+        chunk_id: chunk ID
+    """
     await db.execute(text(f"DELETE FROM {FTS_TABLE} WHERE chunk_id = :cid"), {"cid": chunk_id})
 
 
 def build_fts_query(query: str) -> str | None:
-    """构造 FTS5 MATCH 表达式（中文/英文分词）。"""
+    """构造 FTS5 MATCH 表达式（中文单字 + 英文词 OR 组合）。
+
+    参数:
+        query: 用户查询
+
+    返回:
+        MATCH 字符串或 None（空查询）
+    """
     text_q = query.strip()
     if not text_q:
         return None
@@ -146,7 +201,17 @@ async def search_fts(
     *,
     limit: int = 15,
 ) -> list[tuple[str, float]]:
-    """BM25 检索，返回 (chunk_id, bm25_score)。分数越高越好（已取负）。"""
+    """BM25 检索，返回 (chunk_id, bm25_score)。
+
+    参数:
+        db: 异步会话
+        kb_id: 知识库 ID
+        query: 查询文本
+        limit: 最大条数
+
+    返回:
+        (chunk_id, 分数) 列表，分数越高越相关（已对 bm25 负值取反）
+    """
     match = build_fts_query(query)
     if not match:
         return []

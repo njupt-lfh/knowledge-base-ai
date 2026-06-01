@@ -1,4 +1,15 @@
-"""知识库服务"""
+"""知识库（KnowledgeBase）CRUD 服务。
+
+职责：
+    知识库的创建、列表、更新、删除，以及文档数等聚合统计；
+    删除时同步清理 Chroma collection。
+
+在流水线中的位置：
+    API knowledge_bases 路由 → KnowledgeService
+
+依赖服务：
+    - chroma_client.delete_collection
+"""
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,12 +26,24 @@ from ..schemas.knowledge import (
 
 
 class KnowledgeService:
+    """知识库业务服务。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def list(
         self, page: int, page_size: int, search: str | None
     ) -> tuple[list[KnowledgeBaseResponse], int]:
+        """分页列出知识库（含文档数、总命中数）。
+
+        参数:
+            page: 页码
+            page_size: 每页条数
+            search: 名称模糊搜索
+
+        返回:
+            (知识库列表, 总数)
+        """
         query = select(KnowledgeBase)
         count_query = select(func.count(KnowledgeBase.id))
 
@@ -65,6 +88,14 @@ class KnowledgeService:
         return items, total
 
     async def create(self, data: KnowledgeBaseCreate) -> KnowledgeBaseResponse:
+        """创建知识库。
+
+        参数:
+            data: 创建参数
+
+        返回:
+            新建的知识库响应
+        """
         kb = KnowledgeBase(
             name=data.name,
             description=data.description,
@@ -87,6 +118,14 @@ class KnowledgeService:
         )
 
     async def get_by_id(self, kb_id: str) -> KnowledgeBaseResponse | None:
+        """按 ID 获取知识库详情。
+
+        参数:
+            kb_id: 知识库 ID
+
+        返回:
+            KnowledgeBaseResponse 或 None
+        """
         kb = await self.db.get(KnowledgeBase, kb_id)
         if not kb:
             return None
@@ -108,6 +147,15 @@ class KnowledgeService:
         )
 
     async def update(self, kb_id: str, data: KnowledgeBaseUpdate) -> KnowledgeBaseResponse | None:
+        """更新知识库元数据。
+
+        参数:
+            kb_id: 知识库 ID
+            data: 部分更新字段
+
+        返回:
+            更新后的响应或 None
+        """
         kb = await self.db.get(KnowledgeBase, kb_id)
         if not kb:
             return None
@@ -119,6 +167,11 @@ class KnowledgeService:
         return await self.get_by_id(kb_id)
 
     async def delete(self, kb_id: str):
+        """删除知识库及 Chroma 向量集合。
+
+        参数:
+            kb_id: 知识库 ID
+        """
         kb = await self.db.get(KnowledgeBase, kb_id)
         if kb:
             await self.db.delete(kb)

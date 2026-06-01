@@ -1,4 +1,15 @@
-"""图谱检索 — Phase 3: 实体 linking + 多跳扩展 → chunk 排序"""
+"""图谱检索服务（Phase 3: 实体 linking + 多跳扩展 → chunk 排序）。
+
+职责：
+    从用户 query 中链接知识图谱实体，BFS 多跳扩展关联 chunk，
+    与 Hybrid 检索互补（关系型/多跳问题）。
+
+在流水线中的位置：
+    AgentOrchestrator._retrieve → GraphRetriever.search
+
+依赖服务：
+    - graph_store_service：NetworkX 图构建、实体 linking、路径扩展
+"""
 
 from __future__ import annotations
 
@@ -21,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 
 class GraphRetriever:
+    """轻量知识图谱检索器：实体种子 → 多跳 BFS → chunk 打分。"""
+
     async def search(
         self,
         db: AsyncSession,
@@ -29,7 +42,17 @@ class GraphRetriever:
         *,
         top_k: int | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """返回 (sources, graph_paths)。"""
+        """执行图谱检索。
+
+        参数:
+            db: 数据库会话
+            kb_id: 知识库 ID
+            query: 用户查询
+            top_k: 返回 chunk 条数
+
+        返回:
+            (sources, graph_paths) — sources 为 chunk 来源列表，graph_paths 为多跳路径
+        """
         if not getattr(settings, "GRAPH_ENABLED", True):
             return [], []
 
@@ -40,6 +63,7 @@ class GraphRetriever:
         if not entity_names:
             return [], []
 
+        # 从 query 中匹配图谱实体作为 BFS 种子
         seeds = link_entities_in_query(query, entity_names)
         if not seeds:
             return [], []

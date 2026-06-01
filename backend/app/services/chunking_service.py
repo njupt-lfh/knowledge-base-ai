@@ -1,4 +1,14 @@
-"""文档解析与分块服务"""
+"""文档解析与分块服务。
+
+职责：
+    将 PDF/Markdown/TXT 解析为纯文本，再按 chunk_size/overlap 递归分块，
+    为入库流水线提供文本片段。
+
+在流水线中的位置：
+    document_service._process_document / ingest_manual → DocumentParser + TextChunker
+
+依赖：无（pypdf、markdown 库）
+"""
 
 import re
 
@@ -7,10 +17,22 @@ from pypdf import PdfReader
 
 
 class DocumentParser:
-    """文件解析器 — 支持 PDF / Markdown / TXT"""
+    """文件解析器 — 支持 PDF / Markdown / TXT。"""
 
     @staticmethod
     def parse(file_path: str, file_type: str) -> str:
+        """按文件类型解析为纯文本。
+
+        参数:
+            file_path: 文件路径
+            file_type: pdf | md | txt
+
+        返回:
+            提取的全文
+
+        Raises:
+            ValueError: 不支持的文件类型
+        """
         if file_type == "pdf":
             return DocumentParser._parse_pdf(file_path)
         elif file_type == "md":
@@ -22,6 +44,14 @@ class DocumentParser:
 
     @staticmethod
     def _parse_pdf(path: str) -> str:
+        """PDF 逐页提取文本。
+
+        参数:
+            path: PDF 路径
+
+        返回:
+            页间双换行拼接的全文
+        """
         reader = PdfReader(path)
         text_parts = []
         for page in reader.pages:
@@ -32,6 +62,14 @@ class DocumentParser:
 
     @staticmethod
     def _parse_markdown(path: str) -> str:
+        """Markdown 转 HTML 后剥离标签得纯文本。
+
+        参数:
+            path: Markdown 路径
+
+        返回:
+            纯文本
+        """
         with open(path, encoding="utf-8") as f:
             md_content = f.read()
         html = markdown.markdown(md_content)
@@ -40,22 +78,53 @@ class DocumentParser:
 
     @staticmethod
     def _parse_txt(path: str) -> str:
+        """读取 UTF-8 文本文件。
+
+        参数:
+            path: 文本路径
+
+        返回:
+            文件内容
+        """
         with open(path, encoding="utf-8") as f:
             return f.read()
 
 
 class TextChunker:
-    """文本分块器"""
+    """递归字符分块器：优先在句号/换行等分隔符处切分。"""
 
     def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
+        """初始化分块参数。
+
+        参数:
+            chunk_size: 目标块大小（字符）
+            chunk_overlap: 块间重叠字符数
+        """
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.separators = ["\n\n", "\n", "。", ".", "！", "?", "？", "! ", "; ", "；", " "]
 
     def split(self, text: str) -> list[str]:
+        """将长文本切分为 chunk 列表。
+
+        参数:
+            text: 原始全文
+
+        返回:
+            非空 chunk 字符串列表
+        """
         return self._split_recursive(text, self.separators)
 
     def _split_recursive(self, text: str, separators: list[str]) -> list[str]:
+        """逐字符累积，达 chunk_size 时在最佳分隔点切分。
+
+        参数:
+            text: 待切分文本
+            separators: 分隔符优先级列表
+
+        返回:
+            chunk 列表
+        """
         chunks = []
         current_chunk = ""
 
@@ -76,6 +145,15 @@ class TextChunker:
         return chunks
 
     def _find_best_split_point(self, text: str, separators: list[str]) -> int:
+        """在文本后 20% 区域找最接近 chunk_size 的分隔位置。
+
+        参数:
+            text: 当前累积块
+            separators: 分隔符列表
+
+        返回:
+            切分位置（字符索引），-1 表示未找到合适点
+        """
         search_start = int(len(text) * 0.8)
         search_area = text[search_start:]
         best_pos = -1

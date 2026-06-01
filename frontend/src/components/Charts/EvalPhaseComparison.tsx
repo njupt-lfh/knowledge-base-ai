@@ -1,3 +1,8 @@
+/**
+ * 检索评测阶段对比表组件
+ * 静态 Phase 0/2/3 快照与当前 eval 报告 live 字段对照
+ * 主要导出：默认 EvalPhaseComparison 组件
+ */
 import { Table, Tag, Typography } from 'antd'
 import type { EvalBaselineReport } from '../../api/eval'
 import {
@@ -11,6 +16,7 @@ import { formatDateTime } from '../../utils/format'
 import HudPanel from '../common/HudPanel'
 import './StatCard.css'
 
+/** 将 live 数值格式化为表格展示字符串 */
 function formatLiveValue(
   value: number | null | undefined,
   format?: PhaseComparisonRow['format'],
@@ -41,6 +47,7 @@ interface EvalPhaseComparisonProps {
   report: EvalBaselineReport | null
 }
 
+/** 检索演进对比主组件，依赖 eval 基线 aggregate 字段 */
 export default function EvalPhaseComparison({ report }: EvalPhaseComparisonProps) {
   const agg = report?.aggregate ?? {}
 

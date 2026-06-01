@@ -1,4 +1,15 @@
-"""Chunk 质量分计算与检索加权 — Phase 1.2"""
+"""Chunk 质量分计算与检索加权服务（Phase 1.2）。
+
+职责：
+    基于命中、点赞/点踩、纠正次数、新鲜度计算 chunk 质量分，
+    并在 Hybrid 检索最终排序时与 retrieval_score 加权融合。
+
+在流水线中的位置：
+    HybridRetriever.search → QualityService.get_scores_map
+    FeedbackService → apply_feedback
+
+依赖：Chunk、ChunkQuality 模型
+"""
 
 from __future__ import annotations
 
@@ -24,7 +35,18 @@ def compute_quality_score(
     correction_count: int,
     created_at: datetime | None,
 ) -> float:
-    """统一版公式初版实现。"""
+    """统一版质量分公式。
+
+    参数:
+        hit_count: 检索命中次数
+        like_count: 点赞数
+        dislike_count: 点踩数
+        correction_count: 纠正次数
+        created_at: chunk 创建时间
+
+    返回:
+        质量分 [0, 1]
+    """
     hit_count = int(hit_count or 0)
     like_count = int(like_count or 0)
     dislike_count = int(dislike_count or 0)
@@ -44,14 +66,33 @@ def compute_quality_score(
 
 
 def blend_retrieval_score(retrieval_score: float, quality_score: float) -> float:
+    """检索分与质量分线性融合。
+
+    参数:
+        retrieval_score: 混合检索分数
+        quality_score: chunk 质量分
+
+    返回:
+        融合后的最终 score
+    """
     return round(RETRIEVAL_BLEND * retrieval_score + QUALITY_BLEND * quality_score, 4)
 
 
 class QualityService:
+    """Chunk 质量分 CRUD 与反馈更新。"""
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def get_or_create(self, chunk_id: str) -> ChunkQuality:
+        """获取或创建 ChunkQuality 记录。
+
+        参数:
+            chunk_id: chunk ID
+
+        返回:
+            ChunkQuality 实体
+        """
         result = await self.db.execute(
             select(ChunkQuality).where(ChunkQuality.chunk_id == chunk_id)
         )
@@ -64,6 +105,14 @@ class QualityService:
         return row
 
     async def recalculate_chunk(self, chunk_id: str) -> ChunkQuality | None:
+        """根据 Chunk 与反馈重新计算质量分。
+
+        参数:
+            chunk_id: chunk ID
+
+        返回:
+            更新后的 ChunkQuality 或 None
+        """
         chunk = await self.db.get(Chunk, chunk_id)
         if not chunk:
             return None
@@ -91,6 +140,15 @@ class QualityService:
         chunk_ids: list[str],
         feedback_type: str,
     ) -> list[ChunkQuality]:
+        """批量应用用户反馈并重算质量分。
+
+        参数:
+            chunk_ids: 关联 chunk ID 列表
+            feedback_type: like | dislike | correction
+
+        返回:
+            更新后的 ChunkQuality 列表
+        """
         updated: list[ChunkQuality] = []
         for cid in chunk_ids:
             q = await self.get_or_create(cid)
@@ -106,6 +164,14 @@ class QualityService:
         return updated
 
     async def get_scores_map(self, chunk_ids: list[str]) -> dict[str, float]:
+        """批量获取 chunk 质量分（缺失则现场计算）。
+
+        参数:
+            chunk_ids: chunk ID 列表
+
+        返回:
+            chunk_id → quality_score 映射
+        """
         if not chunk_ids:
             return {}
         result = await self.db.execute(
@@ -122,6 +188,15 @@ class QualityService:
         return scores
 
     async def list_low_quality(self, kb_id: str, limit: int = 20) -> list[dict]:
+        """列出需复审的低质量 chunk。
+
+        参数:
+            kb_id: 知识库 ID
+            limit: 最大条数
+
+        返回:
+            预览 dict 列表
+        """
         result = await self.db.execute(
             select(ChunkQuality, Chunk.content)
             .join(Chunk, Chunk.id == ChunkQuality.chunk_id)

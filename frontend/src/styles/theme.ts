@@ -1,6 +1,12 @@
+/**
+ * Ant Design 主题配置
+ * 定义暗色/浅色 HUD 风格 token 与组件样式
+ * 主要导出：darkTheme、lightTheme、getAntdTheme、hudTheme（已弃用）
+ */
 import type { ThemeConfig } from 'antd'
 import type { ThemeMode } from '../stores/themeStore'
 
+/** 暗色与浅色主题共享的组件级覆盖 */
 const sharedComponents: ThemeConfig['components'] = {
   Button: {
     primaryShadow: '0 0 12px rgba(0, 212, 255, 0.2)',
@@ -11,6 +17,7 @@ const sharedComponents: ThemeConfig['components'] = {
   },
 }
 
+/** 暗色 HUD 主题（默认） */
 export const darkTheme: ThemeConfig = {
   token: {
     colorPrimary: '#00d4ff',
@@ -77,6 +84,7 @@ export const darkTheme: ThemeConfig = {
   },
 }
 
+/** 浅色主题 */
 export const lightTheme: ThemeConfig = {
   token: {
     colorPrimary: '#0891b2',
@@ -134,9 +142,14 @@ export const lightTheme: ThemeConfig = {
   },
 }
 
+/**
+ * 按模式返回 Ant Design 主题配置
+ * @param mode 暗色或浅色
+ * @returns ThemeConfig
+ */
 export function getAntdTheme(mode: ThemeMode): ThemeConfig {
   return mode === 'dark' ? darkTheme : lightTheme
 }
 
-/** @deprecated use getAntdTheme('dark') */
+/** @deprecated 请使用 getAntdTheme('dark') */
 export const hudTheme = darkTheme

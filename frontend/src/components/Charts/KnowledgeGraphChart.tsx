@@ -1,3 +1,8 @@
+/**
+ * 知识图谱力导向图（ECharts Graph）
+ * 展示实体节点与关系边，支持拖拽与缩放
+ * 主要导出：默认 KnowledgeGraphChart 组件（memo 优化）
+ */
 import { memo } from 'react'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
@@ -11,6 +16,7 @@ interface KnowledgeGraphChartProps {
   relationCount: number
 }
 
+/** 力导向布局的知识图谱，节点大小随实体名长度微调 */
 function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChartProps) {
   if (nodes.length === 0 || edges.length === 0) {
     return (
@@ -114,6 +120,7 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
   )
 }
 
+/** 节点/边数量不变时跳过重渲染，避免力导向布局抖动 */
 export default memo(
   KnowledgeGraphChart,
   (prev, next) =>

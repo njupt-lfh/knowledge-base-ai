@@ -1,3 +1,8 @@
+/**
+ * 文档管理 API
+ * 上传、手动录入、状态切换与重新入库
+ * 主要导出：documentApi
+ */
 import request from './request'
 import type { Document } from '../types'
 
@@ -7,6 +12,7 @@ export const documentApi = {
       params,
     }),
 
+  /** multipart 上传文件 */
   upload: (kbId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)

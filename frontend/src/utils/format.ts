@@ -1,4 +1,13 @@
-/** 本地中文日期时间展示（DB 存 UTC，加 Z 标记后自动转本地时区） */
+/**
+ * 格式化工具函数
+ * 主要导出：formatDateTime
+ */
+
+/**
+ * 将 UTC 时间字符串格式化为本地中文日期时间
+ * @param value ISO 或 "YYYY-MM-DD HH:mm:ss" 格式，空值返回占位符
+ * @returns 本地化后的日期时间字符串
+ */
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return '—'
   const utc = value.endsWith('Z') ? value : value.replace(' ', 'T') + 'Z'

@@ -1,4 +1,8 @@
-"""文档 API 路由"""
+"""文档 API 路由。
+
+提供文档分页列表、文件上传、手工录入、详情、删除、启用切换与 reindex 端点，
+委托 `DocumentService` 处理解析、分块与向量化后台任务。
+"""
 
 from fastapi import (
     APIRouter,
@@ -31,6 +35,17 @@ async def list_documents(
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
 ):
+    """分页获取知识库文档列表。
+
+    参数:
+        kb_id: 知识库 ID。
+        page: 页码，从 1 开始。
+        page_size: 每页条数。
+        db: 数据库会话。
+
+    返回:
+        DocumentListResponse。
+    """
     service = DocumentService(db)
     items, total = await service.list_by_kb(kb_id, page, page_size)
     return DocumentListResponse(items=items, total=total)
@@ -43,6 +58,17 @@ async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
+    """上传文件并异步入库（分块+向量化）。
+
+    参数:
+        kb_id: 知识库 ID。
+        background_tasks: FastAPI 后台任务队列。
+        file: 上传文件。
+        db: 数据库会话。
+
+    返回:
+        新建的 DocumentResponse；超大文件 413。
+    """
     if file.size and file.size > settings.MAX_UPLOAD_SIZE:
         raise HTTPException(
             status_code=413, detail=f"文件大小超过限制 ({settings.MAX_UPLOAD_SIZE // 1048576}MB)"
@@ -58,6 +84,17 @@ async def create_manual_document(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
+    """创建手工文本文档并异步分块入库。
+
+    参数:
+        kb_id: 知识库 ID。
+        data: 标题与正文。
+        background_tasks: 后台任务队列。
+        db: 数据库会话。
+
+    返回:
+        新建的 DocumentResponse。
+    """
     service = DocumentService(db)
     return await service.create_manual(kb_id, data, background_tasks)
 
@@ -68,6 +105,16 @@ async def get_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
 ):
+    """获取单个文档详情。
+
+    参数:
+        kb_id: 知识库 ID（路径参数）。
+        doc_id: 文档 ID。
+        db: 数据库会话。
+
+    返回:
+        DocumentResponse；不存在时 404。
+    """
     service = DocumentService(db)
     doc = await service.get_by_id(doc_id)
     if not doc:
@@ -81,6 +128,13 @@ async def delete_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
 ):
+    """删除文档及其 chunk、向量与磁盘文件。
+
+    参数:
+        kb_id: 知识库 ID。
+        doc_id: 文档 ID。
+        db: 数据库会话。
+    """
     service = DocumentService(db)
     await service.delete(doc_id)
 
@@ -92,6 +146,17 @@ async def toggle_document_status(
     is_active: bool = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    """切换单个文档启用状态并同步向量索引。
+
+    参数:
+        kb_id: 知识库 ID。
+        doc_id: 文档 ID。
+        is_active: 目标状态（表单字段）。
+        db: 数据库会话。
+
+    返回:
+        更新后的 DocumentResponse。
+    """
     service = DocumentService(db)
     return await service.toggle_status(doc_id, is_active)
 
@@ -103,7 +168,17 @@ async def reindex_document(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """重新向量化文档"""
+    """重新解析并向量化已上传文件文档。
+
+    参数:
+        kb_id: 知识库 ID。
+        doc_id: 文档 ID。
+        background_tasks: 后台任务队列。
+        db: 数据库会话。
+
+    返回:
+        状态为 processing 的 DocumentResponse；无 file_path 时 400。
+    """
     from ..services.document_service import _process_document
 
     doc = await db.get(Document, doc_id)

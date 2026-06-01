@@ -1,4 +1,15 @@
-"""文件夹增量同步 — Phase 4.4"""
+"""文件夹增量同步服务（Phase 4.4）。
+
+职责：
+    监听本地文件夹，增量导入/更新 PDF/MD/TXT/图片到知识库，
+    文件变更时重置 chunk 并重新走完整入库流水线。
+
+在流水线中的位置：
+    定时任务 / API sync → scan_watch / scan_all_enabled_watches
+
+依赖服务：
+    - document_service._process_document / _process_image
+"""
 
 from __future__ import annotations
 
@@ -24,6 +35,8 @@ SYNC_EXTENSIONS = {".pdf", ".md", ".txt"} | IMAGE_EXTENSIONS
 
 @dataclass
 class SyncScanResult:
+    """单次文件夹扫描结果。"""
+
     watch_id: str
     kb_id: str
     scanned: int = 0
@@ -34,6 +47,15 @@ class SyncScanResult:
 
 
 def _iter_sync_files(folder: Path, *, recursive: bool) -> list[Path]:
+    """遍历目录下可同步的文件。
+
+    参数:
+        folder: 根目录
+        recursive: 是否递归子目录
+
+    返回:
+        文件 Path 列表
+    """
     if not folder.is_dir():
         return []
     pattern = "**/*" if recursive else "*"
@@ -45,6 +67,13 @@ def _iter_sync_files(folder: Path, *, recursive: bool) -> list[Path]:
 
 
 async def _reset_document_chunks(db: AsyncSession, doc: Document, kb_id: str) -> None:
+    """重新同步前清空文档 chunk 与 Chroma 向量。
+
+    参数:
+        db: 数据库会话
+        doc: 文档实体
+        kb_id: 知识库 ID
+    """
     from sqlalchemy import delete
 
     from ..core.chroma_client import get_collection
@@ -68,7 +97,15 @@ async def scan_watch(
     db: AsyncSession,
     watch: KbFolderWatch,
 ) -> SyncScanResult:
-    """扫描监听目录，新增或更新有变化的文件。"""
+    """扫描监听目录，新增或更新有变化的文件。
+
+    参数:
+        db: 数据库会话
+        watch: 文件夹监听配置
+
+    返回:
+        SyncScanResult 扫描统计
+    """
     from .document_service import _process_document, _process_image
 
     result = SyncScanResult(watch_id=watch.id, kb_id=watch.knowledge_base_id, errors=[])
@@ -157,6 +194,14 @@ async def scan_watch(
 
 
 async def scan_all_enabled_watches(db: AsyncSession) -> list[SyncScanResult]:
+    """扫描全部启用的文件夹监听。
+
+    参数:
+        db: 数据库会话
+
+    返回:
+        各 watch 的 SyncScanResult 列表
+    """
     rows = (
         (await db.execute(select(KbFolderWatch).where(KbFolderWatch.enabled.is_(True))))
         .scalars()
@@ -166,6 +211,15 @@ async def scan_all_enabled_watches(db: AsyncSession) -> list[SyncScanResult]:
 
 
 async def scan_kb_watch(db: AsyncSession, kb_id: str) -> list[SyncScanResult]:
+    """扫描指定知识库下启用的文件夹监听。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+
+    返回:
+        SyncScanResult 列表
+    """
     rows = (
         (
             await db.execute(

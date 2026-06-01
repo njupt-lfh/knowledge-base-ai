@@ -1,4 +1,15 @@
-"""知识库健康度聚合 — Phase 1 审计修复"""
+"""知识库健康度聚合服务（Phase 1 审计修复）。
+
+职责：
+    汇总冷知识、待处理 Gap、冲突、低质量 chunk 等指标，
+    输出 healthy / attention / critical 健康等级。
+
+在流水线中的位置：
+    API health 路由 → knowledge_base_health
+
+依赖服务：
+    - stats_service.cold_knowledge_count
+"""
 
 from __future__ import annotations
 
@@ -14,6 +25,15 @@ from .stats_service import cold_knowledge_count
 
 
 async def knowledge_base_health(db: AsyncSession, kb_id: str) -> dict:
+    """计算单知识库健康度快照。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID（支持 legacy 前缀解析）
+
+    返回:
+        含 level、pending_gaps、冷知识统计等的字典
+    """
     resolver = KbIdResolver(db)
     canonical = await resolver.resolve(kb_id)
     legacy = resolver.legacy_prefix(canonical)

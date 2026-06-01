@@ -1,4 +1,10 @@
+/**
+ * 分享对话页（独立布局，无侧栏）
+ * 通过 share token 加载历史并继续 SSE 对话
+ * 主要导出：默认 ShareChat 页面组件
+ */
 import { useEffect, useState, useRef } from 'react'
+
 import { useParams } from 'react-router-dom'
 import { message } from 'antd'
 import { DatabaseOutlined } from '@ant-design/icons'
@@ -12,6 +18,7 @@ import '../components/Chat/Chat.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080'
 
+/** 本地 SSE 流式聊天（与 chatApi.sendMessage 逻辑一致，分享页无 kb 上下文） */
 async function* streamChat(convId: string, msg: string) {
   const r = await fetch(`${API_BASE}/api/conversations/${convId}/chat`, {
     method: 'POST',
@@ -33,13 +40,14 @@ async function* streamChat(convId: string, msg: string) {
         try {
           yield JSON.parse(line.slice(6))
         } catch {
-          /* skip */
+          /* 跳过无效 SSE 行 */
         }
       }
     }
   }
 }
 
+/** 公开分享链接对话页 */
 export default function ShareChat() {
   const { token } = useParams<{ token: string }>()
   const [conv, setConv] = useState<Conversation | null>(null)
@@ -49,6 +57,7 @@ export default function ShareChat() {
   const [error, setError] = useState('')
   const assistantIdxRef = useRef(-1)
 
+  // 根据 URL token 加载会话与历史消息
   useEffect(() => {
     if (!token) return
     fetch(`${API_BASE}/api/share/${token}`)

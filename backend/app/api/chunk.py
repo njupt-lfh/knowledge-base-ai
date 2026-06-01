@@ -1,4 +1,8 @@
-"""知识块 API 路由"""
+"""知识块 API 路由。
+
+提供按文档列出 chunk、编辑内容、切换启用状态及知识库内检索测试端点，
+委托 `ChunkService` 同步向量库与 FTS。
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +19,15 @@ async def list_chunks(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """获取文档的知识块列表"""
+    """获取文档的知识块列表。
+
+    参数:
+        doc_id: 文档 ID。
+        db: 数据库会话。
+
+    返回:
+        ChunkResponse 列表。
+    """
     service = ChunkService(db)
     return await service.list_by_document(doc_id)
 
@@ -26,7 +38,16 @@ async def update_chunk(
     data: ChunkUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    """编辑知识块"""
+    """编辑知识块内容与/或启用状态。
+
+    参数:
+        chunk_id: 知识块 ID。
+        data: 可选 content、is_active 更新字段。
+        db: 数据库会话。
+
+    返回:
+        更新后的 ChunkResponse；不存在时 404。
+    """
     service = ChunkService(db)
     chunk = await service.update(chunk_id, data)
     if not chunk:
@@ -40,7 +61,16 @@ async def toggle_chunk_status(
     is_active: bool,
     db: AsyncSession = Depends(get_db),
 ):
-    """切换知识块启用/禁用状态"""
+    """切换知识块启用/禁用状态。
+
+    参数:
+        chunk_id: 知识块 ID。
+        is_active: 目标启用状态。
+        db: 数据库会话。
+
+    返回:
+        更新后的 ChunkResponse。
+    """
     service = ChunkService(db)
     return await service.toggle_status(chunk_id, is_active)
 
@@ -51,7 +81,16 @@ async def search_knowledge(
     data: SearchRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """知识检索测试"""
+    """知识检索测试（Hybrid 检索，不经过 LLM）。
+
+    参数:
+        kb_id: 知识库 ID。
+        data: 查询文本与 top_k。
+        db: 数据库会话。
+
+    返回:
+        SearchResponse 含排序后的检索项。
+    """
     service = ChunkService(db)
     items = await service.search(kb_id, data.query, data.top_k)
     return SearchResponse(items=items, query=data.query)

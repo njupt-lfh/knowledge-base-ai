@@ -1,4 +1,13 @@
-"""Phase 4.2 PDF 内嵌图入库 — mock 集成"""
+"""Phase 4.2 PDF 内嵌图入库 — mock 集成
+
+验证内容：
+  - mock 模式下 PDF 文本块与内嵌图块入库
+
+运行方式（在 backend 目录）:
+  pytest tests/test_phase4_pdf_images.py -v
+
+预期结果：全部用例通过。
+"""
 
 import os
 import uuid
@@ -13,6 +22,7 @@ os.environ["PDF_IMAGE_EXTRACTION_ENABLED"] = "true"
 
 
 def _pdf_with_text_and_image(path: Path) -> None:
+    """构造含标记文本与内嵌图的测试 PDF。"""
     doc = fitz.open()
     page = doc.new_page()
     page.insert_text((72, 72), "PDF phase42 unique marker XYZ123", fontsize=14)
@@ -24,6 +34,7 @@ def _pdf_with_text_and_image(path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_process_document_pdf_with_embedded_image(tmp_path: Path):
+    """验证文档/PDF 入库流程。"""
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
