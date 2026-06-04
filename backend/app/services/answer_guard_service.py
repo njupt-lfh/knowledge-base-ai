@@ -13,8 +13,6 @@
 
 from __future__ import annotations
 
-from ..core.config import settings
-
 REFUSAL_TEXT = "目前知识库中暂无相关信息，已为您记录到知识缺口队列，请稍后补充资料或联系管理员。"
 
 _POST_HOC_SYSTEM = """你是 RAG 回答质检员。仅根据「知识库内容」判断「助手回答」是否严格有据。
