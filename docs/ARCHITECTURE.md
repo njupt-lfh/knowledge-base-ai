@@ -1,5 +1,8 @@
 # AI 知识库管理平台 — 架构文档
 
+> **源码仓库**：[njupt-lfh/knowledge-base-ai](https://github.com/njupt-lfh/knowledge-base-ai)（开发分支 `dev`）  
+> 本文档描述与仓库实现一致的架构；变更流水线或目录结构时请同步更新此处与 [README.md](../README.md)。
+
 ## 1. 系统架构
 
 ```

@@ -2,6 +2,16 @@
 
 基于 RAG 技术构建的 AI 知识库管理平台，支持知识生产、治理、检索、对话与运营分析的完整闭环。
 
+## 源码仓库
+
+| 项 | 地址 |
+|----|------|
+| **GitHub** | https://github.com/njupt-lfh/knowledge-base-ai |
+| **默认开发分支** | `dev` |
+| **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml)（push / PR 触发） |
+
+克隆：`git clone https://github.com/njupt-lfh/knowledge-base-ai.git`
+
 ## 技术栈
 
 - **前端**: React 18 + TypeScript + Ant Design 6 + Vite
