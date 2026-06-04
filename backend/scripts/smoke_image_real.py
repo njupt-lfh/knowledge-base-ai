@@ -1,4 +1,13 @@
-"""真实 API 图片入库联调 — 用法: python scripts/smoke_image_real.py <图片路径> [kb_id]"""
+"""真实 API 图片联调
+
+验证内容：
+  - Vision caption + embed_image 全链路
+
+运行方式（在 backend 目录）:
+  python scripts/smoke_image_real.py <图片路径>
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -16,6 +25,7 @@ from app.core.config import settings  # noqa: E402
 
 
 async def main() -> int:
+    """脚本 CLI 入口。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("image_path", type=Path)
     parser.add_argument("kb_id", nargs="?", default="")

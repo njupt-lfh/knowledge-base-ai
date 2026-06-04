@@ -280,6 +280,7 @@ async def _run(args: argparse.Namespace) -> int:
         "config": {
             "top_k": args.top_k,
             "retrieval_only": args.retrieval_only,
+            "eval_mode": "retrieval_only" if args.retrieval_only else "full",
             "ragas_enabled": args.ragas,
             "llm_judge_enabled": args.llm_judge,
             "deepeval_enabled": args.deepeval,
@@ -298,6 +299,14 @@ async def _run(args: argparse.Namespace) -> int:
     REPORT_FILE.write_text(
         json.dumps(_json_safe(report), ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+    # 写入 eval_runs，供评测基线页「历史趋势」使用（与 JSON 基线同步）
+    async with async_session() as db:
+        from app.services.eval_run_service import persist_eval_report
+
+        run_id = await persist_eval_report(db, report, ci_phase="rag_eval")
+    print(f"  eval_run persisted -> {run_id}")
+
     print(f"\nPASS: report -> {REPORT_FILE}")
     print(f"  context_recall_mean: {agg.get('context_recall_mean')}")
     print(f"  faithfulness_mean:   {agg.get('faithfulness_mean')}")

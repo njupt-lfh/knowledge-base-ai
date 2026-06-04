@@ -81,7 +81,7 @@ async def search_knowledge(
     data: SearchRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """知识检索测试（Hybrid 检索，不经过 LLM）。
+    """知识检索测试（Hybrid 轻量路径：Vector + FTS + 词项重排，不加载 Cross-Encoder）。
 
     参数:
         kb_id: 知识库 ID。
@@ -92,5 +92,5 @@ async def search_knowledge(
         SearchResponse 含排序后的检索项。
     """
     service = ChunkService(db)
-    items = await service.search(kb_id, data.query, data.top_k)
+    items = await service.search(kb_id, data.query, data.top_k, lightweight=True)
     return SearchResponse(items=items, query=data.query)

@@ -1,26 +1,46 @@
 /**
- * 顶部品牌栏
- * 展示产品名、主题切换与版本号
- * 主要导出：默认 TopBar 组件
+ * 顶部导航栏（sticky）
+ * 全局入口（知识库/驾驶舱/评测）+ 主题切换 + 版本号
  */
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Typography } from 'antd'
-import { DatabaseOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, DashboardOutlined, ExperimentOutlined } from '@ant-design/icons'
 import ThemeToggle from '../common/ThemeToggle'
 import './TopBar.css'
 
 const { Text } = Typography
 
-/** 固定顶栏，全宽品牌区 */
+const navItems = [
+  { key: '/knowledge-bases', icon: DatabaseOutlined, label: '知识库管理' },
+  { key: '/stats', icon: DashboardOutlined, label: '数据驾驶舱' },
+  { key: '/eval', icon: ExperimentOutlined, label: '评测基线' },
+]
+
 export default function TopBar() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const activeKey = '/' + location.pathname.split('/')[1]
+
   return (
     <header className="topbar">
       <div className="topbar__brand">
         <DatabaseOutlined className="topbar__icon" />
-        <div>
-          <h1 className="topbar__title">KNOWLEDGE BASE AI</h1>
-          <Text className="topbar__subtitle">智能知识库管理平台</Text>
-        </div>
+        <span className="topbar__title">KNOWLEDGE BASE AI</span>
+        <Text className="topbar__subtitle">智能知识库管理平台</Text>
       </div>
+      <nav className="topbar__nav">
+        {navItems.map(({ key, icon: Icon, label }) => (
+          <button
+            key={key}
+            type="button"
+            className={`topbar__nav-item ${activeKey === key ? 'topbar__nav-item--active' : ''}`}
+            onClick={() => navigate(key)}
+          >
+            <Icon />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
       <div className="topbar__meta">
         <ThemeToggle />
         <span className="topbar__version">v1.0</span>

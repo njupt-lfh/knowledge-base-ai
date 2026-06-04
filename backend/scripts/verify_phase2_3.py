@@ -1,4 +1,15 @@
-"""Phase 2.3 验收：Embedding 缓存 + 历史压缩 + FTS 增量同步"""
+"""Phase 2.3 验收：Embedding 缓存 + 历史压缩 + FTS 增量同步。
+
+验证内容：
+  - embed_query 二次调用命中缓存
+  - compress_history 压缩比 >= 0.2
+  - chunks_fts 增量同步与 embed_documents 去重
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase2_3.py
+
+预期结果：打印 PASS 并退出码 0。
+"""
 
 from __future__ import annotations
 
@@ -11,6 +22,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """执行 Phase 2.3 验收：缓存、历史压缩与 FTS 增量。"""
     from app.core.database import async_session, init_db
     from app.services.embedding_service import EmbeddingService, get_embedding_cache
     from app.services.fts_service import FTS_TABLE
@@ -19,6 +31,7 @@ async def main() -> int:
 
     await init_db()
 
+    # 验证 Embedding LRU 缓存命中
     cache = get_embedding_cache()
     cache.clear()
     svc = EmbeddingService()
@@ -30,6 +43,7 @@ async def main() -> int:
         return 1
     print(f"  embedding cache hit_rate={stats['hit_rate']}")
 
+    # 验证长对话历史压缩节省 token
     long_hist = []
     for i in range(12):
         long_hist.append({"role": "user", "content": "问题内容" * 40 + str(i)})
@@ -49,6 +63,7 @@ async def main() -> int:
             return 1
     print(f"  fts index rows={count} (incremental sync on init_db)")
 
+    # 验证 embed_documents 对重复文本去重
     dup_vecs = svc.embed_documents(["a", "a", "b"])
     if dup_vecs[0] != dup_vecs[1]:
         print("FAIL: embed_documents dedupe")

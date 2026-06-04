@@ -1,7 +1,12 @@
-"""确保 SQLite 中存在全部 ORM 表（可独立运行，不依赖 uvicorn 启动）
+"""确保 SQLite ORM 表完整
 
-用法（在 backend 目录）:
+验证内容：
+  - init_db 补齐缺失表
+
+运行方式（在 backend 目录）:
   python scripts/ensure_db_schema.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """初始化数据库并校验全部 ORM 表是否齐全。"""
     from app.core.database import existing_table_names, expected_table_names, init_db, verify_schema
 
     before = await existing_table_names()
@@ -26,6 +32,7 @@ async def main() -> int:
     expected = expected_table_names()
     missing = await verify_schema()
 
+    # 打印期望表与实际表对比
     print(f"Expected ({len(expected)}): {', '.join(sorted(expected))}")
     print(f"After ({len(after)}): {', '.join(sorted(after))}")
 

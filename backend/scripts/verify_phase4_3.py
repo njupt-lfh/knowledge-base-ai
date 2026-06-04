@@ -1,4 +1,13 @@
-"""Phase 4.3 SIM-RAG 验收"""
+"""Phase 4.3 SIM-RAG 验收
+
+验证内容：
+  - 子查询分解、多路检索合并
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase4_3.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -19,6 +28,7 @@ settings.SIM_RAG_ENABLED = True
 
 
 async def main() -> int:
+    """脚本 CLI 入口。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document
@@ -76,6 +86,7 @@ async def main() -> int:
     orch = AgentOrchestrator()
 
     async def fake_retrieve(db, kb_id, query, *, route, top_k):
+        """SIM-RAG 验收用的 mock 检索函数。"""
         if "A" in query:
             src = [
                 {

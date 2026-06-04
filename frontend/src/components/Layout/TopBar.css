@@ -64,3 +64,42 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
+
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.topbar__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.topbar__nav-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.topbar__nav-item--active {
+  color: var(--accent-primary);
+  background: rgba(0, 212, 255, 0.1);
+  font-weight: 600;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+}

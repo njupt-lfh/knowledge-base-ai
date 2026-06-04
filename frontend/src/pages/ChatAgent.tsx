@@ -283,6 +283,7 @@ export default function ChatAgent() {
   }
 
   return (
+    <div className="chat-page chat-page--agent">
     <HudPanel className="chat-page__panel">
       <div className="kb-detail__header">
         <div>
@@ -376,15 +377,17 @@ export default function ChatAgent() {
         </div>
       )}
 
-      <ChatWindow
-        messages={messages}
-        input={input}
-        sending={sending}
-        kbId={kbId}
-        onInputChange={setInput}
-        onSend={handleSend}
-        onFeedback={handleFeedback}
-      />
+      <div className="chat-page__body">
+        <ChatWindow
+          messages={messages}
+          input={input}
+          sending={sending}
+          kbId={kbId}
+          onInputChange={setInput}
+          onSend={handleSend}
+          onFeedback={handleFeedback}
+        />
+      </div>
 
       <Modal
         title="提炼为知识"
@@ -423,5 +426,6 @@ export default function ChatAgent() {
         )}
       </Modal>
     </HudPanel>
+    </div>
   )
 }

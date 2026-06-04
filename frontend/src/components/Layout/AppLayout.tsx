@@ -1,45 +1,37 @@
 /**
- * 应用主布局
- * 顶栏 + 侧栏 + 带路由过渡动画的内容区
- * 主要导出：默认 AppLayout 组件
+ * 应用主布局（v2）
+ * 顶部导航栏 + 内容区（无全局侧栏）
  */
-import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import GridBackground from '../common/GridBackground'
 import TopBar from './TopBar'
-import SideNav from './SideNav'
-import StatusIndicator from './StatusIndicator'
 import './AppLayout.css'
 
-/** 主应用壳层，子路由通过 Outlet 渲染 */
+/** 知识库详情/对话等子路由：全宽工作区，由 KBLayout 控制边距 */
+function isKbWorkspacePath(pathname: string): boolean {
+  return /^\/knowledge-bases\/[^/]+/.test(pathname)
+}
+
 export default function AppLayout() {
-  const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
+  const kbWorkspace = isKbWorkspacePath(location.pathname)
 
   return (
     <div className="app-layout">
       <GridBackground />
       <TopBar />
-      <div className="app-layout__body">
-        <SideNav collapsed={collapsed} />
-        <main className="app-layout__content">
-          <div className="app-layout__content-header">
-            <button
-              type="button"
-              className="app-layout__collapse-btn"
-              onClick={() => setCollapsed(!collapsed)}
-              aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
-            >
-              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            </button>
-            <StatusIndicator />
-          </div>
-          <div className="app-layout__page">
+      <main className="app-layout__content">
+        <div className="app-layout__page">
+          {kbWorkspace ? (
+            <div key={location.pathname} className="app-layout__viewport">
+              <Outlet />
+            </div>
+          ) : (
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
+                className="app-layout__shell"
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
@@ -48,9 +40,9 @@ export default function AppLayout() {
                 <Outlet />
               </motion.div>
             </AnimatePresence>
-          </div>
-        </main>
-      </div>
+          )}
+        </div>
+      </main>
     </div>
   )
 }

@@ -1,5 +1,13 @@
-#!/usr/bin/env python3
-"""重新处理卡在 processing 状态的文档。"""
+"""重新处理卡在 processing 状态的文档。
+
+验证内容：
+  - 调用 recover_stuck_documents 扫描并重试超时文档
+
+运行方式（在 backend 目录）:
+  python scripts/reprocess_stuck_documents.py
+
+预期结果：打印 attempted recover 数量并退出码 0。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +20,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 
 async def main() -> int:
+    """初始化数据库并尝试恢复所有卡在 processing 的文档。"""
     from app.core.database import init_db
     from app.services.document_service import recover_stuck_documents
 

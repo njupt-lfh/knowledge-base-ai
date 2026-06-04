@@ -1,4 +1,13 @@
-"""从 SQLite 为多个知识库生成评测 QA（每库 20 条）并合并写入 eval_qa_dataset.json"""
+"""生成评测 QA 数据集
+
+验证内容：
+  - 从 SQLite 采样写入 eval_qa_dataset.json
+
+运行方式（在 backend 目录）:
+  python scripts/build_eval_dataset.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -22,6 +31,7 @@ SAMPLES_PER_KB = 20
 
 
 def _first_sentence(text: str, max_len: int = 120) -> str:
+    """从文本中提取首句（截断至 max_len）。"""
     t = re.sub(r"\s+", " ", text.strip())
     for sep in ("。", "！", "？", ".", "\n"):
         if sep in t:
@@ -31,6 +41,7 @@ def _first_sentence(text: str, max_len: int = 120) -> str:
 
 
 def _make_samples(kb_id: str, kb_name: str, chunks: list[Chunk]) -> list[dict]:
+    """为单个知识库生成 20 条评测 QA 样本。"""
     active = [c for c in chunks if c.is_active and len(c.content.strip()) > 40]
     if len(active) < 20:
         return []
@@ -39,6 +50,7 @@ def _make_samples(kb_id: str, kb_name: str, chunks: list[Chunk]) -> list[dict]:
     idx = 0
 
     def add(q_type: str, question: str, ground_truth: str, chunk_ids: list[str]) -> None:
+        """add 函数。"""
         nonlocal idx
         idx += 1
         samples.append(
@@ -100,6 +112,7 @@ def _make_samples(kb_id: str, kb_name: str, chunks: list[Chunk]) -> list[dict]:
 
 
 async def main() -> int:
+    """从数据库采样并写入 eval_qa_dataset.json。"""
     all_samples: list[dict] = []
     kb_meta: list[dict] = []
 

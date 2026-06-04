@@ -5,7 +5,7 @@
  */
 import { useEffect, useState, useCallback } from 'react'
 
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Button,
@@ -13,7 +13,6 @@ import {
   Space,
   Upload,
   message,
-  Tabs,
   Input,
   Switch,
   Popconfirm,
@@ -31,10 +30,6 @@ import {
   InboxOutlined,
   EyeOutlined,
   TagsOutlined,
-  MessageOutlined,
-  UnorderedListOutlined,
-  ApartmentOutlined,
-  SyncOutlined,
 } from '@ant-design/icons'
 import GovernancePanel from '../components/Governance/GovernancePanel'
 import ConflictsPanel from '../components/Conflicts/ConflictsPanel'
@@ -83,7 +78,13 @@ export default function KnowledgeDetail() {
   const [editChunkContent, setEditChunkContent] = useState('')
   const [uploadFlash, setUploadFlash] = useState(false)
   const [coldStats, setColdStats] = useState<ColdKnowledgeStats | null>(null)
-  const [activeTab, setActiveTab] = useState('documents')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') || 'documents'
+
+  // 侧栏切换时更新 URL param
+  const handleTabChange = (tab: string) => {
+    setSearchParams({ tab })
+  }
   const [healthTick, setHealthTick] = useState(0)
   const [graphData, setGraphData] = useState<KnowledgeGraphSnapshot | null>(null)
   const [graphLoading, setGraphLoading] = useState(false)
@@ -330,14 +331,17 @@ export default function KnowledgeDetail() {
     if (!query.trim() || !kbId) return
     setSearchQuery(query)
     setSearching(true)
+    setSearchResults([])
     try {
       const res = await request.post<{ items: SearchResultItem[] }>(
         `/api/knowledge-bases/${kbId}/search`,
         { query, top_k: 5 },
+        { timeout: 90000 },
       )
-      setSearchResults(res.data.items)
+      setSearchResults(res.data?.items ?? [])
     } catch {
-      message.error('检索失败')
+      setSearchResults([])
+      message.error('检索失败，请确认后端已重启且 Embedding 服务可用')
     }
     setSearching(false)
   }
@@ -426,387 +430,334 @@ export default function KnowledgeDetail() {
   ]
 
   return (
-    <>
+    <div className={`kb-detail${activeTab === 'graph' ? ' kb-detail--graph' : ''}`}>
       <div className="kb-detail__header">
-        <div>
-          <h2 className="page-title">{kb?.name || '知识库详情'}</h2>
-          <p className="page-subtitle">{kb?.description || '文档管理与检索测试'}</p>
-        </div>
-        <Space wrap align="center">
-          {coldStats && (
-            <ColdKnowledgeBadge
-              data={coldStats}
-              compact
-              onClick={() => setActiveTab('governance')}
-            />
-          )}
-          <Button
-            type="primary"
-            icon={<MessageOutlined />}
-            onClick={() => navigate(`/knowledge-bases/${kbId}/chat`)}
-          >
-            AI 对话
-          </Button>
-          <Button
-            icon={<UnorderedListOutlined />}
-            onClick={() => navigate(`/knowledge-bases/${kbId}/gaps`)}
-          >
-            补全任务
-          </Button>
-          <Button onClick={() => navigate('/knowledge-bases')}>返回列表</Button>
-        </Space>
+        <h2 className="page-title kb-detail__headline" title={`${kb?.name || '知识库详情'}（${kb?.description?.trim() || '文档管理与检索测试'}）`}>
+          <span className="kb-detail__name">{kb?.name || '知识库详情'}</span>
+          <span className="kb-detail__desc">
+            （{kb?.description?.trim() || '文档管理与检索测试'}）
+          </span>
+        </h2>
+        {coldStats && (
+          <ColdKnowledgeBadge
+            data={coldStats}
+            compact
+            onClick={() => handleTabChange('governance')}
+          />
+        )}
       </div>
 
       <HudPanel className="kb-detail__panel">
-        {kbId && (
+        {kbId && activeTab !== 'graph' && (
           <KnowledgeHealthPanel
             kbId={kbId}
             refreshToken={healthTick}
             onNavigate={(tab) => {
               if (tab === 'gaps') navigate(`/knowledge-bases/${kbId}/gaps`)
-              else setActiveTab(tab)
+              else handleTabChange(tab)
             }}
           />
         )}
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          destroyOnHidden
-          className="kb-detail__tabs"
-          items={[
-            {
-              key: 'documents',
-              label: '文档管理',
-              children: (
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                  <Space wrap>
-                    <Dragger
-                      accept=".pdf,.md,.txt,.png,.jpg,.jpeg,.webp,.gif"
-                      showUploadList={false}
-                      className={`upload-dragger${uploadFlash ? ' upload-dragger--flash' : ''}`}
-                      beforeUpload={(file) => {
-                        handleUpload(file)
-                        return false
-                      }}
-                      style={{ width: 300, padding: 12 }}
-                    >
-                      <p className="ant-upload-drag-icon">
-                        <InboxOutlined />
-                      </p>
-                      <p className="ant-upload-text">拖拽文件或点击上传</p>
-                      <p className="ant-upload-hint">
-                        PDF / Markdown / TXT / 图片（PNG、JPG、WEBP）
-                      </p>
-                    </Dragger>
-                    <Button icon={<PlusOutlined />} onClick={() => setManualModal(true)}>
-                      手动录入
+        <div
+          className={`kb-detail__tab-content${activeTab === 'graph' ? ' kb-detail__tab-content--graph' : ''}`}
+        >
+          {activeTab === 'documents' && (
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Space wrap>
+                <Dragger
+                  accept=".pdf,.md,.txt,.png,.jpg,.jpeg,.webp,.gif"
+                  showUploadList={false}
+                  className={`upload-dragger${uploadFlash ? ' upload-dragger--flash' : ''}`}
+                  beforeUpload={(file) => {
+                    handleUpload(file)
+                    return false
+                  }}
+                  style={{ width: 300, padding: 12 }}
+                >
+                  <p className="ant-upload-drag-icon">
+                    <InboxOutlined />
+                  </p>
+                  <p className="ant-upload-text">拖拽文件或点击上传</p>
+                  <p className="ant-upload-hint">PDF / Markdown / TXT / 图片（PNG、JPG、WEBP）</p>
+                </Dragger>
+                <Button icon={<PlusOutlined />} onClick={() => setManualModal(true)}>
+                  手动录入
+                </Button>
+                <Select
+                  allowClear
+                  placeholder="按标签筛选"
+                  style={{ width: 160 }}
+                  value={tagFilter}
+                  onChange={(v) => setTagFilter(v || null)}
+                  options={tags.map((t) => ({ value: t.name, label: t.name }))}
+                />
+                {selectedRowKeys.length > 0 && (
+                  <Space>
+                    <Button size="small" onClick={() => handleBatchToggle(true)}>
+                      批量启用
                     </Button>
-                    <Select
-                      allowClear
-                      placeholder="按标签筛选"
-                      style={{ width: 160 }}
-                      value={tagFilter}
-                      onChange={(v) => setTagFilter(v || null)}
-                      options={tags.map((t) => ({ value: t.name, label: t.name }))}
-                    />
-                    {selectedRowKeys.length > 0 && (
-                      <Space>
-                        <Button size="small" onClick={() => handleBatchToggle(true)}>
-                          批量启用
-                        </Button>
-                        <Button size="small" onClick={() => handleBatchToggle(false)}>
-                          批量禁用
-                        </Button>
-                        <Popconfirm
-                          title={`确定删除 ${selectedRowKeys.length} 个文档?`}
-                          onConfirm={handleBatchDelete}
-                        >
-                          <Button size="small" danger>
-                            批量删除
-                          </Button>
-                        </Popconfirm>
-                        <Typography.Text type="secondary">
-                          已选 {selectedRowKeys.length} 项
-                        </Typography.Text>
-                      </Space>
-                    )}
+                    <Button size="small" onClick={() => handleBatchToggle(false)}>
+                      批量禁用
+                    </Button>
+                    <Popconfirm
+                      title={`确定删除 ${selectedRowKeys.length} 个文档?`}
+                      onConfirm={handleBatchDelete}
+                    >
+                      <Button size="small" danger>
+                        批量删除
+                      </Button>
+                    </Popconfirm>
+                    <Typography.Text type="secondary">
+                      已选 {selectedRowKeys.length} 项
+                    </Typography.Text>
                   </Space>
-                  <Table
-                    rowKey="id"
-                    columns={columns}
-                    loading={loading}
-                    rowClassName={(record) =>
-                      record.status === 'processing' ? 'doc-row-processing' : ''
-                    }
-                    rowSelection={{
-                      selectedRowKeys,
-                      onChange: (keys) => setSelectedRowKeys(keys),
-                    }}
-                    dataSource={
-                      tagFilter
-                        ? docs.filter((d) => (docTags[d.id] || []).includes(tagFilter))
-                        : docs
-                    }
+                )}
+              </Space>
+              <Table
+                rowKey="id"
+                columns={columns}
+                loading={loading}
+                rowClassName={(record) =>
+                  record.status === 'processing' ? 'doc-row-processing' : ''
+                }
+                rowSelection={{
+                  selectedRowKeys,
+                  onChange: (keys) => setSelectedRowKeys(keys),
+                }}
+                dataSource={
+                  tagFilter ? docs.filter((d) => (docTags[d.id] || []).includes(tagFilter)) : docs
+                }
+              />
+
+              <Modal
+                title="手动录入知识"
+                open={manualModal}
+                onCancel={() => setManualModal(false)}
+                onOk={handleManualCreate}
+                okText="提交"
+                cancelText="取消"
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Input
+                    placeholder="标题"
+                    value={manualTitle}
+                    onChange={(e) => setManualTitle(e.target.value)}
                   />
-
-                  <Modal
-                    title="手动录入知识"
-                    open={manualModal}
-                    onCancel={() => setManualModal(false)}
-                    onOk={handleManualCreate}
-                    okText="提交"
-                    cancelText="取消"
-                  >
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <Input
-                        placeholder="标题"
-                        value={manualTitle}
-                        onChange={(e) => setManualTitle(e.target.value)}
-                      />
-                      <Input.TextArea
-                        rows={8}
-                        placeholder="知识内容"
-                        value={manualContent}
-                        onChange={(e) => setManualContent(e.target.value)}
-                      />
-                    </Space>
-                  </Modal>
-
-                  <Modal
-                    title="编辑标签"
-                    open={tagModal}
-                    onCancel={() => setTagModal(false)}
-                    onOk={saveDocTags}
-                    okText="保存"
-                  >
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <Select
-                        mode="multiple"
-                        style={{ width: '100%' }}
-                        placeholder="选择标签"
-                        value={tagDocTags}
-                        onChange={(v) => setTagDocTags(v)}
-                        options={tags.map((t) => ({ value: t.id, label: t.name }))}
-                      />
-                      <Space.Compact style={{ width: '100%' }}>
-                        <Input
-                          placeholder="新建标签"
-                          value={newTagName}
-                          onChange={(e) => setNewTagName(e.target.value)}
-                          onPressEnter={createTag}
-                        />
-                        <Button onClick={createTag}>添加</Button>
-                      </Space.Compact>
-                    </Space>
-                  </Modal>
-
-                  <Drawer
-                    title={`知识块: ${chunksDocName}`}
-                    open={chunksDrawer}
-                    onClose={() => setChunksDrawer(false)}
-                    width={700}
-                  >
-                    <List
-                      dataSource={chunks}
-                      renderItem={(chunk) => (
-                        <List.Item
-                          actions={[
-                            <Switch
-                              size="small"
-                              checked={chunk.is_active}
-                              onChange={() => handleChunkToggle(chunk)}
-                            />,
-                            <Button
-                              size="small"
-                              onClick={() => {
-                                setEditingChunk(chunk)
-                                setEditChunkContent(chunk.content)
-                              }}
-                            >
-                              编辑
-                            </Button>,
-                          ]}
-                        >
-                          <List.Item.Meta
-                            title={
-                              <Space>
-                                <Tag color="blue">#{chunk.chunk_index}</Tag>
-                                <Typography.Text type="secondary">
-                                  {chunk.char_count} 字符 | 命中 {chunk.hit_count} 次
-                                </Typography.Text>
-                              </Space>
-                            }
-                            description={
-                              editingChunk?.id === chunk.id ? (
-                                <Space direction="vertical" style={{ width: '100%' }}>
-                                  <Input.TextArea
-                                    rows={4}
-                                    value={editChunkContent}
-                                    onChange={(e) => setEditChunkContent(e.target.value)}
-                                  />
-                                  <Space>
-                                    <Button
-                                      size="small"
-                                      type="primary"
-                                      onClick={async () => {
-                                        await request.put(`/api/chunks/${chunk.id}`, {
-                                          content: editChunkContent,
-                                        })
-                                        setChunks((prev) =>
-                                          prev.map((c) =>
-                                            c.id === chunk.id
-                                              ? {
-                                                  ...c,
-                                                  content: editChunkContent,
-                                                  char_count: editChunkContent.length,
-                                                }
-                                              : c,
-                                          ),
-                                        )
-                                        setEditingChunk(null)
-                                        message.success('已更新')
-                                      }}
-                                    >
-                                      保存
-                                    </Button>
-                                    <Button size="small" onClick={() => setEditingChunk(null)}>
-                                      取消
-                                    </Button>
-                                  </Space>
-                                </Space>
-                              ) : (
-                                <Typography.Paragraph
-                                  ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
-                                  style={{ whiteSpace: 'pre-wrap' }}
-                                >
-                                  {chunk.content}
-                                </Typography.Paragraph>
-                              )
-                            }
-                          />
-                        </List.Item>
-                      )}
-                    />
-                  </Drawer>
+                  <Input.TextArea
+                    rows={8}
+                    placeholder="知识内容"
+                    value={manualContent}
+                    onChange={(e) => setManualContent(e.target.value)}
+                  />
                 </Space>
-              ),
-            },
-            {
-              key: 'conflicts',
-              label: '入库冲突',
-              children: kbId ? <ConflictsPanel kbId={kbId} /> : null,
-            },
-            {
-              key: 'governance',
-              label: '治理建议',
-              children: kbId ? (
-                <GovernancePanel
-                  kbId={kbId}
-                  onApplied={() => {
-                    fetchColdStats()
-                    setHealthTick((t) => t + 1)
-                  }}
-                />
-              ) : null,
-            },
-            {
-              key: 'graph',
-              label: (
-                <>
-                  <ApartmentOutlined /> 知识图谱
-                </>
-              ),
-              children:
-                kbId && activeTab === 'graph' ? (
-                  graphLoading ? (
-                    <Typography.Text type="secondary">加载图谱中…</Typography.Text>
-                  ) : (
-                    <KnowledgeGraphChart
-                      nodes={graphData?.nodes ?? []}
-                      edges={graphData?.edges ?? []}
-                      relationCount={graphData?.relation_count ?? 0}
-                    />
-                  )
-                ) : null,
-            },
-            {
-              key: 'sync',
-              label: (
-                <>
-                  <SyncOutlined /> 文件夹同步
-                </>
-              ),
-              children: kbId ? (
-                <FolderSyncPanel
-                  kbId={kbId}
-                  onSynced={() => {
-                    fetchDocs()
-                    setHealthTick((t) => t + 1)
-                  }}
-                />
-              ) : null,
-            },
-            {
-              key: 'search',
-              label: '检索测试',
-              children: (
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                  <Input.Search
-                    placeholder="输入查询文本..."
-                    enterButton={
-                      <>
-                        <SearchOutlined /> 检索
-                      </>
-                    }
-                    onSearch={handleSearch}
-                    loading={searching}
-                    size="large"
+              </Modal>
+
+              <Modal
+                title="编辑标签"
+                open={tagModal}
+                onCancel={() => setTagModal(false)}
+                onOk={saveDocTags}
+                okText="保存"
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Select
+                    mode="multiple"
+                    style={{ width: '100%' }}
+                    placeholder="选择标签"
+                    value={tagDocTags}
+                    onChange={(v) => setTagDocTags(v)}
+                    options={tags.map((t) => ({ value: t.id, label: t.name }))}
                   />
-                  {activeTab === 'search' && searchResults.length > 0 && (
-                    <SearchRadarChart
-                      scores={searchResults.map((r) => Number(r.score))}
-                      query={searchQuery}
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input
+                      placeholder="新建标签"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      onPressEnter={createTag}
                     />
-                  )}
-                  {searchResults.length > 0 && (
-                    <div>
-                      {searchResults.map((item, i) => (
-                        <motion.div
-                          key={item.chunk_id}
-                          className="search-result-item animate-fade-in-up"
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.08, duration: 0.35 }}
+                    <Button onClick={createTag}>添加</Button>
+                  </Space.Compact>
+                </Space>
+              </Modal>
+
+              <Drawer
+                title={`知识块: ${chunksDocName}`}
+                open={chunksDrawer}
+                onClose={() => setChunksDrawer(false)}
+                width={700}
+              >
+                <List
+                  dataSource={chunks}
+                  renderItem={(chunk) => (
+                    <List.Item
+                      actions={[
+                        <Switch
+                          size="small"
+                          checked={chunk.is_active}
+                          onChange={() => handleChunkToggle(chunk)}
+                        />,
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setEditingChunk(chunk)
+                            setEditChunkContent(chunk.content)
+                          }}
                         >
-                          <Space style={{ marginBottom: 8 }}>
-                            <Tag color="cyan" className="search-result-score">
-                              相似度: {item.score}
-                            </Tag>
-                            <Tag>块 #{item.chunk_index}</Tag>
+                          编辑
+                        </Button>,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={
+                          <Space>
+                            <Tag color="blue">#{chunk.chunk_index}</Tag>
+                            <Typography.Text type="secondary">
+                              {chunk.char_count} 字符 | 命中 {chunk.hit_count} 次
+                            </Typography.Text>
                           </Space>
-                          <Typography.Paragraph
-                            ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
-                            style={{
-                              whiteSpace: 'pre-wrap',
-                              margin: 0,
-                              color: 'var(--text-secondary)',
-                            }}
-                          >
-                            {item.content}
-                          </Typography.Paragraph>
-                        </motion.div>
-                      ))}
-                    </div>
+                        }
+                        description={
+                          editingChunk?.id === chunk.id ? (
+                            <Space direction="vertical" style={{ width: '100%' }}>
+                              <Input.TextArea
+                                rows={4}
+                                value={editChunkContent}
+                                onChange={(e) => setEditChunkContent(e.target.value)}
+                              />
+                              <Space>
+                                <Button
+                                  size="small"
+                                  type="primary"
+                                  onClick={async () => {
+                                    await request.put(`/api/chunks/${chunk.id}`, {
+                                      content: editChunkContent,
+                                    })
+                                    setChunks((prev) =>
+                                      prev.map((c) =>
+                                        c.id === chunk.id
+                                          ? {
+                                              ...c,
+                                              content: editChunkContent,
+                                              char_count: editChunkContent.length,
+                                            }
+                                          : c,
+                                      ),
+                                    )
+                                    setEditingChunk(null)
+                                    message.success('已更新')
+                                  }}
+                                >
+                                  保存
+                                </Button>
+                                <Button size="small" onClick={() => setEditingChunk(null)}>
+                                  取消
+                                </Button>
+                              </Space>
+                            </Space>
+                          ) : (
+                            <Typography.Paragraph
+                              ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
+                              style={{ whiteSpace: 'pre-wrap' }}
+                            >
+                              {chunk.content}
+                            </Typography.Paragraph>
+                          )
+                        }
+                      />
+                    </List.Item>
                   )}
-                  {searchResults.length === 0 && searchQuery && !searching && (
-                    <Typography.Text type="secondary">未找到匹配的知识内容</Typography.Text>
-                  )}
-                </Space>
-              ),
-            },
-          ]}
-        />
+                />
+              </Drawer>
+            </Space>
+          )}
+          {activeTab === 'conflicts' && kbId && <ConflictsPanel kbId={kbId} />}
+          {activeTab === 'governance' && kbId && (
+            <GovernancePanel
+              kbId={kbId}
+              onApplied={() => {
+                fetchColdStats()
+                setHealthTick((t) => t + 1)
+              }}
+            />
+          )}
+          {activeTab === 'graph' && (
+            <div className="kb-detail__graph-wrap">
+              {graphLoading ? (
+                <Typography.Text type="secondary">加载图谱中…</Typography.Text>
+              ) : (
+                <KnowledgeGraphChart
+                  nodes={graphData?.nodes ?? []}
+                  edges={graphData?.edges ?? []}
+                  relationCount={graphData?.relation_count ?? 0}
+                />
+              )}
+            </div>
+          )}
+          {activeTab === 'sync' && kbId && (
+            <FolderSyncPanel
+              kbId={kbId}
+              onSynced={() => {
+                fetchDocs()
+                setHealthTick((t) => t + 1)
+              }}
+            />
+          )}
+          {activeTab === 'search' && (
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Input.Search
+                placeholder="输入查询文本..."
+                enterButton={
+                  <>
+                    <SearchOutlined /> 检索
+                  </>
+                }
+                onSearch={handleSearch}
+                loading={searching}
+                size="large"
+              />
+              {activeTab === 'search' && searchResults.length > 0 && (
+                <SearchRadarChart
+                  scores={searchResults.map((r) => Number(r.score))}
+                  query={searchQuery}
+                />
+              )}
+              {searchResults.length > 0 && (
+                <div>
+                  {searchResults.map((item, i) => (
+                    <motion.div
+                      key={item.chunk_id}
+                      className="search-result-item animate-fade-in-up"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.08, duration: 0.35 }}
+                    >
+                      <Space style={{ marginBottom: 8 }}>
+                        <Tag color="cyan" className="search-result-score">
+                          相似度: {item.score}
+                        </Tag>
+                        <Tag>块 #{item.chunk_index}</Tag>
+                      </Space>
+                      <Typography.Paragraph
+                        ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
+                        style={{
+                          whiteSpace: 'pre-wrap',
+                          margin: 0,
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        {item.content}
+                      </Typography.Paragraph>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+              {searchResults.length === 0 && searchQuery && !searching && (
+                <Typography.Text type="secondary">未找到匹配的知识内容</Typography.Text>
+              )}
+            </Space>
+          )}
+        </div>
       </HudPanel>
-    </>
+    </div>
   )
 }

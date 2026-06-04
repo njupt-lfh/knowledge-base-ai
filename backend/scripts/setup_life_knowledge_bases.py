@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""清理测试知识库，保留 AI 技术文档库，并创建生活主题知识库。"""
+"""初始化生活主题知识库
+
+验证内容：
+  - 清理旧库并创建 9 个主题库
+
+运行方式（在 backend 目录）:
+  python scripts/setup_life_knowledge_bases.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -71,6 +80,7 @@ THEMED_KBS = [
 
 
 def request(method: str, path: str, body: dict | None = None) -> dict | None:
+    """HTTP 请求封装，失败时抛出 RuntimeError。"""
     url = f"{BASE_URL}{path}"
     data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     req = urllib.request.Request(
@@ -91,11 +101,13 @@ def request(method: str, path: str, body: dict | None = None) -> dict | None:
 
 
 def list_kbs() -> list[dict]:
+    """分页获取知识库列表。"""
     data = request("GET", "/api/knowledge-bases?page_size=100")
     return data["items"] if data else []
 
 
 def main() -> int:
+    """脚本 CLI 入口。"""
     print(f"API: {BASE_URL}")
     kbs = list_kbs()
     print(f"当前知识库数量: {len(kbs)}")

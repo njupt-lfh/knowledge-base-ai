@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -24,10 +26,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.chroma_client import get_collection
 from ..models.chunk import Chunk
 from ..models.chunk_quality import ChunkQuality
+from ..models.governance_suggestion import (
+    GovernanceAuditLog,
+    GovernanceSuggestion,
+)
 from ..services.chunk_service import ChunkService
 from ..services.embedding_service import EmbeddingService
 from ..services.quality_service import QualityService
 from ..services.stats_service import cold_knowledge_count
+
+logger = logging.getLogger(__name__)
 
 COLD_DAYS = 90
 DUPLICATE_SCAN_LIMIT = 40
@@ -311,6 +319,304 @@ class GovernanceService:
                 raise ValueError(f"unknown action: {action}")
 
         return {"action": action, "applied": applied, "details": details}
+
+    # ── Phase 3 治理闭环：持久化 + 状态机 + 审计 + Chroma/FTS 同步 ──
+
+    async def persist_suggestions(
+        self,
+        kb_id: str,
+        suggestions: list[dict],
+        *,
+        scan_id: str = "",
+    ) -> int:
+        """将扫描结果持久化到 governance_suggestions 表（去重：同 type+chunk_ids 的 pending 跳过）。
+
+        参数:
+            kb_id: 知识库 ID
+            suggestions: scan_suggestions 的输出
+            scan_id: 本次扫描 ID
+
+        返回:
+            新写入条数
+        """
+        count = 0
+        for s in suggestions:
+            cids = s.get("chunk_ids", [])
+            cids_json = json.dumps(sorted(cids))
+            existing = await self.db.execute(
+                select(GovernanceSuggestion).where(
+                    GovernanceSuggestion.kb_id == kb_id,
+                    GovernanceSuggestion.suggestion_type == s["type"],
+                    GovernanceSuggestion.chunk_ids == cids_json,
+                    GovernanceSuggestion.status == "pending",
+                )
+            )
+            if existing.scalar_one_or_none():
+                continue
+            row = GovernanceSuggestion(
+                kb_id=kb_id,
+                suggestion_type=s["type"],
+                title=s.get("title", ""),
+                description=s.get("description", ""),
+                chunk_ids=cids_json,
+                recommended_action=s.get("recommended_action", ""),
+                severity=s.get("severity", "warning"),
+                status="pending",
+                scan_id=scan_id or None,
+                content_preview=s.get("content_preview", ""),
+            )
+            self.db.add(row)
+            count += 1
+        if count > 0:
+            await self.db.commit()
+        return count
+
+    async def list_suggestions(
+        self,
+        kb_id: str,
+        *,
+        status: str | None = None,
+        suggestion_type: str | None = None,
+        limit: int = 50,
+    ) -> list[GovernanceSuggestion]:
+        """列出治理建议。
+
+        参数:
+            kb_id: 知识库 ID
+            status: 状态过滤
+            suggestion_type: 类型过滤
+            limit: 最大条数
+
+        返回:
+            GovernanceSuggestion 列表
+        """
+        q = select(GovernanceSuggestion).where(
+            GovernanceSuggestion.kb_id == kb_id
+        )
+        if status:
+            q = q.where(GovernanceSuggestion.status == status)
+        if suggestion_type:
+            q = q.where(GovernanceSuggestion.suggestion_type == suggestion_type)
+        q = q.order_by(GovernanceSuggestion.created_at.desc()).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all())
+
+    async def _write_audit(
+        self,
+        kb_id: str,
+        suggestion_id: str,
+        action: str,
+        *,
+        operator: str = "",
+        chunk_ids: str = "",
+        detail: str = "",
+    ) -> None:
+        """写入治理审计日志。"""
+        self.db.add(
+            GovernanceAuditLog(
+                kb_id=kb_id,
+                suggestion_id=suggestion_id,
+                action=action,
+                operator=operator or None,
+                chunk_ids=chunk_ids or None,
+                detail=detail or None,
+            )
+        )
+        await self.db.commit()
+
+    async def approve_suggestion(
+        self,
+        suggestion_id: str,
+        *,
+        operator: str = "",
+    ) -> GovernanceSuggestion | None:
+        """批准治理建议（pending → approved）。"""
+        row = await self.db.get(GovernanceSuggestion, suggestion_id)
+        if not row or row.status != "pending":
+            return None
+        row.status = "approved"
+        row.approved_by = operator or None
+        row.approved_at = datetime.utcnow()
+        await self.db.commit()
+        await self._write_audit(
+            row.kb_id, suggestion_id, "approved",
+            operator=operator, chunk_ids=row.chunk_ids,
+            detail=f"批准治理建议: {row.title}",
+        )
+        return row
+
+    async def dismiss_suggestion(
+        self,
+        suggestion_id: str,
+        *,
+        operator: str = "",
+        reason: str = "",
+    ) -> GovernanceSuggestion | None:
+        """驳回治理建议（pending → dismissed）。"""
+        row = await self.db.get(GovernanceSuggestion, suggestion_id)
+        if not row or row.status != "pending":
+            return None
+        row.status = "dismissed"
+        await self.db.commit()
+        await self._write_audit(
+            row.kb_id, suggestion_id, "dismissed",
+            operator=operator, chunk_ids=row.chunk_ids,
+            detail=f"驳回治理建议: {row.title}" + (f"，原因: {reason}" if reason else ""),
+        )
+        return row
+
+    async def execute_suggestion(
+        self,
+        suggestion_id: str,
+        *,
+        operator: str = "",
+    ) -> dict | None:
+        """执行已批准的治理建议（approved → executed），同步 Chroma/FTS。
+
+        返回执行结果 dict 或 None（状态不允许）。
+        """
+        row = await self.db.get(GovernanceSuggestion, suggestion_id)
+        if not row or row.status != "approved":
+            return None
+
+        import json as _json
+
+        try:
+            chunk_ids = _json.loads(row.chunk_ids)
+        except (_json.JSONDecodeError, TypeError):
+            chunk_ids = []
+
+        action = row.recommended_action
+        result = await self.apply_action(row.kb_id, action, chunk_ids)
+
+        # Phase 3: archive/deactivate 时同步 Chroma 删除 + FTS 更新
+        if action in ("archive", "deactivate"):
+            await self._sync_chunks_removal(row.kb_id, chunk_ids)
+
+        row.status = "executed"
+        row.executed_by = operator or None
+        row.executed_at = datetime.utcnow()
+        await self.db.commit()
+        await self._write_audit(
+            row.kb_id, suggestion_id, "executed",
+            operator=operator, chunk_ids=row.chunk_ids,
+            detail=f"执行动作: {action}, 影响 {result.get('applied', 0)} 个chunk",
+        )
+        return result
+
+    async def verify_suggestion(
+        self,
+        suggestion_id: str,
+        *,
+        operator: str = "",
+    ) -> GovernanceSuggestion | None:
+        """验证执行结果（executed → verified）。"""
+        row = await self.db.get(GovernanceSuggestion, suggestion_id)
+        if not row or row.status != "executed":
+            return None
+        row.status = "verified"
+        row.verified_by = operator or None
+        row.verified_at = datetime.utcnow()
+        await self.db.commit()
+        await self._write_audit(
+            row.kb_id, suggestion_id, "verified",
+            operator=operator, chunk_ids=row.chunk_ids,
+            detail=f"验证执行结果: {row.title}",
+        )
+        return row
+
+    async def rollback_suggestion(
+        self,
+        suggestion_id: str,
+        *,
+        operator: str = "",
+    ) -> dict | None:
+        """回退建议到上一个状态（误操作恢复）。
+
+        支持: approved→pending | executed→approved | verified→executed | dismissed→pending
+        """
+        row = await self.db.get(GovernanceSuggestion, suggestion_id)
+        if not row:
+            return None
+
+        import json as _json
+
+        try:
+            chunk_ids = _json.loads(row.chunk_ids)
+        except (_json.JSONDecodeError, TypeError):
+            chunk_ids = []
+
+        prev_status = row.status
+        if row.status == "approved":
+            row.status = "pending"
+            row.approved_by = None
+            row.approved_at = None
+        elif row.status == "executed":
+            row.status = "approved"
+            row.executed_by = None
+            row.executed_at = None
+            action = row.recommended_action
+            if action in ("archive", "deactivate"):
+                for cid in chunk_ids:
+                    chunk = await self.db.get(Chunk, cid)
+                    if chunk and not chunk.is_active:
+                        await ChunkService(self.db).toggle_status(cid, True)
+        elif row.status == "verified":
+            row.status = "executed"
+            row.verified_by = None
+            row.verified_at = None
+        elif row.status == "dismissed":
+            row.status = "pending"
+        else:
+            return None
+
+        await self.db.commit()
+        await self._write_audit(
+            row.kb_id,
+            suggestion_id,
+            "reverted",
+            operator=operator,
+            chunk_ids=row.chunk_ids,
+            detail=f"回退治理建议: {row.title}（{prev_status} → {row.status}）",
+        )
+        return {"status": row.status, "prev_status": prev_status}
+
+    async def _sync_chunks_removal(
+        self, kb_id: str, chunk_ids: list[str]
+    ) -> None:
+        """归档/禁用时同步删除 Chroma 向量 + FTS 索引。"""
+        try:
+            collection = get_collection(kb_id)
+            valid_ids = [cid for cid in chunk_ids if cid]
+            if valid_ids:
+                collection.delete(ids=valid_ids)
+        except Exception as exc:
+            logger.warning("governance: Chroma sync failed kb=%s: %s", kb_id, exc)
+
+        try:
+            from .fts_service import upsert_chunk_fts
+
+            for cid in chunk_ids:
+                await upsert_chunk_fts(
+                    self.db, cid, kb_id, "", active=False,
+                )
+        except Exception as exc:
+            logger.warning("governance: FTS sync failed kb=%s: %s", kb_id, exc)
+
+    async def get_audit_log(
+        self,
+        kb_id: str,
+        *,
+        action: str | None = None,
+        limit: int = 50,
+    ) -> list[GovernanceAuditLog]:
+        """查询治理审计日志（可按动作筛选）。"""
+        q = select(GovernanceAuditLog).where(GovernanceAuditLog.kb_id == kb_id)
+        if action:
+            q = q.where(GovernanceAuditLog.action == action)
+        q = q.order_by(GovernanceAuditLog.created_at.desc()).limit(limit)
+        result = await self.db.execute(q)
+        return list(result.scalars().all())
 
 
 def _suggestion(

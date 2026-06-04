@@ -1,4 +1,13 @@
-"""Phase 4.1 图片入库验收 — 零真实 API（LLM_MOCK_MODE=true）"""
+"""Phase 4.1 图片入库验收
+
+验证内容：
+  - mock 模式下图片 caption、chunk、向量入库
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase4_1.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -15,6 +24,7 @@ os.environ["MULTIMODAL_IMAGE_ENABLED"] = "true"
 
 
 async def main() -> int:
+    """脚本 CLI 入口。"""
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk

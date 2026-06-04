@@ -1,4 +1,13 @@
-"""Phase 2 审计修复验收：上传/手动录入 → FTS5 同步"""
+"""Phase 2 FTS 入库验收
+
+验证内容：
+  - 手动/上传入库后 chunks 同步到 FTS5；toggle_status 同步删除
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase2_fts_ingest.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -13,6 +22,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """执行 FTS 入库验收：手动录入、文件上传与 toggle_status 同步。"""
     from app.core.database import async_session, init_db
     from app.models.document import Document
     from app.models.knowledge_base import KnowledgeBase
@@ -28,6 +38,7 @@ async def main() -> int:
     manual_kw = f"manualverify{suffix}"
     upload_kw = f"uploadverify{suffix}"
 
+    # 准备测试知识库与 manual/upload 两条 processing 文档
     async with async_session() as db:
         db.add(
             KnowledgeBase(
@@ -59,6 +70,7 @@ async def main() -> int:
         await db.commit()
 
     fake_collection = MagicMock()
+    # mock Embedding 与 Chroma，避免真实向量服务
     embed_patch = patch(
         "app.services.embedding_service.EmbeddingService.embed_documents",
         return_value=[[0.1] * 256],
@@ -85,6 +97,7 @@ async def main() -> int:
             await _process_document(upload_doc_id, kb_id, "txt", "/tmp/fake.txt")
 
     async with async_session() as db:
+        # 断言 manual/upload 关键词均能在 FTS5 命中
         manual_hits = await search_fts(db, kb_id, manual_kw, limit=5)
         upload_hits = await search_fts(db, kb_id, upload_kw, limit=5)
         if not manual_hits:
@@ -96,6 +109,7 @@ async def main() -> int:
         print(f"  manual_fts_hits={len(manual_hits)} upload_fts_hits={len(upload_hits)}")
 
         svc = DocumentService(db)
+        # 禁用 manual 文档后，其 chunk 应从 FTS 移除
         await svc.toggle_status(manual_doc_id, False)
         disabled_hits = await search_fts(db, kb_id, manual_kw, limit=5)
         if disabled_hits:

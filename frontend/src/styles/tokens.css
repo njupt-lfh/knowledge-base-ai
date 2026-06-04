@@ -45,6 +45,11 @@
   --topbar-height: 56px;
   --sidenav-width: 220px;
   --sidenav-collapsed: 64px;
+  --kb-sidebar-width: 240px;
+  --kb-sidebar-collapsed: 60px;
+  --page-padding-y: 28px;
+  --page-padding-x: clamp(24px, 4vw, 48px);
+  --page-max-width: 1560px;
 
   --text-on-accent: #0a0e17;
   --grid-line: rgba(0, 212, 255, 0.04);

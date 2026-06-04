@@ -41,7 +41,9 @@ def test_route_chitchat():
 def test_retrieval_top_k_by_route():
     """测试：retrieval top k by route。"""
     assert retrieval_top_k_for_route("chitchat", 5) == 0
-    assert retrieval_top_k_for_route("relational", 5) >= 7
+    assert retrieval_top_k_for_route("factual", 5) == 5
+    assert retrieval_top_k_for_route("comprehensive", 5) == 4
+    assert retrieval_top_k_for_route("relational", 5) == 5
 
 
 def test_expand_query_for_retry():

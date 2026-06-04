@@ -1,4 +1,13 @@
-"""为历史 chunk 回填 kg_relations 三元组（Phase 3 backfill）"""
+"""历史 chunk 图谱回填
+
+验证内容：
+  - 为 kg_relations 批量抽取三元组
+
+运行方式（在 backend 目录）:
+  python scripts/backfill_graph.py --mock
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -22,6 +31,7 @@ EVAL_DATA = ROOT / "data" / "eval_qa_dataset.json"
 
 
 def _preflight() -> tuple[bool, str]:
+    """回填前检查 LLM/API 配置是否满足要求。"""
     from app.core.config import settings
 
     if settings.LLM_MOCK_MODE and "--mock" not in sys.argv:
@@ -35,6 +45,7 @@ def _preflight() -> tuple[bool, str]:
 
 
 async def _run(args: argparse.Namespace) -> int:
+    """执行主逻辑并返回进程退出码。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.kg_relation import KgRelation
@@ -147,6 +158,7 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    """脚本 CLI 入口。"""
     parser = argparse.ArgumentParser(description="Backfill kg_relations for existing chunks")
     parser.add_argument("--kb-id", default="", help="single KB id")
     parser.add_argument("--eval-kbs-only", action="store_true", help="only eval dataset KBs")

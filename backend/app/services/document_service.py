@@ -240,7 +240,7 @@ class DocumentService:
             content: 正文
             skip_gate: True 时跳过门禁检查（用于已人工审核的 Gap 入库）
         """
-        from .chunking_service import TextChunker
+        from .chunking_service import build_content_chunks
 
         doc_id = str(uuid.uuid4())
         doc = Document(
@@ -260,8 +260,13 @@ class DocumentService:
         chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
         chunk_overlap = kb.chunk_overlap if kb else settings.DEFAULT_CHUNK_OVERLAP
 
-        chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-        chunks = chunker.split(content) or [content]
+        structured = getattr(settings, "STRUCTURED_CHUNKING_ENABLED", True)
+        chunks = build_content_chunks(
+            content,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            structured=structured,
+        ) or [content]
 
         if skip_gate:
             chunk_records = [
@@ -409,24 +414,29 @@ async def _process_document(doc_id: str, kb_id: str, file_type: str, file_path: 
         file_type: pdf | md | txt
         file_path: 文件路径
     """
-    from .chunking_service import DocumentParser, TextChunker
+    from .chunking_service import build_document_chunks
     from .embedding_service import EmbeddingService
     from .image_chunk_ingest_service import ingest_pdf_embedded_images
 
     async with async_session() as db:
         try:
             resolved = str(resolve_upload_path(file_path))
-            text = DocumentParser.parse(resolved, file_type)
 
             from ..models.knowledge_base import KnowledgeBase
 
             kb_result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
             kb = kb_result.scalar_one_or_none()
+            structured = getattr(settings, "STRUCTURED_CHUNKING_ENABLED", True)
             chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
             chunk_overlap = kb.chunk_overlap if kb else settings.DEFAULT_CHUNK_OVERLAP
 
-            chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-            text_parts = chunker.split(text) if text and text.strip() else []
+            text_parts = build_document_chunks(
+                file_path=resolved,
+                file_type=file_type,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                structured=structured,
+            )
 
             chunk_records: list[Chunk] = []
             gate_stats = IngestStats()
@@ -614,7 +624,7 @@ async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
         title: 文档标题
         content: 正文
     """
-    from .chunking_service import TextChunker
+    from .chunking_service import build_content_chunks
     from .embedding_service import EmbeddingService
 
     async with async_session() as db:
@@ -627,9 +637,13 @@ async def _process_manual(doc_id: str, kb_id: str, title: str, content: str):
             chunk_size = kb.chunk_size if kb else settings.DEFAULT_CHUNK_SIZE
             chunk_overlap = kb.chunk_overlap if kb else settings.DEFAULT_CHUNK_OVERLAP
 
-            # 2. 分块
-            chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-            chunks = chunker.split(content)
+            structured = getattr(settings, "STRUCTURED_CHUNKING_ENABLED", True)
+            chunks = build_content_chunks(
+                content,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                structured=structured,
+            )
             if not chunks:
                 chunks = [content]
 

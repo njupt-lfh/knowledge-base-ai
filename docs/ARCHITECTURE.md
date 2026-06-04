@@ -7,7 +7,7 @@
 │                    前端 (React 18 + Ant Design)               │
 │  KnowledgeList / KnowledgeDetail / ChatAgent / GapTasks      │
 │  Stats（数据驾驶舱）/ EvalDashboard / ShareChat               │
-│  端口: 5173 (Vite dev)  →  API: http://localhost:8080        │
+│  端口: 5174 (Vite dev，strictPort)  →  API: http://localhost:8080 │
 └────────────────────────────┬─────────────────────────────────┘
                              │ HTTP REST + SSE Stream
 ┌────────────────────────────▼─────────────────────────────────┐
@@ -66,17 +66,21 @@ Chunk: content, is_active, hit_count, quality 等
 
 ```
 用户提问
+  → Query Router（factual / relational / comprehensive / chitchat）
   → HybridRetriever
-       ├─ Chroma 向量检索（top 候选）
+       ├─ Chroma 向量检索（扩大候选池）
        └─ SQLite FTS5 BM25 检索
-       → RRF 融合排序
-  → CRAG-lite 质量门（分数 / 词重叠阈值，低质可拒答或改写查询）
-  → Agentic-lite（可选多轮 SIM-RAG 子查询扩展）
-  → 轻量知识图谱增强（可选）
-  → System Prompt 组装（知识块 + 规则 + 截断历史）
-  → LLM 流式生成（SSE）
+       → RRF 融合 → 轻量 Rerank → Cross-Encoder 精排（可配置）
+       → 检索后过滤 / 同文档去重
+  → retrieval_gate（abstention，锚点词 + 阈值）
+  → CRAG-lite（最多 2 轮检索重试）
+  → Agentic-lite（multi_hop：图谱分路 + SIM-RAG；评测路径见 retrieve_for_eval）
+  → compress_context → System Prompt
+  → LLM 流式生成 → Post-hoc Answer Guard / 一致性双路（可配置）
   → 保存 Message、更新 hit_count、返回 sources
 ```
+
+评测流水线与线上一致性说明见 [EVAL.md](EVAL.md)：评测检索走 `retrieve_for_eval`，生成走 `RAGService.generate`。
 
 Mock 模式（`LLM_MOCK_MODE=true`）：跳过真实 LLM/嵌入调用，便于无 Key 环境下冒烟与 UI 验证。
 
@@ -133,14 +137,30 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080
 cd frontend
 npm install
 npm run dev
-# → http://localhost:5173
+# → http://localhost:5174
 ```
 
-**CORS**：后端允许 `localhost:5173`（及 5174 备用）来源。
+**CORS**：后端允许 `localhost:5173`、`localhost:5174` 来源。
 
 **交付含数据时**：连同 `data/knowledge_base.db`、`backend/chroma_data/`、`backend/uploads/` 打包；不要泄露 `.env` 中的 API Key。
 
-## 7. 相关文档
+## 7. 评测与质量改进
+
+| 能力 | 位置 |
+|------|------|
+| 评测脚本 | `backend/scripts/run_rag_eval.py`、`run_phase3_exit.py` |
+| 指标聚合 / CI | `backend/app/eval/` |
+| 基线 API | `GET /api/eval/baseline`、`GET /api/eval/runs` |
+| 前端看板 | `/eval` → `EvalDashboard.tsx` |
+
+**双轨指标（CP-chunk vs CP-ragas）**、v1/v2 数据集与 Week 0–5+ 路线见：
+
+- [RAG_IMPROVEMENT_ROADMAP.md](RAG_IMPROVEMENT_ROADMAP.md)
+- [EVAL.md](EVAL.md)
+
+## 8. 相关文档
 
 - 阶段决策记录：[docs/adr/](adr/)
 - 使用说明与数据目录：[../README.md](../README.md)
+- RAG 改善路线图：[RAG_IMPROVEMENT_ROADMAP.md](RAG_IMPROVEMENT_ROADMAP.md)
+- 评测体系：[EVAL.md](EVAL.md)

@@ -14,6 +14,8 @@
     - fts_service、graph_store_service：索引同步
 """
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +24,8 @@ from ..models.chunk import Chunk
 from ..schemas.chunk import ChunkResponse, ChunkUpdate, SearchResultItem
 from .embedding_service import EmbeddingService
 from .hybrid_retriever import HybridRetriever
+
+logger = logging.getLogger(__name__)
 
 
 class ChunkService:
@@ -161,19 +165,33 @@ class ChunkService:
         except Exception:
             pass
 
-    async def search(self, kb_id: str, query: str, top_k: int = 5) -> list[SearchResultItem]:
+    async def search(
+        self,
+        kb_id: str,
+        query: str,
+        top_k: int = 5,
+        *,
+        lightweight: bool = False,
+    ) -> list[SearchResultItem]:
         """Hybrid 检索（与 RAG 路径一致：Vector + FTS5 + RRF + Rerank）。
 
         参数:
             kb_id: 知识库 ID
             query: 查询文本
             top_k: 返回条数
+            lightweight: 检索测试用快速路径（跳过 Cross-Encoder，避免首请求加载模型超时）
 
         返回:
             SearchResultItem 列表
         """
         try:
-            hits = await self.retriever.search(self.db, kb_id, query, top_k=top_k)
+            hits = await self.retriever.search(
+                self.db,
+                kb_id,
+                query,
+                top_k=top_k,
+                use_cross_encoder=False if lightweight else None,
+            )
             items = [
                 SearchResultItem(
                     chunk_id=h["chunk_id"],
@@ -196,5 +214,6 @@ class ChunkService:
                     pass
 
             return items
-        except Exception:
+        except Exception as exc:
+            logger.warning("chunk search failed kb=%s query=%r: %s", kb_id, query[:80], exc)
             return []

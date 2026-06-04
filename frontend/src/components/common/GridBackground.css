@@ -19,5 +19,9 @@
 .grid-background__vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, transparent 40%, var(--grid-vignette) 100%);
+  /* 暗角偏向下与两侧，避免顶部内容区发灰、发淡 */
+  background:
+    radial-gradient(ellipse 120% 70% at 50% 100%, transparent 42%, var(--grid-vignette) 100%),
+    radial-gradient(ellipse 55% 90% at 0% 40%, transparent 55%, var(--grid-vignette) 95%),
+    radial-gradient(ellipse 55% 90% at 100% 40%, transparent 55%, var(--grid-vignette) 95%);
 }

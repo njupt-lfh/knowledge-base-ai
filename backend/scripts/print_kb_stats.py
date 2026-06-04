@@ -1,7 +1,22 @@
+"""统计脚本：导出各知识库的文档/对话/消息/标签/命中数。
+
+验证内容：
+  - 从 SQLite 聚合每个知识库的关键指标
+  - 写入 data/kb_test_summary.txt 并打印到控制台
+
+运行方式（在 backend 目录）:
+  python scripts/print_kb_stats.py
+
+预期结果：打印表格化统计并生成 kb_test_summary.txt；无断言。
+"""
+
 import sqlite3
 from pathlib import Path
 
+# 连接项目数据库
 db = sqlite3.connect(Path(__file__).resolve().parents[2] / "data" / "knowledge_base.db")
+
+# 按知识库聚合文档数、对话数、消息数、标签数、chunk 命中总数
 rows = db.execute(
     """
     SELECT kb.name,

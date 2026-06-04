@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .api import (
+    answer_review,
     chat,
     chunk,
     conflict,
@@ -115,6 +116,7 @@ app.include_router(conflict.router)
 app.include_router(ingestion.router)
 app.include_router(kb_health.router)
 app.include_router(gap.router)
+app.include_router(answer_review.router)
 app.include_router(graph.router)
 app.include_router(sync.router)
 app.include_router(knowledge.router)

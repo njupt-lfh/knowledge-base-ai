@@ -1,4 +1,15 @@
-"""Phase 2.4 验收：DeepEval 模块 + CI 门禁"""
+"""Phase 2.4 验收：DeepEval 模块 + CI 门禁。
+
+验证内容：
+  - offline 代理指标与 deepeval gates 通过
+  - knowledge retention 回归检测
+  - run_deepeval_ci.py 子进程成功
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase2_4.py
+
+预期结果：打印 PASS 并退出码 0。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +23,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """执行 Phase 2.4 验收：DeepEval offline 指标与 CI 脚本。"""
     from app.eval.deepeval_runner import (
         check_deepeval_gates,
         check_knowledge_retention,
@@ -46,6 +58,7 @@ async def main() -> int:
         print(f"FAIL: hallucination proxy {hall}")
         return 1
 
+    # retention：小幅下降应通过
     retention = check_knowledge_retention(
         {"context_recall_mean": 0.8, "context_precision_mean": 0.3},
         {"context_recall_mean": 0.75, "context_precision_mean": 0.28},
@@ -55,6 +68,7 @@ async def main() -> int:
         print(f"FAIL: retention should pass at 0.75/0.8 {retention}")
         return 1
 
+    # retention：大幅下降应失败
     retention_fail = check_knowledge_retention(
         {"context_recall_mean": 0.8},
         {"context_recall_mean": 0.5},

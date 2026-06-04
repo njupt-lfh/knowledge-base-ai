@@ -26,3 +26,6 @@ async def test_init_db_creates_all_orm_tables():
     assert "chunk_quality" in expected
     assert "knowledge_gaps" in expected
     assert "knowledge_conflicts" in expected
+    assert "answer_review_queue" in expected
+    assert "governance_suggestions" in expected
+    assert "governance_audit_log" in expected

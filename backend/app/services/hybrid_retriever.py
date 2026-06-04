@@ -25,9 +25,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.chroma_client import get_collection
 from ..core.config import settings
 from ..models.chunk import Chunk
+from .cross_encoder_rerank_service import cross_encoder_rerank
 from .embedding_service import EmbeddingService
 from .fts_service import search_fts
-from .quality_service import QualityService, blend_retrieval_score
+from .post_retrieval_filter import apply_post_retrieval_filter
+from .quality_service import QualityService, apply_quality_gate, blend_retrieval_score
 from .rerank_service import rerank_candidates
 
 logger = logging.getLogger(__name__)
@@ -124,6 +126,8 @@ class HybridRetriever:
         query: str,
         *,
         top_k: int | None = None,
+        allow_soft_fallback: bool = True,
+        use_cross_encoder: bool | None = None,
     ) -> list[dict[str, Any]]:
         """执行完整 Hybrid 检索流水线。
 
@@ -132,13 +136,16 @@ class HybridRetriever:
             kb_id: 知识库 ID
             query: 查询文本
             top_k: 返回条数，None 时使用 dynamic_top_k
+            allow_soft_fallback: post-filter 全滤后是否保留 top-1
+            use_cross_encoder: 是否用 Cross-Encoder；None 时读配置（检索测试可显式 False 避免超时）
 
         返回:
             来源 dict 列表，含 chunk_id、content、score、quality_score 等
         """
         k = top_k or dynamic_top_k(query, getattr(settings, "RETRIEVAL_TOP_K", 5))
-        vec_limit = getattr(settings, "HYBRID_VECTOR_CANDIDATES", 15)
-        fts_limit = getattr(settings, "HYBRID_FTS_CANDIDATES", 15)
+        vec_limit = getattr(settings, "HYBRID_VECTOR_CANDIDATES", 30)
+        fts_limit = getattr(settings, "HYBRID_FTS_CANDIDATES", 30)
+        pool_size = getattr(settings, "HYBRID_RRF_POOL_SIZE", 30)
 
         # 1. 向量检索：Chroma 语义相似
         vector_ids = await self._vector_search(kb_id, query, vec_limit)
@@ -152,7 +159,7 @@ class HybridRetriever:
         # 3. RRF 融合两路排名，取扩展候选池
         rrf_scores = reciprocal_rank_fusion([vector_ids, fts_ids])
         candidate_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)[
-            : max(k * 3, 12)
+            :pool_size
         ]
 
         # 4. 从 DB 加载 chunk 正文
@@ -188,19 +195,40 @@ class HybridRetriever:
                 }
             )
 
-        # 5. 轻量 Rerank：query-chunk 词项重叠 + RRF 分融合
+        # 5. 二阶段重排：Cross-Encoder（失败则词项 overlap 降级）
+        rerank_k = min(len(candidates), max(k, pool_size))
+        ce_enabled = (
+            use_cross_encoder
+            if use_cross_encoder is not None
+            else getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False)
+        )
         if getattr(settings, "HYBRID_RERANK_ENABLED", True):
-            candidates = rerank_candidates(query, candidates, top_k=k)
+            if ce_enabled:
+                candidates = cross_encoder_rerank(query, candidates, top_k=rerank_k)
+            else:
+                candidates = rerank_candidates(query, candidates, top_k=rerank_k)
         else:
-            candidates = candidates[:k]
+            candidates = candidates[:rerank_k]
 
-        # 6. 质量分加权：命中/反馈/新鲜度综合
+        # 6. 检索后硬过滤 + 同文档去重
+        candidates = apply_post_retrieval_filter(
+            candidates, allow_soft_fallback=allow_soft_fallback
+        )
+
+        # 7. 质量分加权：命中/反馈/新鲜度综合
         quality_svc = QualityService(db)
-        qmap = await quality_svc.get_scores_map([c["chunk_id"] for c in candidates])
+        chunk_ids = [c["chunk_id"] for c in candidates]
+        qmap = await quality_svc.get_scores_map(chunk_ids)
+        dmap = await quality_svc.get_quality_details_map(chunk_ids)
         for c in candidates:
             q = qmap.get(c["chunk_id"], 0.5)
             c["quality_score"] = q
             c["score"] = blend_retrieval_score(c["score"], q)
+
+        # 8. 质量门控硬过滤（Phase 1：低质量/needs_review+dislike/黑名单）
+        candidates = apply_quality_gate(
+            candidates, quality_scores=qmap, quality_details=dmap
+        )
 
         candidates.sort(key=lambda x: x["score"], reverse=True)
         return candidates[:k]

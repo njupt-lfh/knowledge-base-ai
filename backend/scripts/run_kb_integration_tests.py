@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""对各知识库执行标签、AI 对话、提炼知识等集成测试，丰富数据驾驶舱统计。"""
+"""知识库集成测试
+
+验证内容：
+  - 标签/对话/提炼/分享 API 联调
+
+运行方式（在 backend 目录）:
+  python scripts/run_kb_integration_tests.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -139,6 +148,7 @@ KB_TEST_PLAN: dict[str, dict] = {
 
 
 def api(method: str, path: str, body: dict | None = None, timeout: int = TIMEOUT_DEFAULT):
+    """调用 REST API 并解析 JSON 响应。"""
     url = f"{BASE_URL}{path}"
     data = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     req = urllib.request.Request(
@@ -157,6 +167,7 @@ def api(method: str, path: str, body: dict | None = None, timeout: int = TIMEOUT
 
 
 def chat_stream(conv_id: str, message: str) -> dict:
+    """发送 chat SSE 请求并收集答案与来源。"""
     url = f"{BASE_URL}/api/conversations/{conv_id}/chat"
     body = json.dumps({"message": message, "knowledge_base_id": ""}, ensure_ascii=False).encode()
     req = urllib.request.Request(
@@ -187,6 +198,7 @@ def chat_stream(conv_id: str, message: str) -> dict:
 
 
 def wait_doc_completed(kb_id: str, doc_id: str, max_wait: int = 120) -> bool:
+    """轮询文档直至 completed 或超时。"""
     for _ in range(max_wait // 3):
         doc = api("GET", f"/api/knowledge-bases/{kb_id}/documents/{doc_id}")
         if doc["status"] == "completed":
@@ -212,6 +224,7 @@ def should_skip_kb(kb_id: str) -> tuple[bool, str]:
 
 
 def test_kb(kb: dict) -> dict:
+    """对单个知识库执行标签/检索/对话/提炼/分享测试。"""
     name = kb["name"]
     kb_id = kb["id"]
     plan = KB_TEST_PLAN.get(name)
@@ -353,6 +366,7 @@ def test_kb(kb: dict) -> dict:
 
 
 def main() -> int:
+    """脚本 CLI 入口。"""
     print(f"API: {BASE_URL}")
     kbs = api("GET", "/api/knowledge-bases?page_size=50")["items"]
     print(f"共 {len(kbs)} 个知识库待测试")

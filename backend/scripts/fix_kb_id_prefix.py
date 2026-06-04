@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""将误存为 UUID 首段（8 位）的 kb_id / knowledge_base_id 修正为完整 UUID，并合并 Chroma 集合。"""
+"""修正 kb_id 前缀
+
+验证内容：
+  - 8 位前缀修正为完整 UUID 并合并 Chroma
+
+运行方式（在 backend 目录）:
+  python scripts/fix_kb_id_prefix.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -25,6 +34,7 @@ TABLES: list[tuple[str, str]] = [
 
 
 def main() -> int:
+    """脚本 CLI 入口。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="执行写入（默认仅预览）")
     args = parser.parse_args()

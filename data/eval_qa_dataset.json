@@ -1,6 +1,7 @@
 {
   "version": "2.0",
-  "description": "Phase 0 多库评测集 — 每库 20 条 QA",
+  "dataset_version": "v1",
+  "description": "Phase 0 多库评测集 — 每库 20 条 QA（v1 回归基线，保留文件名 eval_qa_dataset.json）",
   "primary_kb_id": "e3752f00-b894-429e-a982-43142c5f0d8a",
   "knowledge_bases": [
     {

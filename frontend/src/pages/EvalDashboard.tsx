@@ -5,7 +5,19 @@
  */
 import { useEffect, useState } from 'react'
 
-import { Card, Col, Row, Statistic, Table, Tag, Typography, message, Space, Alert } from 'antd'
+import {
+  Card,
+  Col,
+  Row,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+  message,
+  Space,
+  Alert,
+  Tabs,
+} from 'antd'
 import {
   CheckCircleOutlined,
   ArrowUpOutlined,
@@ -16,7 +28,7 @@ import {
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
-import { evalApi, getReportSampleCount, type EvalBaselineReport } from '../api/eval'
+import { evalApi, getReportSampleCount, type EvalBaselineReport, type EvalTrendPoint } from '../api/eval'
 import request from '../api/request'
 import HudPanel from '../components/common/HudPanel'
 import { formatDateTime } from '../utils/format'
@@ -133,33 +145,174 @@ function RadarChart({
   return <ReactECharts option={option} style={{ height: 320 }} opts={{ renderer: 'canvas' }} />
 }
 
-/* ───── 主页面 ───── */
+/** 分维度指标块（题型 / 知识库） */
+function DimensionMetricsTable({
+  data,
+  nameKey,
+}: {
+  data: Record<string, Record<string, unknown>> | undefined
+  nameKey?: 'kb_name'
+}) {
+  if (!data || Object.keys(data).length === 0) {
+    return (
+      <Typography.Text type="secondary">
+        暂无分维度数据（请重新运行 run_rag_eval.py）
+      </Typography.Text>
+    )
+  }
+
+  const rows = Object.entries(data).map(([key, m]) => ({
+    key,
+    name: nameKey ? String(m[nameKey] ?? key) : key,
+    sample_count: m.sample_count,
+    cp: m.context_precision_chunk ?? m.context_precision_mean,
+    cr: m.context_recall_chunk ?? m.context_recall_mean,
+    mrr: m.mrr_mean,
+    ndcg: m.ndcg_at_5_mean,
+    hit: m.retrieval_hit_rate,
+    reject: m.negative_reject_rate,
+    faith: m.faithfulness_mean,
+    relev: m.answer_relevancy_mean,
+  }))
+
+  const pct = (v: unknown) =>
+    typeof v === 'number' ? (v < 1 ? (v * 100).toFixed(1) + '%' : v.toFixed(3)) : '—'
+
+  return (
+    <Table
+      size="small"
+      pagination={false}
+      dataSource={rows}
+      columns={[
+        { title: nameKey ? '知识库' : '题型', dataIndex: 'name', key: 'name' },
+        { title: '样本', dataIndex: 'sample_count', key: 'n', width: 60 },
+        { title: 'CP-chunk', dataIndex: 'cp', key: 'cp', render: pct },
+        { title: 'CR-chunk', dataIndex: 'cr', key: 'cr', render: pct },
+        { title: 'MRR', dataIndex: 'mrr', key: 'mrr', render: pct },
+        { title: 'NDCG@5', dataIndex: 'ndcg', key: 'ndcg', render: pct },
+        { title: '命中率', dataIndex: 'hit', key: 'hit', render: pct },
+        { title: '拒答率', dataIndex: 'reject', key: 'reject', render: pct },
+      ]}
+    />
+  )
+}
+
+function trendPointTime(p: EvalTrendPoint): number {
+  if (!p.created_at) return 0
+  const t = new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(p.created_at) ? p.created_at : `${p.created_at}Z`).getTime()
+  return Number.isNaN(t) ? 0 : t
+}
+
+/** 按运行时间升序，与 KPI 基线同一 dataset 版本 */
+function sortTrendPoints(points: EvalTrendPoint[]): EvalTrendPoint[] {
+  return [...points].sort((a, b) => trendPointTime(a) - trendPointTime(b))
+}
+
+/** 评测历史趋势折线图（DB eval_runs） */
+function EvalTrendChart({
+  points,
+  title,
+}: {
+  points: EvalTrendPoint[]
+  title: string
+}) {
+  if (!points.length) {
+    return (
+      <Typography.Text type="secondary">
+        暂无历史运行记录（运行 run_rag_eval.py 后会自动写入 DB）
+      </Typography.Text>
+    )
+  }
+  const option: EChartsOption = {
+    backgroundColor: 'transparent',
+    title: { text: title, left: 'center', textStyle: { color: '#94a3b8', fontSize: 13 } },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: unknown) => {
+        const items = Array.isArray(params) ? params : [params]
+        const idx = (items[0] as { dataIndex?: number })?.dataIndex ?? 0
+        const p = points[idx]
+        const pct =
+          p?.value != null && !Number.isNaN(p.value) ? `${(p.value * 100).toFixed(1)}%` : '—'
+        const when = p?.created_at ? formatDateTime(p.created_at) : '—'
+        const mode = p?.eval_mode ?? ''
+        return `${when}<br/>${title}: <b>${pct}</b>${mode ? `<br/>模式: ${mode}` : ''}`
+      },
+    },
+    grid: { left: 48, right: 24, top: 40, bottom: 40 },
+    xAxis: {
+      type: 'category',
+      data: points.map((p) => (p.created_at ? formatDateTime(p.created_at) : p.run_id.slice(0, 8))),
+      axisLabel: { color: '#64748b', fontSize: 10, rotate: 30 },
+    },
+    yAxis: {
+      type: 'value',
+      max: 1,
+      axisLabel: { color: '#64748b', formatter: (v: number) => `${(v * 100).toFixed(1)}%` },
+      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.1)' } },
+    },
+    series: [
+      {
+        type: 'line',
+        smooth: true,
+        data: points.map((p) => p.value ?? 0),
+        lineStyle: { color: '#00d4ff', width: 2 },
+        itemStyle: { color: '#00d4ff' },
+        areaStyle: { color: 'rgba(0,212,255,0.08)' },
+      },
+    ],
+  }
+  return <ReactECharts option={option} style={{ height: 280 }} opts={{ renderer: 'canvas' }} />
+}
+
 /** RAG 评测基线可视化页 */
 export default function EvalDashboard() {
   const [report, setReport] = useState<EvalBaselineReport | null>(null)
   const [phase0, setPhase0] = useState<EvalBaselineReport | null>(null)
+  const [cpTrend, setCpTrend] = useState<EvalTrendPoint[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // 并行加载当前基线与 Phase 0 备份（用于对比）
-    Promise.allSettled([
-      evalApi.getBaseline(),
-      request
-        .get('/api/eval/baseline-phase0')
-        .then((r) => r?.data)
-        .catch(() => null),
-    ])
-      .then(([r1, r2]) => {
-        if (r1.status === 'fulfilled' && r1.value?.data) setReport(r1.value.data)
-        if (r2.status === 'fulfilled' && r2.value) setPhase0(r2.value)
-      })
-      .catch(() => message.error('未找到基线报告'))
-      .finally(() => setLoading(false))
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [baselineRes, phase0Res] = await Promise.allSettled([
+          evalApi.getBaseline(),
+          request
+            .get('/api/eval/baseline-phase0')
+            .then((r) => r?.data)
+            .catch(() => null),
+        ])
+        if (cancelled) return
+        const baseline = baselineRes.status === 'fulfilled' ? baselineRes.value?.data : null
+        if (baseline) setReport(baseline)
+        if (phase0Res.status === 'fulfilled' && phase0Res.value) setPhase0(phase0Res.value)
+
+        const datasetVer =
+          (baseline as EvalBaselineReport | null)?.dataset_version ??
+          baseline?.config?.dataset ??
+          'v1'
+        const trendRes = await evalApi.getTrend('context_precision_chunk', datasetVer)
+        if (!cancelled) {
+          setCpTrend(sortTrendPoints(trendRes?.data?.points ?? []))
+        }
+      } catch {
+        if (!cancelled) message.error('未找到基线报告')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const agg = report?.aggregate ?? {}
   const p0agg = phase0?.aggregate ?? {}
   const sampleCount = report ? getReportSampleCount(report) : undefined
+  const datasetVer = (report as { dataset_version?: string })?.dataset_version ?? 'v1'
+  const evalMode =
+    (report?.config?.eval_mode ?? report?.config?.retrieval_only) ? 'retrieval_only' : 'full'
   const bottleneck = report?.diagnosis?.primary_bottleneck
 
   // 从 Phase 0 aggregate 安全读取数值
@@ -201,7 +354,7 @@ export default function EvalDashboard() {
   ]
 
   return (
-    <div style={{ padding: 24 }}>
+    <div>
       <Space direction="vertical" size={24} style={{ width: '100%' }}>
         {/* ─── 头部 ─── */}
         <HudPanel>
@@ -214,7 +367,12 @@ export default function EvalDashboard() {
                 <span style={{ color: '#e2e8f0', fontSize: 18, fontWeight: 600 }}>
                   RAG 评测基线
                 </span>
-                {report && <Tag color="cyan">100 样本 · 5 知识库</Tag>}
+                {report && (
+                  <Tag color="cyan">
+                    {datasetVer} · {sampleCount ?? '—'} 样本
+                    {evalMode === 'retrieval_only' ? ' · 检索专项' : ''}
+                  </Tag>
+                )}
               </Space>
             </Col>
             <Col>
@@ -257,9 +415,14 @@ export default function EvalDashboard() {
               </Col>
               <Col span={8}>
                 <MetricCard
-                  label="上下文精确"
-                  value={agg.context_precision_mean as number | null}
-                  baseline={p0('context_precision_mean')}
+                  label="CP-chunk（chunk级精确率）"
+                  value={
+                    (agg.context_precision_chunk as number | null) ??
+                    (agg.context_precision_mean as number | null)
+                  }
+                  baseline={
+                    (p0('context_precision_chunk') ?? p0('context_precision_mean')) as number | null
+                  }
                   lowerIsBetter={false}
                 />
               </Col>
@@ -303,6 +466,33 @@ export default function EvalDashboard() {
                 />
               </Col>
             </Row>
+            {(report?.by_question_type || report?.by_kb) && (
+              <HudPanel>
+                <Tabs
+                  defaultActiveKey="type"
+                  items={[
+                    {
+                      key: 'type',
+                      label: '按题型',
+                      children: <DimensionMetricsTable data={report?.by_question_type} />,
+                    },
+                    {
+                      key: 'kb',
+                      label: '按知识库',
+                      children: <DimensionMetricsTable data={report?.by_kb} nameKey="kb_name" />,
+                    },
+                  ]}
+                />
+              </HudPanel>
+            )}
+
+            <HudPanel>
+              <h3 className="chart-panel__title">历史趋势（CP-chunk）</h3>
+              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                数据来自 eval_runs（与上方 KPI 同数据集 {datasetVer}）；运行 run_rag_eval.py 后自动写入，时间为 UTC 转本地显示。
+              </Typography.Text>
+              <EvalTrendChart points={cpTrend} title="context_precision_chunk 历次运行" />
+            </HudPanel>
 
             {/* ─── 雷达图 + 检索对比表 ─── */}
             <Row gutter={16}>
@@ -351,12 +541,12 @@ export default function EvalDashboard() {
                         <Statistic
                           title={
                             k === 'faithfulness'
-                              ? '答案忠实度'
+                              ? '答案忠实度 (FA)'
                               : k === 'answer_relevancy'
-                                ? '答案相关性'
+                                ? '答案相关性 (AR)'
                                 : k === 'context_precision'
-                                  ? '上下文精确率'
-                                  : '上下文召回率'
+                                  ? 'CP-ragas（RAGAS加权精确率）'
+                                  : 'CR-ragas（RAGAS召回）'
                           }
                           value={Number(agg.ragas?.[k] ?? 0)}
                           precision={4}

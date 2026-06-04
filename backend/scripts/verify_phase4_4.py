@@ -1,4 +1,13 @@
-"""Phase 4.4 文件夹监听验收"""
+"""Phase 4.4 文件夹监听验收
+
+验证内容：
+  - scan_watch 导入新文件
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase4_4.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -14,6 +23,7 @@ os.environ["LLM_MOCK_MODE"] = "true"
 
 
 async def main() -> int:
+    """脚本 CLI 入口。"""
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk
     from app.models.document import Document

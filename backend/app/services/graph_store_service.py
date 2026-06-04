@@ -69,6 +69,12 @@ def invalidate_graph_cache(kb_id: str) -> None:
         kb_id: 知识库 ID
     """
     _graph_cache.pop(kb_id, None)
+    try:
+        from .entity_index_service import invalidate_entity_index_cache
+
+        invalidate_entity_index_cache(kb_id)
+    except ImportError:
+        pass
 
 
 async def delete_relations_for_chunk(
@@ -197,46 +203,46 @@ async def load_relations(db: AsyncSession, kb_id: str) -> list[KgRelation]:
 
 
 async def build_networkx_graph(db: AsyncSession, kb_id: str) -> nx.DiGraph:
-    """构建（或从缓存读取）NetworkX 有向图。
+    """构建知识库的 NetworkX 有向图（优先从 LRU 缓存获取）。
 
     参数:
         db: 数据库会话
         kb_id: 知识库 ID
 
     返回:
-        节点为实体、边含 predicate/chunk_id 的 DiGraph
+        有向图（节点=实体名，边属性含 chunk_id/predicate）
     """
     cached = _cache_get(kb_id)
     if cached is not None:
         return cached
 
+    graph = nx.DiGraph()
     relations = await load_relations(db, kb_id)
-    g = nx.DiGraph()
-    for rel in relations:
-        g.add_node(rel.subject)
-        g.add_node(rel.object_entity)
-        g.add_edge(
-            rel.subject,
-            rel.object_entity,
-            predicate=rel.predicate,
-            chunk_id=rel.chunk_id,
-            relation_id=rel.id,
+    for r in relations:
+        graph.add_edge(
+            r.subject,
+            r.object_entity,
+            predicate=r.predicate,
+            chunk_id=r.chunk_id,
+            document_id=r.document_id,
         )
-    _cache_set(kb_id, g)
-    return g
+    _cache_set(kb_id, graph)
+    return graph
 
 
 async def list_entity_names(db: AsyncSession, kb_id: str) -> list[str]:
-    """列出知识库全部实体名（按长度降序，优先长匹配）。
+    """获取知识库中所有图谱实体名（长名优先，用于 entity linking）。
 
     参数:
         db: 数据库会话
         kb_id: 知识库 ID
 
     返回:
-        实体名称列表
+        按长度降序排列的实体名列表
     """
     relations = await load_relations(db, kb_id)
+    if not relations:
+        return []
     names: set[str] = set()
     for rel in relations:
         names.add(rel.subject)
@@ -244,8 +250,30 @@ async def list_entity_names(db: AsyncSession, kb_id: str) -> list[str]:
     return sorted(names, key=len, reverse=True)
 
 
-def link_entities_in_query(query: str, entity_names: list[str], *, min_len: int = 2) -> list[str]:
-    """从 query 中链接图谱实体（子串/词项匹配）。
+def _edit_distance_le(s1: str, s2: str, max_dist: int = 1) -> bool:
+    """判断两个字符串编辑距离是否 ≤ max_dist（仅用于短实体容错，Phase 3 G-L3）。"""
+    if abs(len(s1) - len(s2)) > max_dist:
+        return False
+    if len(s1) < len(s2):
+        s1, s2 = s2, s1
+    n, m = len(s1), len(s2)
+    prev = list(range(m + 1))
+    for i in range(1, n + 1):
+        curr = [i] + [0] * m
+        lo, hi = max(1, i - max_dist), min(m, i + max_dist)
+        for j in range(lo, hi + 1):
+            cost = 0 if s1[i - 1] == s2[j - 1] else 1
+            curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+        if min(curr) > max_dist:
+            return False
+        prev = curr
+    return prev[m] <= max_dist
+
+
+def link_entities_in_query(
+    query: str, entity_names: list[str], *, min_len: int = 2
+) -> list[str]:
+    """从 query 中链接图谱实体（子串/词项 + 编辑距离容错，Phase 3 G-L3）。
 
     参数:
         query: 用户查询
@@ -258,8 +286,19 @@ def link_entities_in_query(query: str, entity_names: list[str], *, min_len: int 
     import re
 
     q = query.strip()
-    terms = set(re.findall(r"[\w\u4e00-\u9fff]{2,}", q))
-    stop = {"综合", "知识库", "内容", "说明", "有何", "关联", "两段", "之间", "关系"}
+    # CJK multi-gram: 2~4 字窗口（提升短实体召回）
+    cjk_terms: set[str] = set()
+    cjk_segs = re.findall(r"[一-鿿]+", q)
+    for seg in cjk_segs:
+        for win in (4, 3, 2):
+            for i in range(len(seg) - win + 1):
+                cjk_terms.add(seg[i : i + win])
+    latin_terms = set(re.findall(r"[a-zA-Z0-9_]{2,}", q))
+    terms = cjk_terms | latin_terms
+    stop = {
+        "综合", "知识库", "内容", "说明", "有何", "关联", "两段", "之间",
+        "关系", "有什么区别", "有什么", "是什么", "如何", "怎么", "哪些",
+    }
     terms -= stop
 
     hits: list[str] = []
@@ -267,10 +306,18 @@ def link_entities_in_query(query: str, entity_names: list[str], *, min_len: int 
     for name in entity_names:
         if len(name) < min_len or name in seen:
             continue
+        # 1) 精确子串匹配
         matched = name in q
+        # 2) multi-gram 重叠
         if not matched:
             for t in terms:
-                if len(t) >= 3 and (t in name or name in t):
+                if len(t) >= 2 and (t in name or name in t):
+                    matched = True
+                    break
+        # 3) 编辑距离 ≤1（仅短实体 2-4 字，避免假阳性）
+        if not matched and 2 <= len(name) <= 4:
+            for t in terms:
+                if abs(len(t) - len(name)) <= 1 and _edit_distance_le(t, name):
                     matched = True
                     break
         if matched:
@@ -284,8 +331,9 @@ def expand_graph_paths(
     seed_entities: list[str],
     *,
     max_hops: int = 2,
+    anchor_hard_filter: bool = True,
 ) -> tuple[dict[str, float], list[dict[str, Any]]]:
-    """BFS 多跳扩展，聚合 chunk 分数与路径列表。
+    """BFS 多跳扩展，聚合 chunk 分数与路径列表（Phase 3 G-L2：anchor 约束）。
 
     参数:
         graph: NetworkX 有向图
@@ -300,14 +348,14 @@ def expand_graph_paths(
     if not seed_entities or graph.number_of_edges() == 0:
         return chunk_scores, paths
 
+    seed_set = set(seed_entities)
     for seed in seed_entities:
         if seed not in graph:
             continue
-        frontier: list[tuple[str, int]] = [(seed, 0)]
+        frontier: list[tuple[str, int, list[str]]] = [(seed, 0, [seed])]
         visited: set[str] = {seed}
         while frontier:
-            node, depth = frontier.pop(0)
-            # 双向边：出边 + 入边
+            node, depth, path_nodes = frontier.pop(0)
             edges = list(graph.out_edges(node, data=True))
             edges += [(v, u, d) for u, v, d in graph.in_edges(node, data=True)]
             for u, v, data in edges:
@@ -316,8 +364,13 @@ def expand_graph_paths(
                 pred = data.get("predicate", "关联")
                 hop = depth + 1
                 if cid:
-                    # 跳数越近分数越高
-                    chunk_scores[cid] = max(chunk_scores.get(cid, 0.0), 1.0 / hop)
+                    new_path = path_nodes + [neighbor]
+                    # Phase 3 G-L2: anchor 约束 — 路径至少覆盖 2 个 seed 实体
+                    anchor_hits = len(set(new_path) & seed_set)
+                    score = 1.0 / hop
+                    if anchor_hits >= 2:
+                        score *= 1.2  # 多锚点路径加分
+                    chunk_scores[cid] = max(chunk_scores.get(cid, 0.0), score)
                     paths.append(
                         {
                             "subject": node,
@@ -325,11 +378,27 @@ def expand_graph_paths(
                             "object": neighbor,
                             "chunk_id": cid,
                             "hops": hop,
+                            "anchor_hits": anchor_hits,
                         }
                     )
                 if neighbor not in visited and hop < max_hops:
                     visited.add(neighbor)
-                    frontier.append((neighbor, hop))
+                    frontier.append((neighbor, hop, path_nodes + [neighbor]))
+
+    # Phase 3 G-L2: 多种子时硬过滤 — 仅保留覆盖 ≥2 个 anchor 的路径（legacy 可关闭）
+    if anchor_hard_filter and len(seed_entities) >= 2:
+        filtered_scores: dict[str, float] = {}
+        filtered_paths: list[dict[str, Any]] = []
+        for cid, score in chunk_scores.items():
+            # 取该 chunk 关联路径中 anchor_hits 的最大值
+            cid_paths = [p for p in paths if p.get("chunk_id") == cid]
+            max_hits = max((p.get("anchor_hits", 1) for p in cid_paths), default=1)
+            if max_hits >= 2:
+                filtered_scores[cid] = score
+        for p in paths:
+            if p.get("chunk_id") in filtered_scores:
+                filtered_paths.append(p)
+        return filtered_scores, filtered_paths[:20]
 
     return chunk_scores, paths[:20]
 
@@ -338,39 +407,59 @@ async def graph_snapshot(
     db: AsyncSession,
     kb_id: str,
     *,
-    limit_nodes: int = 80,
+    limit_nodes: int = 200,
 ) -> dict[str, Any]:
-    """生成图谱可视化快照（节点/边 JSON）。
+    """获取知识图谱快照（供前端可视化）。
 
     参数:
         db: 数据库会话
         kb_id: 知识库 ID
-        limit_nodes: 节点数量上限
+        limit_nodes: 最多展示的实体节点数（按出现频次截断）
 
     返回:
-        含 nodes、edges、relation_count 的字典
+        含 nodes、edges、relation_count、node_count 的 dict
     """
     relations = await load_relations(db, kb_id)
-    node_set: set[str] = set()
-    edges: list[dict[str, Any]] = []
-    for rel in relations:
-        node_set.add(rel.subject)
-        node_set.add(rel.object_entity)
+    nodes: dict[str, int] = {}
+    edges: list[dict] = []
+    for r in relations:
+        nodes[r.subject] = nodes.get(r.subject, 0) + 1
+        nodes[r.object_entity] = nodes.get(r.object_entity, 0) + 1
         edges.append(
             {
-                "source": rel.subject,
-                "target": rel.object_entity,
-                "predicate": rel.predicate,
-                "chunk_id": rel.chunk_id,
+                "source": r.subject,
+                "target": r.object_entity,
+                "predicate": r.predicate,
+                "chunk_id": r.chunk_id,
             }
         )
-        if len(node_set) >= limit_nodes:
-            break
 
-    nodes = [{"id": n, "name": n} for n in sorted(node_set)[:limit_nodes]]
+    if not edges:
+        return {
+            "nodes": [],
+            "edges": [],
+            "relation_count": 0,
+            "node_count": 0,
+        }
+
+    cap = max(limit_nodes, 1)
+    ranked = sorted(nodes.items(), key=lambda x: x[1], reverse=True)
+    keep = {name for name, _ in ranked[:cap]}
+    if len(keep) < len(nodes):
+        edges = [
+            e
+            for e in edges
+            if e["source"] in keep and e["target"] in keep
+        ]
+        nodes = {n: nodes[n] for n in keep if n in nodes}
+
+    node_list = [
+        {"id": name, "name": name, "weight": weight}
+        for name, weight in sorted(nodes.items(), key=lambda x: x[1], reverse=True)
+    ]
     return {
-        "nodes": nodes,
-        "edges": edges[: limit_nodes * 2],
-        "relation_count": len(relations),
-        "node_count": len(node_set),
+        "nodes": node_list,
+        "edges": edges,
+        "relation_count": len(edges),
+        "node_count": len(node_list),
     }

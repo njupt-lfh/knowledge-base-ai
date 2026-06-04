@@ -68,6 +68,11 @@ class Settings:
     # 分块
     DEFAULT_CHUNK_SIZE: int = int(os.getenv("DEFAULT_CHUNK_SIZE", "500"))
     DEFAULT_CHUNK_OVERLAP: int = int(os.getenv("DEFAULT_CHUNK_OVERLAP", "50"))
+    STRUCTURED_CHUNKING_ENABLED: bool = (
+        os.getenv("STRUCTURED_CHUNKING_ENABLED", "true").lower() == "true"
+    )
+    STRUCTURED_CHUNK_MAX_CHARS: int = int(os.getenv("STRUCTURED_CHUNK_MAX_CHARS", "800"))
+    STRUCTURED_CHUNK_MIN_CHARS: int = int(os.getenv("STRUCTURED_CHUNK_MIN_CHARS", "100"))
 
     # Mock
     LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"
@@ -75,13 +80,25 @@ class Settings:
     # Phase 2.1 Hybrid 检索
     RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
     HYBRID_RERANK_ENABLED: bool = os.getenv("HYBRID_RERANK_ENABLED", "true").lower() == "true"
-    HYBRID_VECTOR_CANDIDATES: int = int(os.getenv("HYBRID_VECTOR_CANDIDATES", "15"))
-    HYBRID_FTS_CANDIDATES: int = int(os.getenv("HYBRID_FTS_CANDIDATES", "15"))
+    HYBRID_VECTOR_CANDIDATES: int = int(os.getenv("HYBRID_VECTOR_CANDIDATES", "30"))
+    HYBRID_FTS_CANDIDATES: int = int(os.getenv("HYBRID_FTS_CANDIDATES", "30"))
+    HYBRID_RRF_POOL_SIZE: int = int(os.getenv("HYBRID_RRF_POOL_SIZE", "30"))
     CONTEXT_MAX_CHARS: int = int(os.getenv("CONTEXT_MAX_CHARS", "4500"))
 
-    # Phase 2.2 Agentic-lite / CRAG-lite
-    CRAG_MIN_SCORE: float = float(os.getenv("CRAG_MIN_SCORE", "0.22"))
-    CRAG_MIN_OVERLAP: float = float(os.getenv("CRAG_MIN_OVERLAP", "0.12"))
+    # Week 1 Cross-Encoder 二阶段重排
+    CROSS_ENCODER_RERANK_ENABLED: bool = (
+        os.getenv("CROSS_ENCODER_RERANK_ENABLED", "true").lower() == "true"
+    )
+    CROSS_ENCODER_MODEL: str = os.getenv(
+        "CROSS_ENCODER_MODEL", "BAAI/bge-reranker-v2-m3"
+    )
+    CROSS_ENCODER_DEVICE: str = os.getenv("CROSS_ENCODER_DEVICE", "cpu")
+    POST_RETRIEVAL_MIN_SCORE: float = float(os.getenv("POST_RETRIEVAL_MIN_SCORE", "0.25"))
+    POST_RETRIEVAL_MAX_PER_DOCUMENT: int = int(os.getenv("POST_RETRIEVAL_MAX_PER_DOCUMENT", "2"))
+
+    # Phase 2.2 Agentic-lite / CRAG-lite（RRF 分数尺度约 0.01–0.16，勿用 0.2+ 绝对阈值）
+    CRAG_MIN_SCORE: float = float(os.getenv("CRAG_MIN_SCORE", "0.06"))
+    CRAG_MIN_OVERLAP: float = float(os.getenv("CRAG_MIN_OVERLAP", "0.10"))
     AGENT_MAX_ROUNDS: int = int(os.getenv("AGENT_MAX_ROUNDS", "2"))
 
     # Phase 2.3 Token 与效率
@@ -95,13 +112,60 @@ class Settings:
     GRAPH_MAX_HOPS: int = int(os.getenv("GRAPH_MAX_HOPS", "2"))
     GRAPH_MAX_TRIPLES_PER_CHUNK: int = int(os.getenv("GRAPH_MAX_TRIPLES_PER_CHUNK", "5"))
     GRAPH_EXTRACTION_MODEL: str = os.getenv("GRAPH_EXTRACTION_MODEL", "")
+    # Phase 3b：lite=Graph-Lite | linear=LinearRAG 实体索引 | legacy=旧 BFS（无 G-L2 硬过滤）
+    GRAPH_MODE: str = os.getenv("GRAPH_MODE", "lite").lower().strip()
+
+    # Phase 3b P0：多跳双 anchor 分路 + 评测 SIM-RAG 对齐
+    MULTI_HOP_SPLIT_ENABLED: bool = (
+        os.getenv("MULTI_HOP_SPLIT_ENABLED", "true").lower() == "true"
+    )
+    MULTI_HOP_PER_ANCHOR_TOP_K: int = int(os.getenv("MULTI_HOP_PER_ANCHOR_TOP_K", "5"))
+    MULTI_HOP_ANCHOR_QUOTA_MIN: int = int(os.getenv("MULTI_HOP_ANCHOR_QUOTA_MIN", "1"))
+    MULTI_HOP_EMPTY_FALLBACK_ENABLED: bool = (
+        os.getenv("MULTI_HOP_EMPTY_FALLBACK_ENABLED", "true").lower() == "true"
+    )
+    QUOTE_ANCHOR_FTS_ENABLED: bool = (
+        os.getenv("QUOTE_ANCHOR_FTS_ENABLED", "true").lower() == "true"
+    )
+    QUOTE_ANCHOR_FTS_LIMIT_PER_SPAN: int = int(
+        os.getenv("QUOTE_ANCHOR_FTS_LIMIT_PER_SPAN", "3")
+    )
+    EVAL_SIM_RAG_ENABLED: bool = os.getenv("EVAL_SIM_RAG_ENABLED", "true").lower() == "true"
 
     # Phase 3 检索 abstention（负例误召回抑制）
     RETRIEVAL_ABSTAIN_ENABLED: bool = (
         os.getenv("RETRIEVAL_ABSTAIN_ENABLED", "true").lower() == "true"
     )
-    RETRIEVAL_ABSTAIN_MIN_SCORE: float = float(os.getenv("RETRIEVAL_ABSTAIN_MIN_SCORE", "0.20"))
-    RETRIEVAL_ABSTAIN_MIN_OVERLAP: float = float(os.getenv("RETRIEVAL_ABSTAIN_MIN_OVERLAP", "0.10"))
+    RETRIEVAL_ABSTAIN_MIN_SCORE: float = float(os.getenv("RETRIEVAL_ABSTAIN_MIN_SCORE", "0.06"))
+    RETRIEVAL_ABSTAIN_MIN_OVERLAP: float = float(os.getenv("RETRIEVAL_ABSTAIN_MIN_OVERLAP", "0.12"))
+    RETRIEVAL_ABSTAIN_MIN_SUBSTANTIVE: float = float(
+        os.getenv("RETRIEVAL_ABSTAIN_MIN_SUBSTANTIVE", "0.10")
+    )
+    RETRIEVAL_ABSTAIN_MIN_ANCHOR: float = float(os.getenv("RETRIEVAL_ABSTAIN_MIN_ANCHOR", "0.20"))
+    RETRIEVAL_ABSTAIN_MIN_ANCHOR_MATCHES: int = int(
+        os.getenv("RETRIEVAL_ABSTAIN_MIN_ANCHOR_MATCHES", "2")
+    )
+    # Phase 1 P1：near_domain 专项拒答（CE < 0.45 且 anchor 不匹配）
+    NEAR_DOMAIN_GATE_ENABLED: bool = (
+        os.getenv("NEAR_DOMAIN_GATE_ENABLED", "true").lower() == "true"
+    )
+    NEAR_DOMAIN_CE_MAX: float = float(os.getenv("NEAR_DOMAIN_CE_MAX", "0.45"))
+
+    # Week 0：生成后 grounded 自检（Post-hoc），提升 faithfulness / 负例拒答
+    POST_HOC_ANSWER_GUARD_ENABLED: bool = (
+        os.getenv("POST_HOC_ANSWER_GUARD_ENABLED", "true").lower() == "true"
+    )
+
+    # Phase 2：双路径答案一致性守卫（导师建议 #3）
+    ANSWER_CONSISTENCY_ENABLED: bool = (
+        os.getenv("ANSWER_CONSISTENCY_ENABLED", "true").lower() == "true"
+    )
+    CONSISTENCY_ROUTES: str = os.getenv(
+        "CONSISTENCY_ROUTES", "relational,comprehensive"
+    )
+    CONSISTENCY_UNCERTAIN_REFUSE: bool = (
+        os.getenv("CONSISTENCY_UNCERTAIN_REFUSE", "true").lower() == "true"
+    )
 
     # Phase 4.1 多模态图片入库
     MULTIMODAL_IMAGE_ENABLED: bool = os.getenv("MULTIMODAL_IMAGE_ENABLED", "true").lower() == "true"

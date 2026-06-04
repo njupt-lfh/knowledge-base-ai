@@ -1,11 +1,12 @@
-"""Phase 2.4 CI 评测：DeepEval 门禁 + Knowledge Retention 回归
+"""DeepEval CI 门禁
 
-用法（在 backend 目录）:
-  python scripts/run_deepeval_ci.py              # 默认 offline 门禁（无需 API）
-  python scripts/run_deepeval_ci.py --live       # 真实 DeepEval + Volcengine Judge
-  python scripts/run_deepeval_ci.py --retrieval  # 若有 eval 数据集，跑检索子集回归
+验证内容：
+  - offline/live 评测与 retention 回归
 
-输出: ../data/eval_deepeval_ci_report.json
+运行方式（在 backend 目录）:
+  python scripts/run_deepeval_ci.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from app.eval.retrieval_metrics import retrieval_metrics  # noqa: E402
 
 
 async def _retrieval_smoke(limit: int = 8) -> dict[str, Any]:
+    """对 eval 数据集子集跑检索冒烟。"""
     from app.core.database import async_session
     from app.services.rag_service import RAGService
 
@@ -71,6 +73,7 @@ async def _retrieval_smoke(limit: int = 8) -> dict[str, Any]:
 
 
 async def _run(args: argparse.Namespace) -> int:
+    """执行主逻辑并返回进程退出码。"""
     smoke = json.loads(SMOKE_FIXTURE.read_text(encoding="utf-8"))
     deepeval_scores = run_deepeval(smoke, prefer_live=args.live)
     deepeval_gates = check_deepeval_gates(deepeval_scores)
@@ -128,6 +131,7 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    """脚本 CLI 入口。"""
     parser = argparse.ArgumentParser(description="DeepEval CI gates (Phase 2.4)")
     parser.add_argument("--live", action="store_true", help="使用真实 DeepEval + Volcengine")
     parser.add_argument("--retrieval", action="store_true", help="跑检索冒烟 + 基线 retention")

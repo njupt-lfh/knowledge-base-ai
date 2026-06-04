@@ -1,4 +1,15 @@
-"""Phase 2.2 验收：Agentic-lite Router + CRAG-lite + 拒答"""
+"""Phase 2.2 验收：Agentic-lite Router + CRAG-lite + 拒答。
+
+验证内容：
+  - Query Router 路由 relational/chitchat 正确
+  - CRAG 弱来源判定为不充分
+  - Agent 拒答与 chat 流式拒答输出正确
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase2_2.py
+
+预期结果：打印 PASS 并退出码 0。
+"""
 
 from __future__ import annotations
 
@@ -12,6 +23,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """执行 Phase 2.2 验收：路由、CRAG 与拒答流程。"""
     from app.core.database import async_session, init_db
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
@@ -31,6 +43,7 @@ async def main() -> int:
         print("FAIL: query router chitchat")
         return 1
 
+    # CRAG：弱来源应判定为不充分
     weak = evaluate_sufficiency("冷门", [{"content": "无关", "score": 0.01}], "factual")
     if weak.sufficient:
         print("FAIL: CRAG should reject weak sources")
@@ -48,6 +61,7 @@ async def main() -> int:
                 f"  crag refusal ok (rounds={run.rounds}, reason={run.sufficiency.reason if run.sufficiency else ''})"
             )
 
+    # 验证 chat SSE 流式拒答
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         if kb:

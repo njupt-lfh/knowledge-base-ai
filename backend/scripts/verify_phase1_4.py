@@ -1,4 +1,15 @@
-"""Phase 1.4 验收：入库门禁 + knowledge_conflicts 表 + API"""
+"""Phase 1.4 验收：入库门禁 + knowledge_conflicts 表 + API。
+
+验证内容：
+  - knowledge_conflicts 表存在
+  - distance_to_similarity 重复阈值计算正确
+  - 预检与冲突列表 API 可正常响应
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase1_4.py
+
+预期结果：打印 PASS 并退出码 0；无知识库时 SKIP 退出码 0。
+"""
 
 from __future__ import annotations
 
@@ -11,6 +22,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """执行 Phase 1.4 验收：入库门禁服务与冲突 API。"""
     from app.core.database import async_session, init_db, verify_schema
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
@@ -24,6 +36,7 @@ async def main() -> int:
         print(f"FAIL: knowledge_conflicts missing: {missing}")
         return 1
 
+    # 验证距离→相似度换算满足重复判定阈值
     sim = distance_to_similarity(0.4)
     if sim < 0.91:
         print(f"FAIL: duplicate threshold sim={sim}")
@@ -42,6 +55,7 @@ async def main() -> int:
             return 1
         print(f"  precheck status={result.status} llm_calls={result.llm_calls}")
 
+    # 验证预检与冲突列表 REST API
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         pre = await client.post(

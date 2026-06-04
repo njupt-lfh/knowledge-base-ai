@@ -1,4 +1,15 @@
-"""Phase 1.5 验收：对话提炼 + Gap 入库流水线"""
+"""Phase 1.5 验收：对话提炼 + Gap 入库流水线。
+
+验证内容：
+  - ConversationExtractService mock 模式能产出 source_ref
+  - Gap 创建与列表 API 正常
+  - Gap 入库 API 可调用（无 chunk 时可能非 200，可接受）
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase1_5.py
+
+预期结果：打印 PASS 并退出码 0；无知识库时 SKIP 退出码 0。
+"""
 
 from __future__ import annotations
 
@@ -11,6 +22,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """执行 Phase 1.5 验收：对话提炼、Gap 创建与入库 API。"""
     from app.core.database import async_session, init_db
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
@@ -21,6 +33,7 @@ async def main() -> int:
 
     await init_db()
 
+    # 验证 mock 模式下的结构化提炼
     svc = ConversationExtractService()
     svc.llm.mock_mode = True
     extracted = await svc.extract_from_turn(
@@ -50,6 +63,7 @@ async def main() -> int:
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 入库 API：空 body 在测试库可能失败，但不影响整体验收
         bad = await client.post(
             f"/api/knowledge-bases/{kb.id}/gaps/{gap.id}/ingest",
             json={},
@@ -57,6 +71,7 @@ async def main() -> int:
         if bad.status_code != 200:
             print(f"  ingest (mock) status={bad.status_code} — OK if no chunks in test DB")
 
+        # 验证 Gap 列表 API
         gaps = await client.get(
             f"/api/knowledge-bases/{kb.id}/gaps", params={"gap_type": "KNOWLEDGE_ABSENT"}
         )

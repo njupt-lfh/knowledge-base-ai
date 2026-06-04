@@ -219,6 +219,54 @@
   margin: 0 auto;
 }
 
+/* 知识库内 AI 对话：纵向铺满可视区域 */
+.chat-page--agent {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--topbar-height) - 2 * var(--space-lg));
+  height: 100%;
+}
+
+.chat-page--agent .chat-page__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 80%;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.chat-page--agent .kb-detail__header {
+  flex-shrink: 0;
+  margin-bottom: var(--space-sm);
+}
+
+.chat-page--agent .chat-page__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chat-page--agent .chat-window {
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-page--agent .chat-window__messages {
+  flex: 1 1 0;
+  height: 0;
+  min-height: calc(100vh - var(--topbar-height) - 220px);
+  max-height: none;
+}
+
+.chat-page--agent .chat-window__input {
+  flex-shrink: 0;
+}
+
 .share-page {
   min-height: 100vh;
   display: flex;

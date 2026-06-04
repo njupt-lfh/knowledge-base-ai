@@ -1,8 +1,12 @@
-"""删除 pytest / 联调产生的测试知识库，保留用户正式库。
+"""清理测试知识库
 
-用法:
-  python scripts/cleanup_test_knowledge_bases.py          # 预览
-  python scripts/cleanup_test_knowledge_bases.py --apply  # 执行删除
+验证内容：
+  - 按 ID 前缀/名称删除 pytest 残留库
+
+运行方式（在 backend 目录）:
+  python scripts/cleanup_test_knowledge_bases.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
 """
 
 from __future__ import annotations
@@ -61,6 +65,7 @@ TEST_NAMES = {
 
 
 def is_test_kb(kb: KnowledgeBase) -> bool:
+    """根据 ID 前缀或名称判断是否为测试知识库。"""
     if any(kb.id.startswith(p) for p in TEST_ID_PREFIXES):
         return True
     if kb.name in TEST_NAMES:
@@ -73,6 +78,7 @@ def is_test_kb(kb: KnowledgeBase) -> bool:
 
 
 async def main(apply: bool) -> None:
+    """预览或执行测试知识库清理。"""
     await init_db()
     async with async_session() as db:
         rows = (await db.execute(select(KnowledgeBase))).scalars().all()

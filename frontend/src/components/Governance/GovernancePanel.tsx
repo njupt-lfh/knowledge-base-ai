@@ -1,16 +1,35 @@
 /**
- * 知识库治理建议面板
- * 扫描冷知识/重复/低质量 chunk 并执行归档、禁用等动作
+ * 知识库治理建议面板（Phase 3 治理闭环）
+ * 扫描并持久化建议，走 pending → approved → executed → verified 状态机
  * 主要导出：默认 GovernancePanel 组件
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Card, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
-import { ReloadOutlined, ToolOutlined } from '@ant-design/icons'
+import {
+  Button,
+  Card,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  message,
+} from 'antd'
+import {
+  CheckOutlined,
+  CloseOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  ScanOutlined,
+} from '@ant-design/icons'
 import ColdKnowledgeBadge from '../Charts/ColdKnowledgeBadge'
 import {
   governanceApi,
-  type GovernanceScanResult,
-  type GovernanceSuggestion,
+  type AuditLogEntry,
+  type GovernanceHealth,
+  type PersistedSuggestion,
 } from '../../api/governance'
 import type { ColdKnowledgeStats } from '../../api/stats'
 import './GovernancePanel.css'
@@ -29,11 +48,20 @@ const SEVERITY_LABELS: Record<string, string> = {
   info: '低',
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  archive: '归档',
-  deactivate: '禁用',
-  boost_faq: '提升权重',
-  merge: '合并提示',
+const STATUS_LABELS: Record<string, string> = {
+  pending: '待审核',
+  approved: '已批准',
+  executed: '已执行',
+  verified: '已验证',
+  dismissed: '已驳回',
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  pending: 'gold',
+  approved: 'blue',
+  executed: 'purple',
+  verified: 'green',
+  dismissed: 'default',
 }
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -42,9 +70,33 @@ const SEVERITY_COLOR: Record<string, string> = {
   error: 'red',
 }
 
+const ACTION_LABELS: Record<string, string> = {
+  archive: '归档',
+  deactivate: '禁用',
+  boost_faq: '提升FAQ',
+  merge: '合并',
+}
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  approved: '批准',
+  dismissed: '驳回',
+  executed: '执行',
+  verified: '验证',
+  reverted: '已回退',
+}
+
 interface GovernancePanelProps {
   kbId: string
   onApplied?: () => void
+}
+
+function parseChunkIds(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -52,69 +104,120 @@ interface GovernancePanelProps {
  * @param onApplied 治理动作成功后通知父组件刷新健康度/冷知识统计
  */
 export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProps) {
-  const [data, setData] = useState<GovernanceScanResult | null>(null)
+  const [activeTab, setActiveTab] = useState('pending')
+  const [health, setHealth] = useState<GovernanceHealth | null>(null)
+  const [pendingRows, setPendingRows] = useState<PersistedSuggestion[]>([])
+  const [workflowRows, setWorkflowRows] = useState<PersistedSuggestion[]>([])
+  const [auditRows, setAuditRows] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [actingId, setActingId] = useState<string | null>(null)
+  const [auditFilter, setAuditFilter] = useState<string | undefined>(undefined)
 
-  const fetchScan = useCallback(async () => {
-    setLoading(true)
-    try {
-      // scanDuplicates=false 加快扫描，重复项由专门流程处理
-      const res = await governanceApi.scan(kbId, false)
-      setData(res.data)
-    } catch {
-      message.error('获取治理建议失败')
-    }
-    setLoading(false)
+  const fetchPending = useCallback(async () => {
+    const res = await governanceApi.listPersisted(kbId, { status: 'pending' })
+    setPendingRows(res.data)
   }, [kbId])
 
-  useEffect(() => {
-    fetchScan()
-  }, [fetchScan])
+  const fetchWorkflow = useCallback(async () => {
+    const [approved, executed, verified] = await Promise.all([
+      governanceApi.listPersisted(kbId, { status: 'approved' }),
+      governanceApi.listPersisted(kbId, { status: 'executed' }),
+      governanceApi.listPersisted(kbId, { status: 'verified' }),
+    ])
+    setWorkflowRows([...approved.data, ...executed.data, ...verified.data])
+  }, [kbId])
 
-  const handleApply = async (row: GovernanceSuggestion, action?: string) => {
-    const act = action || row.recommended_action
-    if (act === 'merge') {
-      message.info('请在文档分块列表中编辑后禁用重复项')
-      return
-    }
-    setActingId(row.id)
+  const fetchAudit = useCallback(async () => {
+    const res = await governanceApi.auditLog(kbId, {
+      action: auditFilter,
+      limit: 100,
+    })
+    setAuditRows(res.data)
+  }, [kbId, auditFilter])
+
+  const refreshAll = useCallback(async () => {
+    setLoading(true)
     try {
-      const res = await governanceApi.apply(kbId, act, row.chunk_ids)
-      message.success(`已处理 ${res.data.applied} 项`)
-      onApplied?.()
-      fetchScan()
+      await Promise.all([fetchPending(), fetchWorkflow(), fetchAudit()])
     } catch {
-      message.error('执行治理动作失败')
+      message.error('加载治理数据失败')
+    }
+    setLoading(false)
+  }, [fetchPending, fetchWorkflow, fetchAudit])
+
+  useEffect(() => {
+    refreshAll()
+  }, [refreshAll])
+
+  const handleScanAndPersist = async () => {
+    setLoading(true)
+    try {
+      const res = await governanceApi.scanAndPersist(kbId, false)
+      setHealth(res.data.health)
+      message.success(`扫描完成，新增 ${res.data.new_suggestions} 条待审核建议`)
+      await fetchPending()
+      onApplied?.()
+    } catch {
+      message.error('扫描并入库失败')
+    }
+    setLoading(false)
+  }
+
+  const handleRollback = async (suggestionId: string) => {
+    setActingId(suggestionId)
+    try {
+      const res = await governanceApi.rollback(kbId, suggestionId)
+      const from = STATUS_LABELS[res.data.prev_status] || res.data.prev_status
+      const to = STATUS_LABELS[res.data.status] || res.data.status
+      message.success(`已回退: ${from} → ${to}`)
+      await Promise.all([fetchPending(), fetchWorkflow(), fetchAudit()])
+    } catch {
+      message.error('回退失败（仅已批准/已执行状态可回退）')
     }
     setActingId(null)
   }
 
-  const health = data?.health
-  const coldBadge: ColdKnowledgeStats | null = health
-    ? {
-        cold_count_90d: health.cold_count_90d,
-        cold_count_total: health.cold_count_total,
-        threshold_days: health.threshold_days,
-      }
-    : null
+  const runAction = async (
+    suggestionId: string,
+    action: 'approve' | 'dismiss' | 'execute' | 'verify',
+    successMsg: string,
+  ) => {
+    setActingId(suggestionId)
+    try {
+      if (action === 'approve') await governanceApi.approve(kbId, suggestionId)
+      else if (action === 'dismiss') await governanceApi.dismiss(kbId, suggestionId)
+      else if (action === 'execute') await governanceApi.execute(kbId, suggestionId)
+      else await governanceApi.verify(kbId, suggestionId)
+      message.success(successMsg)
+      onApplied?.()
+      await Promise.all([fetchPending(), fetchWorkflow(), fetchAudit()])
+    } catch {
+      message.error('操作失败')
+    }
+    setActingId(null)
+  }
 
-  const columns = [
+  const suggestionColumns = [
     {
       title: '类型',
-      dataIndex: 'type',
+      dataIndex: 'suggestion_type',
       width: 120,
       render: (t: string) => <Tag>{TYPE_LABELS[t] || t}</Tag>,
     },
     {
       title: '建议',
       key: 'title',
-      render: (_: unknown, row: GovernanceSuggestion) => (
+      render: (_: unknown, row: PersistedSuggestion) => (
         <Space direction="vertical" size={0}>
           <Typography.Text strong>{row.title}</Typography.Text>
           <Typography.Text type="secondary">{row.description}</Typography.Text>
-          <Typography.Text type="secondary" className="gov-preview">
-            {row.content_preview}
+          {row.content_preview && (
+            <Typography.Text type="secondary" className="gov-preview">
+              {row.content_preview}
+            </Typography.Text>
+          )}
+          <Typography.Text type="secondary" className="gov-chunk-ids">
+            块 ID：{parseChunkIds(row.chunk_ids).join(', ') || '—'}
           </Typography.Text>
         </Space>
       ),
@@ -128,53 +231,167 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       ),
     },
     {
+      title: '推荐动作',
+      dataIndex: 'recommended_action',
+      width: 100,
+      render: (a: string) => ACTION_LABELS[a] || a,
+    },
+  ]
+
+  const pendingColumns = [
+    ...suggestionColumns,
+    {
+      title: '操作',
+      key: 'action',
+      width: 180,
+      render: (_: unknown, row: PersistedSuggestion) => (
+        <Space size="small">
+          <Button
+            size="small"
+            type="primary"
+            icon={<CheckOutlined />}
+            loading={actingId === row.id}
+            onClick={() => runAction(row.id, 'approve', '已批准')}
+          >
+            批准
+          </Button>
+          <Popconfirm
+            title="确定驳回此建议？"
+            onConfirm={() => runAction(row.id, 'dismiss', '已驳回')}
+          >
+            <Button size="small" danger icon={<CloseOutlined />} loading={actingId === row.id}>
+              驳回
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
+  const workflowColumns = [
+    ...suggestionColumns,
+    {
+      title: '状态',
+      dataIndex: 'status',
+      width: 100,
+      render: (s: string) => (
+        <Tag color={STATUS_COLOR[s] || 'default'}>{STATUS_LABELS[s] || s}</Tag>
+      ),
+    },
+    {
       title: '操作',
       key: 'action',
       width: 200,
-      render: (_: unknown, row: GovernanceSuggestion) => {
-        const actions = [row.recommended_action]
-        // 低质量、冷知识类型提供归档/禁用的交叉选项
-        if (row.type === 'low_quality') {
-          if (!actions.includes('archive')) actions.push('archive')
-        }
-        if (row.type === 'cold_stale') {
-          if (!actions.includes('deactivate')) actions.push('deactivate')
-        }
-        return (
-          <Space size="small">
-            {actions.map((action) => {
-              const btn = (
+      render: (_: unknown, row: PersistedSuggestion) => {
+        if (row.status === 'approved') {
+          return (
+            <Space size="small">
+              <Popconfirm
+                title="确定执行此治理动作？"
+                onConfirm={() => runAction(row.id, 'execute', '已执行')}
+              >
                 <Button
-                  key={action}
                   size="small"
-                  type={action === row.recommended_action ? 'primary' : 'default'}
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
                   loading={actingId === row.id}
                 >
-                  {ACTION_LABELS[action] || action}
+                  执行
                 </Button>
-              )
-              if (action === 'deactivate' || action === 'archive') {
-                return (
-                  <Popconfirm
-                    key={action}
-                    title={`确定${ACTION_LABELS[action]}？`}
-                    onConfirm={() => handleApply(row, action)}
-                  >
-                    {btn}
-                  </Popconfirm>
-                )
-              }
-              return (
-                <span key={action} onClick={() => handleApply(row, action)}>
-                  {btn}
-                </span>
-              )
-            })}
-          </Space>
+              </Popconfirm>
+              <Popconfirm title="确定回退到待审核？" onConfirm={() => handleRollback(row.id)}>
+                <Button size="small" loading={actingId === row.id}>
+                  回退
+                </Button>
+              </Popconfirm>
+            </Space>
+          )
+        }
+        if (row.status === 'executed') {
+          return (
+            <Space size="small">
+              <Button
+                size="small"
+                type="primary"
+                icon={<SafetyCertificateOutlined />}
+                loading={actingId === row.id}
+                onClick={() => runAction(row.id, 'verify', '已验证')}
+              >
+                验证
+              </Button>
+              <Popconfirm
+                title="确定回退到已批准？（会恢复 chunk）"
+                onConfirm={() => handleRollback(row.id)}
+              >
+                <Button size="small" loading={actingId === row.id}>
+                  回退
+                </Button>
+              </Popconfirm>
+            </Space>
+          )
+        }
+        return <Typography.Text type="secondary">—</Typography.Text>
+      },
+    },
+  ]
+
+  const auditColumns = [
+    {
+      title: '时间',
+      dataIndex: 'created_at',
+      width: 160,
+      render: (t: string) => new Date(t).toLocaleString(),
+    },
+    {
+      title: '动作',
+      dataIndex: 'action',
+      width: 80,
+      render: (a: string) => <Tag>{AUDIT_ACTION_LABELS[a] || a}</Tag>,
+    },
+    {
+      title: '建议 ID',
+      dataIndex: 'suggestion_id',
+      width: 100,
+      render: (id: string | null) => (id ? `${id.slice(0, 8)}…` : '—'),
+    },
+    {
+      title: '操作人',
+      dataIndex: 'operator',
+      width: 80,
+      render: (o: string | null) => o || '—',
+    },
+    {
+      title: '详情',
+      dataIndex: 'detail',
+      render: (d: string | null) => d || '—',
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 120,
+      render: (_: unknown, row: AuditLogEntry) => {
+        if (!row.suggestion_id) return <Typography.Text type="secondary">—</Typography.Text>
+        return (
+          <Popconfirm
+            title="确定撤销此操作？会将工单回退到上一个状态"
+            onConfirm={() => handleRollback(row.suggestion_id!)}
+          >
+            <Button size="small" danger loading={actingId === row.suggestion_id}>
+              撤销
+            </Button>
+          </Popconfirm>
         )
       },
     },
   ]
+
+  const coldBadge: ColdKnowledgeStats | null = health
+    ? {
+        cold_count_90d: health.cold_count_90d,
+        cold_count_total: health.cold_count_total,
+        threshold_days: health.threshold_days,
+      }
+    : null
 
   return (
     <Space
@@ -192,30 +409,99 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
             <Typography.Text type="secondary"> / {health.total_chunks}</Typography.Text>
           </Card>
         )}
-        {health && (
-          <Card size="small" className="governance-panel__stat">
-            <Typography.Text type="secondary">待处理建议 </Typography.Text>
-            <Typography.Text strong>{health.suggestions_count}</Typography.Text>
-          </Card>
-        )}
-        <Button icon={<ReloadOutlined />} onClick={fetchScan} loading={loading}>
-          重新扫描
+        <Card size="small" className="governance-panel__stat">
+          <Typography.Text type="secondary">待审核 </Typography.Text>
+          <Typography.Text strong>{pendingRows.length}</Typography.Text>
+        </Card>
+        <Button
+          type="primary"
+          icon={<ScanOutlined />}
+          onClick={handleScanAndPersist}
+          loading={loading}
+        >
+          扫描并入库
+        </Button>
+        <Button icon={<ReloadOutlined />} onClick={refreshAll} loading={loading}>
+          刷新
         </Button>
       </Space>
 
-      {data?.suggestions.length === 0 && !loading && (
-        <Typography.Text type="secondary">
-          <ToolOutlined /> 暂无治理建议，知识库状态良好
-        </Typography.Text>
-      )}
-
-      <Table
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={data?.suggestions || []}
-        pagination={{ pageSize: 10 }}
-        size="small"
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        destroyOnHidden={false}
+        items={[
+          {
+            key: 'pending',
+            label: `待审核 (${pendingRows.length})`,
+            children: (
+              <>
+                {pendingRows.length === 0 && !loading && (
+                  <Typography.Text type="secondary">
+                    暂无待审核建议，点击「扫描并入库」生成工单
+                  </Typography.Text>
+                )}
+                <Table
+                  rowKey="id"
+                  loading={loading}
+                  columns={pendingColumns}
+                  dataSource={pendingRows}
+                  pagination={{ pageSize: 10 }}
+                  size="small"
+                />
+              </>
+            ),
+          },
+          {
+            key: 'workflow',
+            label: `执行流转 (${workflowRows.length})`,
+            children: (
+              <>
+                {workflowRows.length === 0 && !loading && (
+                  <Typography.Text type="secondary">暂无流转中的建议</Typography.Text>
+                )}
+                <Table
+                  rowKey="id"
+                  loading={loading}
+                  columns={workflowColumns}
+                  dataSource={workflowRows}
+                  pagination={{ pageSize: 10 }}
+                  size="small"
+                />
+              </>
+            ),
+          },
+          {
+            key: 'audit',
+            label: '审计日志',
+            children: (
+              <>
+                <Space style={{ marginBottom: 12 }}>
+                  <Typography.Text type="secondary">筛选动作：</Typography.Text>
+                  <Select
+                    allowClear
+                    placeholder="全部"
+                    style={{ width: 120 }}
+                    value={auditFilter}
+                    onChange={(v) => setAuditFilter(v)}
+                    options={Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => ({
+                      value: k,
+                      label: v,
+                    }))}
+                  />
+                </Space>
+                <Table
+                  rowKey="id"
+                  loading={loading}
+                  columns={auditColumns}
+                  dataSource={auditRows}
+                  pagination={{ pageSize: 15 }}
+                  size="small"
+                />
+              </>
+            ),
+          },
+        ]}
       />
     </Space>
   )

@@ -25,6 +25,10 @@ LOW_QUALITY_THRESHOLD = 0.25
 REVIEW_DISLIKE_THRESHOLD = 3
 RETRIEVAL_BLEND = 0.7  # retrieval_score 权重
 QUALITY_BLEND = 0.3
+# 质量门控硬过滤阈值（Phase 1）
+QUALITY_GATE_MIN_SCORE = 0.25  # 低于此分的 chunk 禁止进入检索结果（与 LOW_QUALITY_THRESHOLD 对齐，放行冷启动 ~0.25）
+QUALITY_GATE_DISLIKE_BLACKLIST = 3  # 点踩数达到此值进入黑名单
+QUALITY_GATE_NEEDS_REVIEW_DISLIKE = 2  # needs_review 且 dislike 达到此值即剔除
 
 
 def compute_quality_score(
@@ -76,6 +80,54 @@ def blend_retrieval_score(retrieval_score: float, quality_score: float) -> float
         融合后的最终 score
     """
     return round(RETRIEVAL_BLEND * retrieval_score + QUALITY_BLEND * quality_score, 4)
+
+
+def apply_quality_gate(
+    candidates: list[dict],
+    *,
+    quality_scores: dict[str, float],
+    quality_details: dict[str, dict] | None = None,
+    min_score: float | None = None,
+) -> list[dict]:
+    """检索末段硬过滤：低质量 / needs_review+dislike / 黑名单 chunk 剔除。
+
+    参数:
+        candidates: 候选 chunk 列表，每个需含 'chunk_id' 或 'id'
+        quality_scores: chunk_id → quality_score 映射
+        quality_details: chunk_id → {like_count, dislike_count, needs_review} 映射（可选）
+        min_score: 自定义最低质量分（默认 QUALITY_GATE_MIN_SCORE）
+
+    返回:
+        过滤后的候选列表（可能为空）
+    """
+    if not candidates:
+        return []
+
+    threshold = min_score if min_score is not None else QUALITY_GATE_MIN_SCORE
+    details = quality_details or {}
+    passed: list[dict] = []
+
+    for c in candidates:
+        cid = c.get("chunk_id") or c.get("id") or ""
+        qs = quality_scores.get(cid, 0.5)  # 新 chunk 默认 0.5
+
+        # 黑名单：dislike >= 3
+        d = details.get(cid, {})
+        dislike = d.get("dislike_count", 0)
+        if dislike >= QUALITY_GATE_DISLIKE_BLACKLIST:
+            continue
+
+        # needs_review 且 dislike >= 2
+        if d.get("needs_review") and dislike >= QUALITY_GATE_NEEDS_REVIEW_DISLIKE:
+            continue
+
+        # 质量分低于阈值
+        if qs < threshold:
+            continue
+
+        passed.append(c)
+
+    return passed
 
 
 class QualityService:
@@ -186,6 +238,34 @@ class QualityService:
             if row:
                 scores[cid] = row.quality_score
         return scores
+
+    async def get_quality_details_map(
+        self, chunk_ids: list[str]
+    ) -> dict[str, dict]:
+        """批量获取 chunk 的质量详情（dislike_count, needs_review 等）。
+
+        用于 apply_quality_gate 的 blacklist / needs_review 规则。
+
+        参数:
+            chunk_ids: chunk ID 列表
+
+        返回:
+            chunk_id → {dislike_count, like_count, needs_review, quality_score} 映射
+        """
+        if not chunk_ids:
+            return {}
+        result = await self.db.execute(
+            select(ChunkQuality).where(ChunkQuality.chunk_id.in_(chunk_ids))
+        )
+        return {
+            r.chunk_id: {
+                "dislike_count": r.dislike_count or 0,
+                "like_count": r.like_count or 0,
+                "needs_review": bool(r.needs_review),
+                "quality_score": r.quality_score or 0.5,
+            }
+            for r in result.scalars().all()
+        }
 
     async def list_low_quality(self, kb_id: str, limit: int = 20) -> list[dict]:
         """列出需复审的低质量 chunk。

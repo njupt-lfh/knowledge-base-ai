@@ -1,4 +1,15 @@
-"""Phase 2.1 验收：Hybrid 检索 + FTS5 + RRF"""
+"""Phase 2.1 验收：Hybrid 检索 + FTS5 + RRF。
+
+验证内容：
+  - chunks_fts 表存在
+  - reciprocal_rank_fusion 合并排序正确
+  - rerank、Hybrid 搜索与 REST search API 可用
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase2_1.py
+
+预期结果：打印 PASS 并退出码 0。
+"""
 
 from __future__ import annotations
 
@@ -11,6 +22,7 @@ sys.path.insert(0, str(BACKEND))
 
 
 async def main() -> int:
+    """执行 Phase 2.1 验收：FTS5、Hybrid 检索、RRF 与 Rerank。"""
     from app.core.database import async_session, init_db
     from app.main import app
     from app.models.knowledge_base import KnowledgeBase
@@ -22,6 +34,7 @@ async def main() -> int:
     await init_db()
 
     async with async_session() as db:
+        # 验证 FTS5 虚拟表已创建
         row = (
             await db.execute(
                 text("SELECT name FROM sqlite_master WHERE type='table' AND name='chunks_fts'")
@@ -39,6 +52,7 @@ async def main() -> int:
             hits = await retriever.search(db, kb.id, "RAG 检索", top_k=3)
             print(f"  hybrid search hits={len(hits)}")
 
+    # 验证 RRF：b 出现在两个列表中，得分应最高
     rrf = reciprocal_rank_fusion([["a", "b"], ["b", "c"]])
     if rrf.get("b", 0) <= rrf.get("a", 0):
         print(f"FAIL: RRF merge unexpected {rrf}")

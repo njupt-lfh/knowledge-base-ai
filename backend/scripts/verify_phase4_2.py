@@ -1,4 +1,13 @@
-"""Phase 4.2 PDF 内嵌图验收 — 零真实 API（LLM_MOCK_MODE=true）"""
+"""Phase 4.2 PDF 内嵌图验收
+
+验证内容：
+  - PDF 文本块与 pdf_image 块入库
+
+运行方式（在 backend 目录）:
+  python scripts/verify_phase4_2.py
+
+预期结果：打印 PASS 并退出码 0；失败时退出码 1（部分脚本 SKIP 为 0）。
+"""
 
 from __future__ import annotations
 
@@ -17,6 +26,7 @@ os.environ["PDF_IMAGE_EXTRACTION_ENABLED"] = "true"
 
 
 def _build_sample_pdf(path: Path) -> None:
+    """构造含文本与内嵌图的样例 PDF。"""
     doc = fitz.open()
     page = doc.new_page()
     page.insert_text((72, 72), "verify phase42 sentinel Q7Z9", fontsize=12)
@@ -27,6 +37,7 @@ def _build_sample_pdf(path: Path) -> None:
 
 
 async def main() -> int:
+    """脚本 CLI 入口。"""
     from app.core.chroma_client import get_collection
     from app.core.database import async_session, init_db
     from app.models.chunk import Chunk

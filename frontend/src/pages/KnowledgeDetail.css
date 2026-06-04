@@ -1,14 +1,109 @@
 .kb-detail__header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
   gap: var(--space-md);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.kb-detail__headline {
+  display: flex;
+  align-items: baseline;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  gap: 0;
+  line-height: 1.3;
+}
+
+.kb-detail__name {
+  flex-shrink: 0;
+}
+
+.kb-detail__desc {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .kb-detail__panel {
   padding: var(--space-lg);
+}
+
+/* 知识图谱：纵向撑满可视区域，图表贴近窗口底部 */
+.kb-detail--graph {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--topbar-height) - 2 * var(--space-lg));
+}
+
+.kb-detail--graph .kb-detail__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--space-md);
+}
+
+.kb-detail--graph .kb-detail__tab-content--graph {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.kb-detail__graph-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.kb-detail--graph .kb-graph-panel.chart-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--topbar-height) - 160px);
+  height: 100%;
+  padding: var(--space-sm) var(--space-md) var(--space-md);
+  overflow: hidden;
+}
+
+.kb-graph-panel__title {
+  flex-shrink: 0;
+  margin-bottom: var(--space-xs) !important;
+}
+
+/* flex:1 + height:0 让绘图区吃满 HudPanel 剩余高度 */
+.kb-graph-chart {
+  flex: 1 1 0;
+  height: 0;
+  min-height: calc(100vh - var(--topbar-height) - 160px);
+  width: 100%;
+  position: relative;
+}
+
+.kb-graph-chart > div {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.kb-graph-panel--empty {
+  min-height: calc(100vh - var(--topbar-height) - 180px);
+}
+
+.kb-graph-panel__empty-text {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  margin: 0;
+  padding: var(--space-xl) 0;
 }
 
 .kb-detail__tabs .ant-tabs-nav::before {
