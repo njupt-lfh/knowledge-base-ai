@@ -1,20 +1,77 @@
 """项目打包脚本 — 跨平台，生成可直接迁移的压缩包
 用法: python scripts/pack_for_deploy.py
 输出: knowledge-base-ai-portable.zip
+
+打包前自动清理测试知识库与孤儿数据，确保新机器上只有正式知识库。
 """
 import shutil
+import sqlite3
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PACK = ROOT / "knowledge-base-ai-portable.zip"
+DB = ROOT / "data" / "knowledge_base.db"
 
 EXCLUDE = {
     "node_modules", "__pycache__", ".pytest_cache", ".coverage",
     ".claude", ".git", "dist", ".vite",
 }
 
+# ── 打包前清理 ──────────────────────────────────────────────
+def cleanup_test_data():
+    """删除 pytest 产生的测试知识库与孤儿数据，只保留正式 KB。"""
+    if not DB.exists():
+        return
+    conn = sqlite3.connect(str(DB))
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    # 删除测试 KB（ID 以 "kb-" 开头，pytest fixture 生成）
+    c = conn.execute("DELETE FROM knowledge_bases WHERE id LIKE 'kb-%'")
+    deleted_kbs = c.rowcount
+
+    # 级联删除孤儿数据
+    conn.execute(
+        "DELETE FROM conversations WHERE knowledge_base_id "
+        "NOT IN (SELECT id FROM knowledge_bases)"
+    )
+    conn.execute(
+        "DELETE FROM knowledge_gaps WHERE kb_id "
+        "NOT IN (SELECT id FROM knowledge_bases)"
+    )
+    conn.execute(
+        "DELETE FROM chunk_feedback WHERE kb_id "
+        "NOT IN (SELECT id FROM knowledge_bases)"
+    )
+    conn.execute(
+        "DELETE FROM kg_relations WHERE knowledge_base_id "
+        "NOT IN (SELECT id FROM knowledge_bases)"
+    )
+    conn.execute(
+        "DELETE FROM knowledge_conflicts WHERE knowledge_base_id "
+        "NOT IN (SELECT id FROM knowledge_bases)"
+    )
+    conn.execute(
+        "DELETE FROM chunk_quality WHERE chunk_id "
+        "NOT IN (SELECT id FROM chunks)"
+    )
+    conn.commit()
+
+    remaining = conn.execute("SELECT count(*) FROM knowledge_bases").fetchone()[0]
+    print(f"    清理: 删除 {deleted_kbs} 个测试 KB, 剩余 {remaining} 个正式 KB")
+    for row in conn.execute(
+        "SELECT substr(id, 1, 8), name FROM knowledge_bases ORDER BY name"
+    ):
+        print(f"      {row[0]}  {row[1]}")
+    conn.close()
+
+
+# ── 打包主流程 ──────────────────────────────────────────────
 print("=== 打包 KnowledgeBase AI 项目 ===")
+
+# 0. 清理
+print("[0/5] 清理测试数据...")
+cleanup_test_data()
 
 files_to_pack: list[tuple[Path, str]] = []
 
