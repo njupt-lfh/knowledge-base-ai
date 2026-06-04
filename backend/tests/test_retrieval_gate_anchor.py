@@ -27,7 +27,11 @@ def test_multi_hop_relaxed_keeps_dual_entity_chunks():
     ]
     strict = apply_retrieval_abstention(q, sources, "relational", graph_paths=[])
     relaxed = apply_retrieval_abstention(
-        q, sources, "relational", graph_paths=[{"seed": "x"}], multi_hop_relaxed=True,
+        q,
+        sources,
+        "relational",
+        graph_paths=[{"seed": "x"}],
+        multi_hop_relaxed=True,
     )
     assert len(relaxed) == 2
     assert len(strict) <= len(relaxed)

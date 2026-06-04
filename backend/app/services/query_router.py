@@ -171,7 +171,10 @@ def decompose_multi_hop_query(query: str) -> list[str]:
         return seeds
 
     # 模式1：「A 与 B 的关系/区别/对比」
-    m = re.search(r"「?([^」与和、,，]+)」?\s*[与和、]\s*「?([^」与和、,，]+)」?\s*(?:的)?(?:关系|区别|对比|关联|异同)", query)
+    m = re.search(
+        r"「?([^」与和、,，]+)」?\s*[与和、]\s*「?([^」与和、,，]+)」?\s*(?:的)?(?:关系|区别|对比|关联|异同)",
+        query,
+    )
     if m:
         a, b = m.group(1).strip(), m.group(2).strip()
         if len(a) >= 2:
@@ -195,8 +198,25 @@ def decompose_multi_hop_query(query: str) -> list[str]:
 
     # 模式3：「涉及哪些/包含哪些」（comprehensive）
     cjk = re.findall(r"[一-鿿]{2,}", query)
-    stop = {"综合", "知识库", "内容", "说明", "有何", "关联", "两段", "之间", "关系",
-            "有什么区别", "有什么", "是什么", "如何", "怎么", "哪些", "涉及", "包含"}
+    stop = {
+        "综合",
+        "知识库",
+        "内容",
+        "说明",
+        "有何",
+        "关联",
+        "两段",
+        "之间",
+        "关系",
+        "有什么区别",
+        "有什么",
+        "是什么",
+        "如何",
+        "怎么",
+        "哪些",
+        "涉及",
+        "包含",
+    }
     for w in cjk:
         if w not in stop and len(w) >= 2:
             seeds.append(w)

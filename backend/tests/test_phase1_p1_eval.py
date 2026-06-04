@@ -133,7 +133,9 @@ def test_compare_eval_runs_delta():
     comp = compare_reports(before, after)
     assert comp["metrics"]["context_recall_mean"]["delta"] == pytest.approx(0.01)
     assert comp["metrics"]["negative_reject_rate"]["delta"] == pytest.approx(0.2)
-    assert comp["by_negative_subtype"]["near_domain"]["negative_reject_rate"]["delta"] == pytest.approx(0.25)
+    assert comp["by_negative_subtype"]["near_domain"]["negative_reject_rate"][
+        "delta"
+    ] == pytest.approx(0.25)
     text = format_comparison(comp)
     assert "negative_reject_rate" in text
     assert "near_domain" in text

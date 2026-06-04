@@ -61,7 +61,10 @@ async def _run(args: argparse.Namespace) -> int:
             quotes = extract_quote_anchors(question)
 
             sources, _route, _paths = await agent.retrieve_for_eval(
-                db, kb_id, question, top_k=args.top_k,
+                db,
+                kb_id,
+                question,
+                top_k=args.top_k,
             )
             retrieved = [x["chunk_id"] for x in sources]
             metrics = retrieval_metrics(relevant, retrieved, "multi_hop")

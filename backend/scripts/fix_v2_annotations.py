@@ -24,11 +24,44 @@ def extract_key_terms(text: str) -> list[str]:
     """提取中文关键词（2-4字词组）"""
     # 移除常见停用词和标点
     stop_words = {
-        "什么", "如何", "为什么", "怎么", "哪些", "哪个", "请问", "请",
-        "介绍", "解释", "说明", "列出", "描述", "比较", "分析",
-        "一下", "一个", "一种", "这个", "那个", "可以", "需要",
-        "的", "是", "在", "有", "和", "与", "或", "及", "等",
-        "了", "吗", "呢", "吧", "啊", "哦", "嗯",
+        "什么",
+        "如何",
+        "为什么",
+        "怎么",
+        "哪些",
+        "哪个",
+        "请问",
+        "请",
+        "介绍",
+        "解释",
+        "说明",
+        "列出",
+        "描述",
+        "比较",
+        "分析",
+        "一下",
+        "一个",
+        "一种",
+        "这个",
+        "那个",
+        "可以",
+        "需要",
+        "的",
+        "是",
+        "在",
+        "有",
+        "和",
+        "与",
+        "或",
+        "及",
+        "等",
+        "了",
+        "吗",
+        "呢",
+        "吧",
+        "啊",
+        "哦",
+        "嗯",
     }
     # 提取中文
     chinese = re.findall(r"[一-鿿]+", text)
@@ -111,15 +144,9 @@ def main():
 
         # 找 primary chunk
         grades = sample.get("relevance_grades", {})
-        primary_id = next(
-            (cid for cid, g in grades.items() if g == "primary"), None
-        )
+        primary_id = next((cid for cid, g in grades.items() if g == "primary"), None)
         if not primary_id:
-            primary_id = (
-                sample["relevant_chunk_ids"][0]
-                if sample["relevant_chunk_ids"]
-                else None
-            )
+            primary_id = sample["relevant_chunk_ids"][0] if sample["relevant_chunk_ids"] else None
 
         if not primary_id:
             # No primary chunk at all - search
@@ -138,9 +165,7 @@ def main():
             continue
 
         # Verify existing primary chunk
-        row = conn.execute(
-            "SELECT content FROM chunks WHERE id=?", (primary_id,)
-        ).fetchone()
+        row = conn.execute("SELECT content FROM chunks WHERE id=?", (primary_id,)).fetchone()
         if not row:
             failed_count += 1
             continue
@@ -172,19 +197,16 @@ def main():
         sample["ground_truth"] = best[0][1][:300]
         sample.pop("_review", None)
 
-        print(
-            f"  FIXED: primary={best[0][0][:8]}... "
-            f"score={best[0][3]:.2f}"
-        )
+        print(f"  FIXED: primary={best[0][0][:8]}... score={best[0][3]:.2f}")
         fixed_count += 1
 
     conn.close()
 
     # Save
     total = ok_count + fixed_count + failed_count
-    v2[
-        "description"
-    ] = f"v2 fixed: {fixed_count} annotations corrected, {failed_count} unfixable, {ok_count} already OK"
+    v2["description"] = (
+        f"v2 fixed: {fixed_count} annotations corrected, {failed_count} unfixable, {ok_count} already OK"
+    )
     with open(V2_PATH, "w", encoding="utf-8") as f:
         json.dump(v2, f, ensure_ascii=False, indent=2)
 

@@ -26,9 +26,7 @@ class GovernanceSuggestion(Base):
 
     __tablename__ = "governance_suggestions"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     kb_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     suggestion_type: Mapped[str] = mapped_column(String(32), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -36,9 +34,7 @@ class GovernanceSuggestion(Base):
     chunk_ids: Mapped[str] = mapped_column(Text, nullable=False)  # JSON list
     recommended_action: Mapped[str] = mapped_column(String(32), nullable=False)
     severity: Mapped[str] = mapped_column(String(16), nullable=False, default="warning")
-    status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="pending", index=True
-    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     executed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -56,12 +52,12 @@ class GovernanceAuditLog(Base):
 
     __tablename__ = "governance_audit_log"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     kb_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     suggestion_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    action: Mapped[str] = mapped_column(String(32), nullable=False)  # approve/dismiss/execute/verify
+    action: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )  # approve/dismiss/execute/verify
     operator: Mapped[str | None] = mapped_column(String(64), nullable=True)
     chunk_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)

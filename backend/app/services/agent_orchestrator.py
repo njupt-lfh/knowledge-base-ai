@@ -43,12 +43,10 @@ from .retrieval_gate import apply_retrieval_abstention
 logger = logging.getLogger(__name__)
 
 CONSISTENCY_CONFLICT_REFUSAL = (
-    "基于不同检索路径生成的答案存在矛盾，"
-    "为避免提供错误信息，已为您记录此问题，我们将尽快核实补充。"
+    "基于不同检索路径生成的答案存在矛盾，为避免提供错误信息，已为您记录此问题，我们将尽快核实补充。"
 )
 CONSISTENCY_UNCERTAIN_REFUSAL = (
-    "基于不同检索路径无法确认答案一致性，"
-    "已为您记录此问题，我们将尽快核实补充。"
+    "基于不同检索路径无法确认答案一致性，已为您记录此问题，我们将尽快核实补充。"
 )
 
 CHITCHAT_SYSTEM = """你是知识库平台的智能助手。用户正在进行日常寒暄或通用对话。
@@ -130,7 +128,11 @@ class AgentOrchestrator:
         if self._should_use_graph(route, query):
             # 图谱检索：实体 linking + BFS 多跳
             graph_sources, graph_paths = await self.graph.search(
-                db, kb_id, query, top_k=top_k, graph_mode=graph_mode,
+                db,
+                kb_id,
+                query,
+                top_k=top_k,
+                graph_mode=graph_mode,
             )
             merged = (
                 merge_source_lists([graph_sources, hybrid_sources], top_k=max(top_k * 3, 12))
@@ -188,10 +190,17 @@ class AgentOrchestrator:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """严格检索路径：关闭 soft fallback + CE τ=0.35（Phase 2 P0-1）。"""
         sources = await self.hybrid.search(
-            db, kb_id, query, top_k=top_k, allow_soft_fallback=False,
+            db,
+            kb_id,
+            query,
+            top_k=top_k,
+            allow_soft_fallback=False,
         )
         sources = apply_retrieval_abstention(
-            query, sources, route, ce_min_score=0.35,
+            query,
+            sources,
+            route,
+            ce_min_score=0.35,
         )
         return sources, []
 
@@ -206,28 +215,41 @@ class AgentOrchestrator:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """扩展检索路径：soft fallback + graph + CE τ=0.25（Phase 2 P0-1）。"""
         sources = await self.hybrid.search(
-            db, kb_id, query, top_k=top_k, allow_soft_fallback=True,
+            db,
+            kb_id,
+            query,
+            top_k=top_k,
+            allow_soft_fallback=True,
         )
         paths: list[dict[str, Any]] = []
         if self._should_use_graph(route, query):
             graph_sources, gpaths = await self.graph.search(
-                db, kb_id, query, top_k=top_k,
+                db,
+                kb_id,
+                query,
+                top_k=top_k,
             )
             if graph_sources:
                 paths = gpaths
                 merged = merge_source_lists(
-                    [graph_sources, sources], top_k=max(top_k * 3, 12),
+                    [graph_sources, sources],
+                    top_k=max(top_k * 3, 12),
                 )
                 if getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False):
                     pool = min(len(merged), getattr(settings, "HYBRID_RRF_POOL_SIZE", 30))
                     merged = cross_encoder_rerank(query, merged, top_k=pool)
                     merged = apply_post_retrieval_filter(
-                        merged, allow_soft_fallback=True,
+                        merged,
+                        allow_soft_fallback=True,
                     )
                     merged = merged[:top_k]
                 sources = merged
         sources = apply_retrieval_abstention(
-            query, sources, route, graph_paths=paths, ce_min_score=0.25,
+            query,
+            sources,
+            route,
+            graph_paths=paths,
+            ce_min_score=0.25,
         )
         return sources, paths
 
@@ -316,7 +338,12 @@ class AgentOrchestrator:
                     return sim.sources, sim.graph_paths
 
         return await self._retrieve(
-            db, kb_id, query, route=route, top_k=top_k, graph_mode=graph_mode,
+            db,
+            kb_id,
+            query,
+            route=route,
+            top_k=top_k,
+            graph_mode=graph_mode,
         )
 
     async def retrieve_for_eval(
@@ -386,16 +413,22 @@ class AgentOrchestrator:
         sim_cov = 0.0
 
         sources, graph_paths = await self._retrieve_enhanced(
-            db, kb_id, query, route=route, top_k=k, use_sim_rag=True,
+            db,
+            kb_id,
+            query,
+            route=route,
+            top_k=k,
+            use_sim_rag=True,
         )
         graph_used = bool(graph_paths) or any(
             s.get("source", "").startswith("graph") for s in sources
         )
         from .multi_hop_retrieval_service import get_multi_hop_anchors
 
-        if getattr(settings, "MULTI_HOP_SPLIT_ENABLED", True) and len(
-            get_multi_hop_anchors(query)
-        ) >= 2:
+        if (
+            getattr(settings, "MULTI_HOP_SPLIT_ENABLED", True)
+            and len(get_multi_hop_anchors(query)) >= 2
+        ):
             sim_sub = get_multi_hop_anchors(query)
         else:
             from .sim_rag_service import decompose_sub_queries
@@ -422,7 +455,12 @@ class AgentOrchestrator:
         retry_query = expand_query_for_retry(query, route)
         retry_k = min(k + 3, 12)
         sources2, graph_paths2 = await self._retrieve_enhanced(
-            db, kb_id, retry_query, route=route, top_k=retry_k, use_sim_rag=True,
+            db,
+            kb_id,
+            retry_query,
+            route=route,
+            top_k=retry_k,
+            use_sim_rag=True,
         )
         graph_used = (
             graph_used
@@ -529,6 +567,17 @@ class AgentOrchestrator:
 
         await self._bump_hit_counts(db, run.sources)
 
+        # 构建基础 messages（Post-hoc 和非 Post-hoc 路径共用）
+        base_context = compress_context(
+            run.sources,
+            max_chars=getattr(settings, "CONTEXT_MAX_CHARS", 4500),
+        )
+        messages = [
+            {"role": "system", "content": system_prompt_template.format(context=base_context)},
+        ]
+        messages.extend(compress_history(history))
+        messages.append({"role": "user", "content": query})
+
         if getattr(settings, "POST_HOC_ANSWER_GUARD_ENABLED", True):
             from .answer_consistency_service import (
                 ConsistencyResult,
@@ -549,10 +598,18 @@ class AgentOrchestrator:
                 #               Path-B relaxed (τ=0.25, soft fallback + graph)
                 try:
                     sources_a, _ = await self._retrieve_strict(
-                        db, kb_id, query, route=run.route, top_k=top_k,
+                        db,
+                        kb_id,
+                        query,
+                        route=run.route,
+                        top_k=top_k,
                     )
                     sources_b, _ = await self._retrieve_relaxed(
-                        db, kb_id, query, route=run.route, top_k=top_k,
+                        db,
+                        kb_id,
+                        query,
+                        route=run.route,
+                        top_k=top_k,
                     )
                     if sources_a and sources_b:
                         ctx_a = compress_context(
@@ -564,12 +621,18 @@ class AgentOrchestrator:
                             max_chars=getattr(settings, "CONTEXT_MAX_CHARS", 4500),
                         )
                         msg_a = [
-                            {"role": "system", "content": system_prompt_template.format(context=ctx_a)},
+                            {
+                                "role": "system",
+                                "content": system_prompt_template.format(context=ctx_a),
+                            },
                         ]
                         msg_a.extend(compress_history(history))
                         msg_a.append({"role": "user", "content": query})
                         msg_b = [
-                            {"role": "system", "content": system_prompt_template.format(context=ctx_b)},
+                            {
+                                "role": "system",
+                                "content": system_prompt_template.format(context=ctx_b),
+                            },
                         ]
                         msg_b.extend(compress_history(history))
                         msg_b.append({"role": "user", "content": query})
@@ -599,12 +662,14 @@ class AgentOrchestrator:
                         if consistency and consistency.verdict == "CONFLICT":
                             logger.warning(
                                 "consistency CONFLICT route=%s query=%.80s",
-                                run.route, query,
+                                run.route,
+                                query,
                             )
                         elif consistency and consistency.verdict == "UNCERTAIN":
                             logger.warning(
                                 "consistency UNCERTAIN route=%s query=%.80s",
-                                run.route, query,
+                                run.route,
+                                query,
                             )
                     else:
                         # 任一路径空检索 → 回退到 run() sources
@@ -613,12 +678,17 @@ class AgentOrchestrator:
                             max_chars=getattr(settings, "CONTEXT_MAX_CHARS", 4500),
                         )
                         messages = [
-                            {"role": "system", "content": system_prompt_template.format(context=context)},
+                            {
+                                "role": "system",
+                                "content": system_prompt_template.format(context=context),
+                            },
                         ]
                         messages.extend(compress_history(history))
                         messages.append({"role": "user", "content": query})
                         full_answer = await self.llm.chat_completion(
-                            messages, temperature=0.7, max_tokens=2048,
+                            messages,
+                            temperature=0.7,
+                            max_tokens=2048,
                         )
                 except Exception as exc:
                     logger.warning("consistency check failed (non-blocking): %s", exc)
@@ -628,12 +698,17 @@ class AgentOrchestrator:
                         max_chars=getattr(settings, "CONTEXT_MAX_CHARS", 4500),
                     )
                     messages = [
-                        {"role": "system", "content": system_prompt_template.format(context=context)},
+                        {
+                            "role": "system",
+                            "content": system_prompt_template.format(context=context),
+                        },
                     ]
                     messages.extend(compress_history(history))
                     messages.append({"role": "user", "content": query})
                     full_answer = await self.llm.chat_completion(
-                        messages, temperature=0.7, max_tokens=2048,
+                        messages,
+                        temperature=0.7,
+                        max_tokens=2048,
                     )
             else:
                 # 非一致性路由：使用 run() 的来源
@@ -647,7 +722,9 @@ class AgentOrchestrator:
                 messages.extend(compress_history(history))
                 messages.append({"role": "user", "content": query})
                 full_answer = await self.llm.chat_completion(
-                    messages, temperature=0.7, max_tokens=2048,
+                    messages,
+                    temperature=0.7,
+                    max_tokens=2048,
                 )
 
             ctx_for_guard = locals().get("context") or compress_context(
@@ -656,7 +733,10 @@ class AgentOrchestrator:
             )
             ans_for_guard = locals().get("full_answer", "")
             _passed, final_answer = await verify_answer_grounded(
-                query, ctx_for_guard, ans_for_guard, llm=self.llm,
+                query,
+                ctx_for_guard,
+                ans_for_guard,
+                llm=self.llm,
             )
 
             # 一致性 CONFLICT/UNCERTAIN → 入队 + 拒答话术

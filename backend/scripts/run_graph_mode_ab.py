@@ -77,10 +77,7 @@ async def _eval_mode(
                     **metrics,
                 }
             )
-            print(
-                f"  [{mode}] {s['id']} recall={metrics.get('context_recall')} "
-                f"ms={ms}"
-            )
+            print(f"  [{mode}] {s['id']} recall={metrics.get('context_recall')} ms={ms}")
 
     cr = _recall_mean(rows)
     return {
@@ -163,7 +160,9 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="GRAPH_MODE lite/linear/legacy A/B on v2 multi_hop")
+    parser = argparse.ArgumentParser(
+        description="GRAPH_MODE lite/linear/legacy A/B on v2 multi_hop"
+    )
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument(
         "--limit",

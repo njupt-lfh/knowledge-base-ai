@@ -16,7 +16,11 @@ from app.services.answer_consistency_service import (
 # 合成矛盾集：20 组 query + 互斥答案对（模拟双路径生成结果）
 SYNTHETIC_CONFLICTS: list[tuple[str, str, str]] = [
     ("Python 和 Java 的主要区别是什么？", "Python 是解释型语言。", "Python 是编译型语言。"),
-    ("React 18 的并发特性是什么？", "React 18 引入了 Suspense 并发渲染。", "React 18 不支持并发渲染。"),
+    (
+        "React 18 的并发特性是什么？",
+        "React 18 引入了 Suspense 并发渲染。",
+        "React 18 不支持并发渲染。",
+    ),
     ("Docker 容器与虚拟机的区别？", "容器共享宿主机内核。", "容器包含完整 Guest OS 内核。"),
     ("Kubernetes 中 Pod 是什么？", "Pod 是最小调度单元。", "Pod 是节点级别的物理机。"),
     ("RAG 检索增强生成的核心步骤？", "先检索再生成。", "仅依赖参数知识，不检索。"),
@@ -57,7 +61,9 @@ async def test_synthetic_conflict_llm_judge_returns_conflict(query, answer_a, an
 async def test_identical_answers_ok_without_llm():
     """完全相同答案 → OK，不调用 LLM。"""
     with patch("app.services.llm_service.LLMService") as cls:
-        result = await check_consistency("什么是 RAG", "RAG 是检索增强生成。", "RAG 是检索增强生成。")
+        result = await check_consistency(
+            "什么是 RAG", "RAG 是检索增强生成。", "RAG 是检索增强生成。"
+        )
         cls.assert_not_called()
     assert result.verdict == "OK"
     assert result.reason == "identical answers"

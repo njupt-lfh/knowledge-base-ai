@@ -58,7 +58,10 @@ def test_ce_min_score_strict_rejects_below_035():
         s.RETRIEVAL_ABSTAIN_MIN_ANCHOR = 0.20
         s.RETRIEVAL_ABSTAIN_MIN_ANCHOR_MATCHES = 2
         out = apply_retrieval_abstention(
-            "Python 和 Java 区别", sources, "relational", ce_min_score=0.35,
+            "Python 和 Java 区别",
+            sources,
+            "relational",
+            ce_min_score=0.35,
         )
     assert out == []
 
@@ -82,6 +85,9 @@ def test_ce_min_score_relaxed_keeps_between_025_and_035():
         s.RETRIEVAL_ABSTAIN_MIN_ANCHOR = 0.20
         s.RETRIEVAL_ABSTAIN_MIN_ANCHOR_MATCHES = 2
         out = apply_retrieval_abstention(
-            "Python 和 Java 区别", sources, "relational", ce_min_score=0.25,
+            "Python 和 Java 区别",
+            sources,
+            "relational",
+            ce_min_score=0.25,
         )
     assert len(out) == 1

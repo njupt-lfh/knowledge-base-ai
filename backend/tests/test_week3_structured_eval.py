@@ -1,6 +1,5 @@
 """Week 3 结构感知分块与 eval_run 服务测试。"""
 
-
 import pytest
 from app.services.chunking_service import (
     StructuredTextChunker,
@@ -65,9 +64,7 @@ async def test_persist_eval_report_and_trend():
     async with async_session() as db:
         run_id = await persist_eval_report(db, report, ci_phase="week2_v2")
         assert run_id
-        points = await metric_trend(
-            db, "context_precision_chunk", limit=5, dataset_version="v2"
-        )
+        points = await metric_trend(db, "context_precision_chunk", limit=5, dataset_version="v2")
     assert points[-1]["value"] == pytest.approx(0.42)
 
 

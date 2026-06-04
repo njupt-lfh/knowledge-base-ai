@@ -41,6 +41,7 @@ class RetrieveFn(Protocol):
         graph_mode: str | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]: ...
 
+
 _QUOTE_SPAN_RE = re.compile(r"「([^」]+)」")
 
 
@@ -386,7 +387,11 @@ async def try_multi_hop_split_retrieve(
     if not all_lists:
         if fallback_on:
             merged = await _multi_hop_fts_fallback(
-                db, kb_id, query, anchors, top_k=top_k,
+                db,
+                kb_id,
+                query,
+                anchors,
+                top_k=top_k,
             )
             return (merged, graph_paths) if merged else None
         return None

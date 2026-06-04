@@ -156,7 +156,11 @@ async def test_graph_retriever_linear_mode():
 
         retriever = GraphRetriever()
         sources, paths = await retriever.search(
-            db, kb_id, "深度学习与机器学习的关系", top_k=3, graph_mode="linear",
+            db,
+            kb_id,
+            "深度学习与机器学习的关系",
+            top_k=3,
+            graph_mode="linear",
         )
         assert sources
         assert sources[0].get("graph_mode") == "linear"

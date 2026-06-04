@@ -50,11 +50,13 @@ def apply_post_retrieval_filter(
         if use_cross_encoder_threshold is not None
         else (ce_enabled and has_ce_scores)
     )
-    threshold = min_score if min_score is not None else getattr(
-        settings, "POST_RETRIEVAL_MIN_SCORE", 0.35
+    threshold = (
+        min_score if min_score is not None else getattr(settings, "POST_RETRIEVAL_MIN_SCORE", 0.25)
     )
-    max_doc = max_per_document if max_per_document is not None else getattr(
-        settings, "POST_RETRIEVAL_MAX_PER_DOCUMENT", 2
+    max_doc = (
+        max_per_document
+        if max_per_document is not None
+        else getattr(settings, "POST_RETRIEVAL_MAX_PER_DOCUMENT", 2)
     )
 
     filtered: list[dict[str, Any]] = []

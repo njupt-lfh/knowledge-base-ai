@@ -390,9 +390,7 @@ class GovernanceService:
         返回:
             GovernanceSuggestion 列表
         """
-        q = select(GovernanceSuggestion).where(
-            GovernanceSuggestion.kb_id == kb_id
-        )
+        q = select(GovernanceSuggestion).where(GovernanceSuggestion.kb_id == kb_id)
         if status:
             q = q.where(GovernanceSuggestion.status == status)
         if suggestion_type:
@@ -439,8 +437,11 @@ class GovernanceService:
         row.approved_at = datetime.utcnow()
         await self.db.commit()
         await self._write_audit(
-            row.kb_id, suggestion_id, "approved",
-            operator=operator, chunk_ids=row.chunk_ids,
+            row.kb_id,
+            suggestion_id,
+            "approved",
+            operator=operator,
+            chunk_ids=row.chunk_ids,
             detail=f"批准治理建议: {row.title}",
         )
         return row
@@ -459,8 +460,11 @@ class GovernanceService:
         row.status = "dismissed"
         await self.db.commit()
         await self._write_audit(
-            row.kb_id, suggestion_id, "dismissed",
-            operator=operator, chunk_ids=row.chunk_ids,
+            row.kb_id,
+            suggestion_id,
+            "dismissed",
+            operator=operator,
+            chunk_ids=row.chunk_ids,
             detail=f"驳回治理建议: {row.title}" + (f"，原因: {reason}" if reason else ""),
         )
         return row
@@ -498,8 +502,11 @@ class GovernanceService:
         row.executed_at = datetime.utcnow()
         await self.db.commit()
         await self._write_audit(
-            row.kb_id, suggestion_id, "executed",
-            operator=operator, chunk_ids=row.chunk_ids,
+            row.kb_id,
+            suggestion_id,
+            "executed",
+            operator=operator,
+            chunk_ids=row.chunk_ids,
             detail=f"执行动作: {action}, 影响 {result.get('applied', 0)} 个chunk",
         )
         return result
@@ -519,8 +526,11 @@ class GovernanceService:
         row.verified_at = datetime.utcnow()
         await self.db.commit()
         await self._write_audit(
-            row.kb_id, suggestion_id, "verified",
-            operator=operator, chunk_ids=row.chunk_ids,
+            row.kb_id,
+            suggestion_id,
+            "verified",
+            operator=operator,
+            chunk_ids=row.chunk_ids,
             detail=f"验证执行结果: {row.title}",
         )
         return row
@@ -581,9 +591,7 @@ class GovernanceService:
         )
         return {"status": row.status, "prev_status": prev_status}
 
-    async def _sync_chunks_removal(
-        self, kb_id: str, chunk_ids: list[str]
-    ) -> None:
+    async def _sync_chunks_removal(self, kb_id: str, chunk_ids: list[str]) -> None:
         """归档/禁用时同步删除 Chroma 向量 + FTS 索引。"""
         try:
             collection = get_collection(kb_id)
@@ -598,7 +606,11 @@ class GovernanceService:
 
             for cid in chunk_ids:
                 await upsert_chunk_fts(
-                    self.db, cid, kb_id, "", active=False,
+                    self.db,
+                    cid,
+                    kb_id,
+                    "",
+                    active=False,
                 )
         except Exception as exc:
             logger.warning("governance: FTS sync failed kb=%s: %s", kb_id, exc)

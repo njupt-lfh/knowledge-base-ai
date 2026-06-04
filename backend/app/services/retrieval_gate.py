@@ -42,9 +42,7 @@ def _low_quality_dominates(sources: list[dict], threshold: float = 0.30) -> bool
     if len(sources) < 3:
         return False
     top3 = sources[:3]
-    low_count = sum(
-        1 for s in top3 if (s.get("quality_score") or 0.5) < threshold
-    )
+    low_count = sum(1 for s in top3 if (s.get("quality_score") or 0.5) < threshold)
     return low_count > 2  # > 2/3 of top-3
 
 
@@ -178,8 +176,6 @@ def apply_retrieval_abstention(
         if has_ce_scores and ce_top_score is not None:
             if ce_top_score < ce_threshold:
                 return []  # CE 低 → 图路径也拒
-            if ce_top_score < 0.35:
-                return []  # 即便图支撑，CE 不到 0.35 仍拒
         return sources
 
     # 书名号/锚点 query：核心实体词命中不足 → 空检索

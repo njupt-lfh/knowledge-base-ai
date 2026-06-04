@@ -270,9 +270,7 @@ def _edit_distance_le(s1: str, s2: str, max_dist: int = 1) -> bool:
     return prev[m] <= max_dist
 
 
-def link_entities_in_query(
-    query: str, entity_names: list[str], *, min_len: int = 2
-) -> list[str]:
+def link_entities_in_query(query: str, entity_names: list[str], *, min_len: int = 2) -> list[str]:
     """从 query 中链接图谱实体（子串/词项 + 编辑距离容错，Phase 3 G-L3）。
 
     参数:
@@ -296,8 +294,21 @@ def link_entities_in_query(
     latin_terms = set(re.findall(r"[a-zA-Z0-9_]{2,}", q))
     terms = cjk_terms | latin_terms
     stop = {
-        "综合", "知识库", "内容", "说明", "有何", "关联", "两段", "之间",
-        "关系", "有什么区别", "有什么", "是什么", "如何", "怎么", "哪些",
+        "综合",
+        "知识库",
+        "内容",
+        "说明",
+        "有何",
+        "关联",
+        "两段",
+        "之间",
+        "关系",
+        "有什么区别",
+        "有什么",
+        "是什么",
+        "如何",
+        "怎么",
+        "哪些",
     }
     terms -= stop
 
@@ -446,11 +457,7 @@ async def graph_snapshot(
     ranked = sorted(nodes.items(), key=lambda x: x[1], reverse=True)
     keep = {name for name, _ in ranked[:cap]}
     if len(keep) < len(nodes):
-        edges = [
-            e
-            for e in edges
-            if e["source"] in keep and e["target"] in keep
-        ]
+        edges = [e for e in edges if e["source"] in keep and e["target"] in keep]
         nodes = {n: nodes[n] for n in keep if n in nodes}
 
     node_list = [

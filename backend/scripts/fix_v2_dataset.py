@@ -23,7 +23,7 @@ def check_chunk_relevance(question: str, chunk_content: str) -> tuple[bool, str]
 
     返回 (is_relevant, reason)
     """
-    q_chars = [c for c in question if '一' <= c <= '鿿']
+    q_chars = [c for c in question if "一" <= c <= "鿿"]
     if not q_chars:
         return True, "non-chinese question, skip"
 
@@ -71,9 +71,7 @@ def main():
             bad_count += 1
             continue
 
-        row = conn.execute(
-            "SELECT content FROM chunks WHERE id=?", (primary_id,)
-        ).fetchone()
+        row = conn.execute("SELECT content FROM chunks WHERE id=?", (primary_id,)).fetchone()
         if not row:
             sample["_review"] = "primary chunk not in DB"
             review_items.append(sample["id"])

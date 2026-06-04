@@ -75,12 +75,7 @@ def _check_v1_regression(v1_report: dict | None) -> dict[str, object]:
     nrr = _metric_from_block(agg, "negative_reject_rate")
     mh_cr = _metric_from_block(mh, "context_recall_mean")
 
-    ok = (
-        cr is not None
-        and cr >= V1_CR_TARGET
-        and nrr is not None
-        and nrr >= V1_NRR_TARGET
-    )
+    ok = cr is not None and cr >= V1_CR_TARGET and nrr is not None and nrr >= V1_NRR_TARGET
     return {
         "available": True,
         "context_recall_mean": cr,

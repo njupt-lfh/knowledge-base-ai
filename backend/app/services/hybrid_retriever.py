@@ -226,9 +226,7 @@ class HybridRetriever:
             c["score"] = blend_retrieval_score(c["score"], q)
 
         # 8. 质量门控硬过滤（Phase 1：低质量/needs_review+dislike/黑名单）
-        candidates = apply_quality_gate(
-            candidates, quality_scores=qmap, quality_details=dmap
-        )
+        candidates = apply_quality_gate(candidates, quality_scores=qmap, quality_details=dmap)
 
         candidates.sort(key=lambda x: x["score"], reverse=True)
         return candidates[:k]

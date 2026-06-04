@@ -142,9 +142,7 @@ async def _kg_multi_hop_pairs(
             if key in seen:
                 continue
             seen.add(key)
-            pairs.append(
-                (r1.chunk_id, r2.chunk_id, r1.subject, r1.predicate, r1.object_entity)
-            )
+            pairs.append((r1.chunk_id, r2.chunk_id, r1.subject, r1.predicate, r1.object_entity))
             if len(pairs) >= limit:
                 return pairs
     return pairs
@@ -346,9 +344,7 @@ async def build_v2_samples_for_kb(
         if neg_n >= 4:
             break
         wrong = wrong_terms[(idx + i) % len(wrong_terms)]
-        question = NEAR_DOMAIN_TEMPLATES[i % len(NEAR_DOMAIN_TEMPLATES)].format(
-            wrong_term=wrong
-        )
+        question = NEAR_DOMAIN_TEMPLATES[i % len(NEAR_DOMAIN_TEMPLATES)].format(wrong_term=wrong)
         if add(
             q_type="negative",
             question=question,
@@ -418,9 +414,7 @@ async def build_v2_dataset(
         if len(batch) < samples_per_kb:
             raise ValueError(f"kb {kb_id}: only {len(batch)} v2 samples")
         all_samples.extend(batch[:samples_per_kb])
-        kb_meta.append(
-            {"kb_id": kb_id, "kb_name": kb_name, "sample_count": samples_per_kb}
-        )
+        kb_meta.append({"kb_id": kb_id, "kb_name": kb_name, "sample_count": samples_per_kb})
 
     return {
         "version": "2.0",

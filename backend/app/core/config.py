@@ -89,9 +89,7 @@ class Settings:
     CROSS_ENCODER_RERANK_ENABLED: bool = (
         os.getenv("CROSS_ENCODER_RERANK_ENABLED", "true").lower() == "true"
     )
-    CROSS_ENCODER_MODEL: str = os.getenv(
-        "CROSS_ENCODER_MODEL", "BAAI/bge-reranker-v2-m3"
-    )
+    CROSS_ENCODER_MODEL: str = os.getenv("CROSS_ENCODER_MODEL", "BAAI/bge-reranker-v2-m3")
     CROSS_ENCODER_DEVICE: str = os.getenv("CROSS_ENCODER_DEVICE", "cpu")
     POST_RETRIEVAL_MIN_SCORE: float = float(os.getenv("POST_RETRIEVAL_MIN_SCORE", "0.25"))
     POST_RETRIEVAL_MAX_PER_DOCUMENT: int = int(os.getenv("POST_RETRIEVAL_MAX_PER_DOCUMENT", "2"))
@@ -116,20 +114,14 @@ class Settings:
     GRAPH_MODE: str = os.getenv("GRAPH_MODE", "lite").lower().strip()
 
     # Phase 3b P0：多跳双 anchor 分路 + 评测 SIM-RAG 对齐
-    MULTI_HOP_SPLIT_ENABLED: bool = (
-        os.getenv("MULTI_HOP_SPLIT_ENABLED", "true").lower() == "true"
-    )
+    MULTI_HOP_SPLIT_ENABLED: bool = os.getenv("MULTI_HOP_SPLIT_ENABLED", "true").lower() == "true"
     MULTI_HOP_PER_ANCHOR_TOP_K: int = int(os.getenv("MULTI_HOP_PER_ANCHOR_TOP_K", "5"))
     MULTI_HOP_ANCHOR_QUOTA_MIN: int = int(os.getenv("MULTI_HOP_ANCHOR_QUOTA_MIN", "1"))
     MULTI_HOP_EMPTY_FALLBACK_ENABLED: bool = (
         os.getenv("MULTI_HOP_EMPTY_FALLBACK_ENABLED", "true").lower() == "true"
     )
-    QUOTE_ANCHOR_FTS_ENABLED: bool = (
-        os.getenv("QUOTE_ANCHOR_FTS_ENABLED", "true").lower() == "true"
-    )
-    QUOTE_ANCHOR_FTS_LIMIT_PER_SPAN: int = int(
-        os.getenv("QUOTE_ANCHOR_FTS_LIMIT_PER_SPAN", "3")
-    )
+    QUOTE_ANCHOR_FTS_ENABLED: bool = os.getenv("QUOTE_ANCHOR_FTS_ENABLED", "true").lower() == "true"
+    QUOTE_ANCHOR_FTS_LIMIT_PER_SPAN: int = int(os.getenv("QUOTE_ANCHOR_FTS_LIMIT_PER_SPAN", "3"))
     EVAL_SIM_RAG_ENABLED: bool = os.getenv("EVAL_SIM_RAG_ENABLED", "true").lower() == "true"
 
     # Phase 3 检索 abstention（负例误召回抑制）
@@ -146,9 +138,7 @@ class Settings:
         os.getenv("RETRIEVAL_ABSTAIN_MIN_ANCHOR_MATCHES", "2")
     )
     # Phase 1 P1：near_domain 专项拒答（CE < 0.45 且 anchor 不匹配）
-    NEAR_DOMAIN_GATE_ENABLED: bool = (
-        os.getenv("NEAR_DOMAIN_GATE_ENABLED", "true").lower() == "true"
-    )
+    NEAR_DOMAIN_GATE_ENABLED: bool = os.getenv("NEAR_DOMAIN_GATE_ENABLED", "true").lower() == "true"
     NEAR_DOMAIN_CE_MAX: float = float(os.getenv("NEAR_DOMAIN_CE_MAX", "0.45"))
 
     # Week 0：生成后 grounded 自检（Post-hoc），提升 faithfulness / 负例拒答
@@ -160,9 +150,7 @@ class Settings:
     ANSWER_CONSISTENCY_ENABLED: bool = (
         os.getenv("ANSWER_CONSISTENCY_ENABLED", "true").lower() == "true"
     )
-    CONSISTENCY_ROUTES: str = os.getenv(
-        "CONSISTENCY_ROUTES", "relational,comprehensive"
-    )
+    CONSISTENCY_ROUTES: str = os.getenv("CONSISTENCY_ROUTES", "relational,comprehensive")
     CONSISTENCY_UNCERTAIN_REFUSE: bool = (
         os.getenv("CONSISTENCY_UNCERTAIN_REFUSE", "true").lower() == "true"
     )

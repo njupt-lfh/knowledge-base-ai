@@ -123,9 +123,7 @@ async def check_consistency(
         else:
             verdict = "OK"
 
-        ctx_hash = hashlib.md5(
-            (answer_a[:200] + answer_b[:200]).encode()
-        ).hexdigest()[:12]
+        ctx_hash = hashlib.md5((answer_a[:200] + answer_b[:200]).encode()).hexdigest()[:12]
 
         return ConsistencyResult(
             verdict=verdict,
@@ -268,7 +266,5 @@ def should_enable_consistency(route: str) -> bool:
     """
     if not getattr(settings, "ANSWER_CONSISTENCY_ENABLED", True):
         return False
-    enabled_routes = getattr(
-        settings, "CONSISTENCY_ROUTES", "relational,comprehensive"
-    )
+    enabled_routes = getattr(settings, "CONSISTENCY_ROUTES", "relational,comprehensive")
     return route in enabled_routes.split(",")

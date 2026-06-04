@@ -92,8 +92,10 @@ async def persist_eval_report(
 async def list_eval_runs(db: AsyncSession, *, limit: int = 20) -> list[dict[str, Any]]:
     """最近评测运行列表（不含全量 samples）。"""
     rows = (
-        await db.execute(select(EvalRun).order_by(desc(EvalRun.created_at)).limit(limit))
-    ).scalars().all()
+        (await db.execute(select(EvalRun).order_by(desc(EvalRun.created_at)).limit(limit)))
+        .scalars()
+        .all()
+    )
     out: list[dict[str, Any]] = []
     for r in rows:
         agg = json.loads(r.aggregate_json)

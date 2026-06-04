@@ -120,10 +120,7 @@ def format_comparison(comp: dict[str, Any]) -> str:
         sign = ""
         if delta is not None:
             sign = " ↑" if delta > 0 else (" ↓" if delta < 0 else " =")
-        lines.append(
-            f"  {key}: {row.get('before')} -> {row.get('after')} "
-            f"(Δ {delta}){sign}"
-        )
+        lines.append(f"  {key}: {row.get('before')} -> {row.get('after')} (Δ {delta}){sign}")
 
     sub = comp.get("by_negative_subtype") or {}
     if sub:
@@ -132,8 +129,7 @@ def format_comparison(comp: dict[str, Any]) -> str:
         for subtype, row in sub.items():
             nrr = row.get("negative_reject_rate") or {}
             lines.append(
-                f"  {subtype} NRR: {nrr.get('before')} -> {nrr.get('after')} "
-                f"(Δ {nrr.get('delta')})"
+                f"  {subtype} NRR: {nrr.get('before')} -> {nrr.get('after')} (Δ {nrr.get('delta')})"
             )
     return "\n".join(lines)
 

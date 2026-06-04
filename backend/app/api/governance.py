@@ -12,9 +12,7 @@ from ..core.database import get_db
 from ..schemas.governance import GovernanceActionRequest
 from ..services.governance_service import GovernanceService
 
-router = APIRouter(
-    prefix="/api/knowledge-bases/{kb_id}/governance", tags=["governance"]
-)
+router = APIRouter(prefix="/api/knowledge-bases/{kb_id}/governance", tags=["governance"])
 
 
 @router.get("/suggestions")
@@ -38,9 +36,7 @@ async def scan_and_persist_suggestions(
     svc = GovernanceService(db)
     result = await svc.scan_suggestions(kb_id, scan_duplicates=scan_duplicates)
     scan_id = str(uuid.uuid4())
-    count = await svc.persist_suggestions(
-        kb_id, result["suggestions"], scan_id=scan_id
-    )
+    count = await svc.persist_suggestions(kb_id, result["suggestions"], scan_id=scan_id)
     return {"scan_id": scan_id, "new_suggestions": count, **result}
 
 

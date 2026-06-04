@@ -20,9 +20,7 @@ def compute_mrr(retrieved_ids: list[str], relevant_ids: set[str]) -> float:
     return 0.0
 
 
-def compute_precision_at_k(
-    retrieved_ids: list[str], relevant_ids: set[str], k: int
-) -> float:
+def compute_precision_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int) -> float:
     """Precision@k：前 k 个结果中相关 chunk 占比。"""
     if k <= 0:
         return 0.0
@@ -139,9 +137,7 @@ def retrieval_metrics(
         "retrieval_hit": hit,
         "negative_ok": None,
         "mrr": compute_mrr(retrieved_ids, relevant),
-        "ndcg_at_5": compute_ndcg(
-            retrieved_ids, relevant, relevance_grades=grade_map, k=5
-        ),
+        "ndcg_at_5": compute_ndcg(retrieved_ids, relevant, relevance_grades=grade_map, k=5),
         "precision_at_1": compute_precision_at_k(retrieved_ids, relevant, 1),
         "precision_at_3": compute_precision_at_k(retrieved_ids, relevant, 3),
         "precision_at_5": compute_precision_at_k(retrieved_ids, relevant, 5),
