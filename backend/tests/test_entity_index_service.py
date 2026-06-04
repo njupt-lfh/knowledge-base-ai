@@ -102,7 +102,9 @@ async def test_search_entity_index_integration():
     try:
         async with async_session() as db:
             db.add(
-                KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
+                KnowledgeBase(
+                    id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50
+                )
             )
             db.add(
                 Document(
@@ -155,7 +157,9 @@ async def test_graph_retriever_linear_mode():
     try:
         async with async_session() as db:
             db.add(
-                KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
+                KnowledgeBase(
+                    id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50
+                )
             )
             db.add(
                 Document(

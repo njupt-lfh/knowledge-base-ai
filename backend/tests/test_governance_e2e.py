@@ -139,19 +139,13 @@ async def kb_with_chunk():
             )
         )
         await db.execute(
-            __import__("sqlalchemy").text(
-                f"DELETE FROM governance_audit_log WHERE kb_id='{kb_id}'"
-            )
+            __import__("sqlalchemy").text(f"DELETE FROM governance_audit_log WHERE kb_id='{kb_id}'")
         )
         await db.execute(
-            __import__("sqlalchemy").text(
-                f"DELETE FROM knowledge_gaps WHERE kb_id='{kb_id}'"
-            )
+            __import__("sqlalchemy").text(f"DELETE FROM knowledge_gaps WHERE kb_id='{kb_id}'")
         )
         await db.execute(
-            __import__("sqlalchemy").text(
-                f"DELETE FROM chunks WHERE knowledge_base_id='{kb_id}'"
-            )
+            __import__("sqlalchemy").text(f"DELETE FROM chunks WHERE knowledge_base_id='{kb_id}'")
         )
         await db.execute(
             __import__("sqlalchemy").text(
@@ -159,9 +153,7 @@ async def kb_with_chunk():
             )
         )
         await db.execute(
-            __import__("sqlalchemy").text(
-                f"DELETE FROM knowledge_bases WHERE id='{kb_id}'"
-            )
+            __import__("sqlalchemy").text(f"DELETE FROM knowledge_bases WHERE id='{kb_id}'")
         )
         await db.commit()
 

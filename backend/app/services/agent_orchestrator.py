@@ -424,10 +424,7 @@ class AgentOrchestrator:
         )
         from .multi_hop_retrieval_service import get_multi_hop_anchors
 
-        if (
-            rt.get_bool("MULTI_HOP_SPLIT_ENABLED", True)
-            and len(get_multi_hop_anchors(query)) >= 2
-        ):
+        if rt.get_bool("MULTI_HOP_SPLIT_ENABLED", True) and len(get_multi_hop_anchors(query)) >= 2:
             sim_sub = get_multi_hop_anchors(query)
         else:
             from .sim_rag_service import decompose_sub_queries
