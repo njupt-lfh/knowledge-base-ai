@@ -28,6 +28,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core import chat_runtime as rt
 from ..core.config import settings
 from .answer_guard_service import REFUSAL_TEXT
 from .crag_evaluator import SufficiencyResult, evaluate_sufficiency
@@ -74,8 +75,6 @@ class AgentRunResult:
 class AgentOrchestrator:
     """Agentic-lite 编排器：有界 2 轮检索 + CRAG + 流式生成。"""
 
-    MAX_ROUNDS = 2
-
     def __init__(self):
         self.hybrid = HybridRetriever()
         self.graph = GraphRetriever()
@@ -91,7 +90,7 @@ class AgentOrchestrator:
         返回:
             是否调用 GraphRetriever
         """
-        if not getattr(settings, "GRAPH_ENABLED", True):
+        if not rt.get_bool("GRAPH_ENABLED", True):
             return False
         if route == "relational":
             return True
@@ -140,7 +139,7 @@ class AgentOrchestrator:
                 else hybrid_sources
             )
             # Graph+Hybrid 融合后再统一 CE 重排（graph chunk 单独打分）
-            if graph_sources and getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False):
+            if graph_sources and rt.get_bool("CROSS_ENCODER_RERANK_ENABLED", False):
                 pool = min(len(merged), getattr(settings, "HYBRID_RRF_POOL_SIZE", 30))
                 merged = cross_encoder_rerank(query, merged, top_k=pool)
                 # P1-1: graph 路径关闭 soft_fallback，避免低分噪声进入 context
@@ -235,7 +234,7 @@ class AgentOrchestrator:
                     [graph_sources, sources],
                     top_k=max(top_k * 3, 12),
                 )
-                if getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False):
+                if rt.get_bool("CROSS_ENCODER_RERANK_ENABLED", False):
                     pool = min(len(merged), getattr(settings, "HYBRID_RRF_POOL_SIZE", 30))
                     merged = cross_encoder_rerank(query, merged, top_k=pool)
                     merged = apply_post_retrieval_filter(
@@ -323,7 +322,7 @@ class AgentOrchestrator:
             if split:
                 return split
 
-        if use_sim_rag and getattr(settings, "EVAL_SIM_RAG_ENABLED", True):
+        if use_sim_rag and rt.get_bool("EVAL_SIM_RAG_ENABLED", True):
             if should_use_sim_rag(route, query):
                 sim = await sim_rag_retrieve(
                     db,
@@ -426,7 +425,7 @@ class AgentOrchestrator:
         from .multi_hop_retrieval_service import get_multi_hop_anchors
 
         if (
-            getattr(settings, "MULTI_HOP_SPLIT_ENABLED", True)
+            rt.get_bool("MULTI_HOP_SPLIT_ENABLED", True)
             and len(get_multi_hop_anchors(query)) >= 2
         ):
             sim_sub = get_multi_hop_anchors(query)
@@ -435,9 +434,25 @@ class AgentOrchestrator:
 
             sim_sub = decompose_sub_queries(query)
         eval1 = evaluate_sufficiency(query, sources, route)
+        max_rounds = max(1, rt.get_int("AGENT_MAX_ROUNDS", 2))
 
         # 第 1 轮检索充分 → 直接采纳，不重试
         if eval1.sufficient:
+            return AgentRunResult(
+                sources=sources,
+                route=route,
+                sufficient=True,
+                rounds=1,
+                sufficiency=eval1,
+                graph_paths=graph_paths,
+                graph_used=graph_used,
+                sim_rag_used=sim_used,
+                sim_sub_queries=sim_sub,
+                sim_coverage=sim_cov,
+            )
+
+        # AGENT_MAX_ROUNDS=1：跳过第二轮检索，直接采用首轮结果（提速，略降 CRAG 严格度）
+        if max_rounds < 2:
             return AgentRunResult(
                 sources=sources,
                 route=route,
@@ -492,7 +507,7 @@ class AgentOrchestrator:
             sources=best_sources,
             route=route,
             sufficient=False,
-            rounds=self.MAX_ROUNDS,
+            rounds=max_rounds,
             sufficiency=best_eval,
             refused=True,
             graph_paths=graph_paths,
@@ -543,6 +558,7 @@ class AgentOrchestrator:
             "sim_rag_used": run.sim_rag_used,
             "sim_sub_queries": run.sim_sub_queries,
             "sim_coverage": run.sim_coverage,
+            "fast_mode": rt.is_fast_mode(),
         }
         yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
 
@@ -578,7 +594,7 @@ class AgentOrchestrator:
         messages.extend(compress_history(history))
         messages.append({"role": "user", "content": query})
 
-        if getattr(settings, "POST_HOC_ANSWER_GUARD_ENABLED", True):
+        if rt.get_bool("POST_HOC_ANSWER_GUARD_ENABLED", True):
             from .answer_consistency_service import (
                 ConsistencyResult,
                 check_consistency,

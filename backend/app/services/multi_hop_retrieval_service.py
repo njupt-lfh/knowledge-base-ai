@@ -404,7 +404,9 @@ async def try_multi_hop_split_retrieve(
         min_per_list=quota_min,
     )
 
-    if getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False) and merged:
+    from ..core import chat_runtime as rt
+
+    if rt.get_bool("CROSS_ENCODER_RERANK_ENABLED", False) and merged:
         pool = min(len(merged), getattr(settings, "HYBRID_RRF_POOL_SIZE", 30))
         merged = cross_encoder_rerank(query, merged, top_k=pool)
         merged = apply_post_retrieval_filter(merged, allow_soft_fallback=True)

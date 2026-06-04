@@ -264,7 +264,9 @@ def should_enable_consistency(route: str) -> bool:
     返回:
         True 表示启用
     """
-    if not getattr(settings, "ANSWER_CONSISTENCY_ENABLED", True):
+    from ..core import chat_runtime as rt
+
+    if not rt.get_bool("ANSWER_CONSISTENCY_ENABLED", True):
         return False
     enabled_routes = getattr(settings, "CONSISTENCY_ROUTES", "relational,comprehensive")
     return route in enabled_routes.split(",")

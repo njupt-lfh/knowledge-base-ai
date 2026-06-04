@@ -74,7 +74,7 @@ def test_schema_declares_tables():
 
 @pytest.fixture
 async def kb_with_chunk():
-    """创建含活跃 chunk 的测试知识库。"""
+    """创建含活跃 chunk 的测试知识库（测试结束后自动清理）。"""
     await init_db()
     suffix = uuid.uuid4().hex[:8]
     kb_id = f"kb-gov-e2e-{suffix}"
@@ -114,7 +114,56 @@ async def kb_with_chunk():
         )
         await db.commit()
 
-    return {"kb_id": kb_id, "chunk_id": chunk_id}
+    yield {"kb_id": kb_id, "chunk_id": chunk_id}
+
+    # 测试结束后清理：删除测试知识库及其关联数据
+    async with async_session() as db:
+        for table, col in [
+            ("chunk_quality", "chunk_id"),
+            ("chunk_feedback", "chunk_id"),
+        ]:
+            await db.execute(
+                __import__("sqlalchemy").text(
+                    f"DELETE FROM {table} WHERE {col} IN "
+                    f"(SELECT id FROM chunks WHERE knowledge_base_id='{kb_id}')"
+                )
+            )
+        await db.execute(
+            __import__("sqlalchemy").text(
+                f"DELETE FROM kg_relations WHERE knowledge_base_id='{kb_id}'"
+            )
+        )
+        await db.execute(
+            __import__("sqlalchemy").text(
+                f"DELETE FROM governance_suggestions WHERE kb_id='{kb_id}'"
+            )
+        )
+        await db.execute(
+            __import__("sqlalchemy").text(
+                f"DELETE FROM governance_audit_log WHERE kb_id='{kb_id}'"
+            )
+        )
+        await db.execute(
+            __import__("sqlalchemy").text(
+                f"DELETE FROM knowledge_gaps WHERE kb_id='{kb_id}'"
+            )
+        )
+        await db.execute(
+            __import__("sqlalchemy").text(
+                f"DELETE FROM chunks WHERE knowledge_base_id='{kb_id}'"
+            )
+        )
+        await db.execute(
+            __import__("sqlalchemy").text(
+                f"DELETE FROM documents WHERE knowledge_base_id='{kb_id}'"
+            )
+        )
+        await db.execute(
+            __import__("sqlalchemy").text(
+                f"DELETE FROM knowledge_bases WHERE id='{kb_id}'"
+            )
+        )
+        await db.commit()
 
 
 @pytest.mark.asyncio

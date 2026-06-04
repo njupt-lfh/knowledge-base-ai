@@ -67,7 +67,9 @@ async def verify_answer_grounded(
     返回:
         (passed, final_answer) — 未通过时 final_answer 为拒答话术
     """
-    if not getattr(settings, "POST_HOC_ANSWER_GUARD_ENABLED", True):
+    from ..core import chat_runtime as rt
+
+    if not rt.get_bool("POST_HOC_ANSWER_GUARD_ENABLED", True):
         return True, answer
 
     if is_refusal_answer(answer):

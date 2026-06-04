@@ -26,12 +26,12 @@ export const chatApi = {
    * @param message 用户输入
    * @yields text / agent_meta / sources / done 等 JSON 事件
    */
-  sendMessage: async function* (convId: string, message: string) {
+  sendMessage: async function* (convId: string, message: string, fastMode = false) {
     const base = import.meta.env.VITE_API_BASE || 'http://localhost:8080'
     const response = await fetch(`${base}/api/conversations/${convId}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, knowledge_base_id: '' }),
+      body: JSON.stringify({ message, knowledge_base_id: '', fast_mode: fastMode }),
     })
 
     const reader = response.body?.getReader()

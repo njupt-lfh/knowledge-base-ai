@@ -22,6 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core import chat_runtime as rt
 from ..core.chroma_client import get_collection
 from ..core.config import settings
 from ..models.chunk import Chunk
@@ -200,7 +201,7 @@ class HybridRetriever:
         ce_enabled = (
             use_cross_encoder
             if use_cross_encoder is not None
-            else getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False)
+            else rt.get_bool("CROSS_ENCODER_RERANK_ENABLED", False)
         )
         if getattr(settings, "HYBRID_RERANK_ENABLED", True):
             if ce_enabled:

@@ -5,7 +5,7 @@
  */
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Space, Typography, message, Modal, Popconfirm } from 'antd'
+import { Button, Space, Typography, message, Modal, Popconfirm, Switch, Tooltip } from 'antd'
 import {
   ArrowLeftOutlined,
   ShareAltOutlined,
@@ -13,6 +13,7 @@ import {
   PlusOutlined,
   HistoryOutlined,
   DeleteOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons'
 import { chatApi } from '../api/chat'
 import { gapApi } from '../api/gap'
@@ -21,6 +22,7 @@ import HudPanel from '../components/common/HudPanel'
 import ChatWindow from '../components/Chat/ChatWindow'
 import type { ChatMessageData } from '../components/Chat/MessageBubble'
 import type { Conversation, Message } from '../types'
+import { loadChatFastMode, saveChatFastMode } from '../utils/chatFastMode'
 import '../components/Chat/Chat.css'
 
 const CONV_LIST_PAGE_SIZE = 50
@@ -37,6 +39,7 @@ export default function ChatAgent() {
   const [convHasMore, setConvHasMore] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [initialized, setInitialized] = useState(false)
+  const [fastMode, setFastMode] = useState(() => loadChatFastMode(kbId))
 
   const loadConvList = useCallback(async () => {
     if (!kbId) return []
@@ -89,6 +92,10 @@ export default function ChatAgent() {
     }
   }
 
+  useEffect(() => {
+    setFastMode(loadChatFastMode(kbId))
+  }, [kbId])
+
   /* eslint-disable react-hooks/set-state-in-effect -- 初始化时加载最近会话并选中 */
   useEffect(() => {
     if (!kbId) return
@@ -134,7 +141,7 @@ export default function ChatAgent() {
 
     try {
       // SSE 流：逐 event 消费，text 增量拼接、agent_meta/sources/done 即时更新助手气泡
-      for await (const event of chatApi.sendMessage(conv.id, query)) {
+      for await (const event of chatApi.sendMessage(conv.id, query, fastMode)) {
         if (event.type === 'text') {
           // 逐 token 增量：追加到助手消息末尾
           setMessages((prev) =>
@@ -160,6 +167,7 @@ export default function ChatAgent() {
                       crag_score: event.crag_score,
                       graph_used: event.graph_used,
                       refused: event.refused,
+                      fast_mode: event.fast_mode,
                     },
                   }
                 : msg,
@@ -291,6 +299,21 @@ export default function ChatAgent() {
             <p className="page-subtitle">基于知识库的智能问答终端</p>
           </div>
           <Space className="chat-page__toolbar" wrap>
+            <Tooltip title="关闭 Cross-Encoder、生成后质检、图谱与双路径一致性，优先响应速度（仅影响后续提问）">
+              <label className="chat-fast-mode-switch">
+                <ThunderboltOutlined className="chat-fast-mode-switch__icon" />
+                <span className="chat-fast-mode-switch__label">快速模式</span>
+                <Switch
+                  size="small"
+                  checked={fastMode}
+                  onChange={(checked) => {
+                    setFastMode(checked)
+                    saveChatFastMode(kbId, checked)
+                    message.info(checked ? '已开启快速模式' : '已关闭快速模式，将使用完整质量链路')
+                  }}
+                />
+              </label>
+            </Tooltip>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleNewChat}>
               新建对话
             </Button>

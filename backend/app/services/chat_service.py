@@ -19,6 +19,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.chat_runtime import fast_mode_context
 from ..core.config import settings
 from ..models.conversation import Conversation, Message
 from ..schemas.chat import ConversationResponse, MessageResponse, ShareResponse
@@ -119,12 +120,13 @@ class ChatService:
         await self.db.commit()
         return True
 
-    async def chat_stream(self, conv_id: str, message: str):
+    async def chat_stream(self, conv_id: str, message: str, *, fast_mode: bool = False):
         """SSE 流式对话（Mock 或真实 RAG + Gap 后处理）。
 
         参数:
             conv_id: 对话 ID
             message: 用户消息
+            fast_mode: 是否启用请求级快速模式
 
         Yields:
             SSE 事件字符串
@@ -164,19 +166,22 @@ class ChatService:
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         else:
             try:
-                async for event_str in self.rag_svc.generate(kb_id, message, history, db=self.db):
-                    yield event_str
-                    try:
-                        parsed = json.loads(event_str.replace("data: ", ""))
-                        if parsed.get("type") == "text":
-                            full_answer += parsed.get("content", "")
-                        elif parsed.get("type") == "sources":
-                            sources_data = parsed.get("sources", [])
-                        elif parsed.get("type") == "agent_meta":
-                            crag_sufficient = bool(parsed.get("sufficient"))
-                            crag_refused = bool(parsed.get("refused"))
-                    except Exception:
-                        pass
+                with fast_mode_context(fast_mode):
+                    async for event_str in self.rag_svc.generate(
+                        kb_id, message, history, db=self.db
+                    ):
+                        yield event_str
+                        try:
+                            parsed = json.loads(event_str.replace("data: ", ""))
+                            if parsed.get("type") == "text":
+                                full_answer += parsed.get("content", "")
+                            elif parsed.get("type") == "sources":
+                                sources_data = parsed.get("sources", [])
+                            elif parsed.get("type") == "agent_meta":
+                                crag_sufficient = bool(parsed.get("sufficient"))
+                                crag_refused = bool(parsed.get("refused"))
+                        except Exception:
+                            pass
             except Exception as e:
                 error_msg = f"AI 服务调用失败: {str(e)}"
                 full_answer = error_msg

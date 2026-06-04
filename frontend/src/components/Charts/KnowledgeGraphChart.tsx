@@ -108,7 +108,7 @@ function KnowledgeGraphChart({ nodes, edges, relationCount }: KnowledgeGraphChar
           label: { show: true, formatter: e.predicate, color: '#64748b', fontSize: 9 },
           emphasis: { lineStyle: { color: '#ff6b35', width: 3, opacity: 1 } },
         })),
-        zoom: 1.2,
+        zoom: 0.6,
         emphasis: {
           focus: 'adjacency',
           lineStyle: { width: 4 },

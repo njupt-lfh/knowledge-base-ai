@@ -15,6 +15,7 @@ export interface AgentMeta {
   crag_score?: number
   graph_used?: boolean
   refused?: boolean
+  fast_mode?: boolean
 }
 
 const ROUTE_LABEL: Record<string, string> = {
@@ -44,6 +45,7 @@ export default function AgentMetaStrip({ meta }: { meta: AgentMeta }) {
           子问题：{meta.sim_sub_queries.join(' · ')}
         </Typography.Text>
       )}
+      {meta.fast_mode && <Tag color="gold">快速模式</Tag>}
       {meta.refused && <Tag color="orange">已拒答</Tag>}
     </div>
   )

@@ -19,6 +19,27 @@ from app.services.entity_index_service import (
 from app.services.graph_store_service import sync_chunk_graph
 
 
+async def _cleanup_test_kb(kb_id: str) -> None:
+    """删除测试知识库及其关联数据。"""
+    from app.core.database import async_session
+
+    async with async_session() as db:
+        for t, col in [
+            ("chunks", "knowledge_base_id"),
+            ("documents", "knowledge_base_id"),
+            ("kg_relations", "knowledge_base_id"),
+        ]:
+            await db.execute(
+                __import__("sqlalchemy").text(f"DELETE FROM {t} WHERE {col}=:kid"),
+                {"kid": kb_id},
+            )
+        await db.execute(
+            __import__("sqlalchemy").text("DELETE FROM knowledge_bases WHERE id=:kid"),
+            {"kid": kb_id},
+        )
+        await db.commit()
+
+
 def test_normalize_graph_mode():
     assert normalize_graph_mode("linear") == "linear"
     assert normalize_graph_mode("UNKNOWN") == "lite"
@@ -78,42 +99,45 @@ async def test_search_entity_index_integration():
     chunk_id = f"c-linear-{suffix}"
     content = "React与Vue是前端框架，React属于JavaScript生态。"
 
-    async with async_session() as db:
-        db.add(
-            KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
-        )
-        db.add(
-            Document(
-                id=doc_id,
-                knowledge_base_id=kb_id,
-                filename="t.txt",
-                file_type="txt",
-                status="completed",
+    try:
+        async with async_session() as db:
+            db.add(
+                KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
             )
-        )
-        db.add(
-            Chunk(
-                id=chunk_id,
-                document_id=doc_id,
-                knowledge_base_id=kb_id,
-                content=content,
-                chunk_index=0,
-                char_count=len(content),
+            db.add(
+                Document(
+                    id=doc_id,
+                    knowledge_base_id=kb_id,
+                    filename="t.txt",
+                    file_type="txt",
+                    status="completed",
+                )
             )
-        )
-        await db.commit()
-        await sync_chunk_graph(db, kb_id, chunk_id, doc_id, content)
+            db.add(
+                Chunk(
+                    id=chunk_id,
+                    document_id=doc_id,
+                    knowledge_base_id=kb_id,
+                    content=content,
+                    chunk_index=0,
+                    char_count=len(content),
+                )
+            )
+            await db.commit()
+            await sync_chunk_graph(db, kb_id, chunk_id, doc_id, content)
 
-        snap = await build_entity_index(db, kb_id)
-        assert snap.entity_names
-        seeds = extract_query_entities("React与Vue的区别", snap.entity_names)
-        assert seeds
+            snap = await build_entity_index(db, kb_id)
+            assert snap.entity_names
+            seeds = extract_query_entities("React与Vue的区别", snap.entity_names)
+            assert seeds
 
-        sources, paths = await search_entity_index(db, kb_id, "React与Vue的区别", top_k=3)
-        assert sources
-        assert sources[0]["chunk_id"] == chunk_id
-        assert sources[0]["source"] == "graph-linear"
-        assert paths
+            sources, paths = await search_entity_index(db, kb_id, "React与Vue的区别", top_k=3)
+            assert sources
+            assert sources[0]["chunk_id"] == chunk_id
+            assert sources[0]["source"] == "graph-linear"
+            assert paths
+    finally:
+        await _cleanup_test_kb(kb_id)
 
 
 @pytest.mark.asyncio
@@ -128,40 +152,43 @@ async def test_graph_retriever_linear_mode():
     chunk_id = f"c-gr-lin-{suffix}"
     content = "深度学习与机器学习是人工智能分支，深度学习属于机器学习。"
 
-    async with async_session() as db:
-        db.add(
-            KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
-        )
-        db.add(
-            Document(
-                id=doc_id,
-                knowledge_base_id=kb_id,
-                filename="t.txt",
-                file_type="txt",
-                status="completed",
+    try:
+        async with async_session() as db:
+            db.add(
+                KnowledgeBase(id=kb_id, name="g", embedding_model="m", chunk_size=500, chunk_overlap=50)
             )
-        )
-        db.add(
-            Chunk(
-                id=chunk_id,
-                document_id=doc_id,
-                knowledge_base_id=kb_id,
-                content=content,
-                chunk_index=0,
-                char_count=len(content),
+            db.add(
+                Document(
+                    id=doc_id,
+                    knowledge_base_id=kb_id,
+                    filename="t.txt",
+                    file_type="txt",
+                    status="completed",
+                )
             )
-        )
-        await db.commit()
-        await sync_chunk_graph(db, kb_id, chunk_id, doc_id, content)
+            db.add(
+                Chunk(
+                    id=chunk_id,
+                    document_id=doc_id,
+                    knowledge_base_id=kb_id,
+                    content=content,
+                    chunk_index=0,
+                    char_count=len(content),
+                )
+            )
+            await db.commit()
+            await sync_chunk_graph(db, kb_id, chunk_id, doc_id, content)
 
-        retriever = GraphRetriever()
-        sources, paths = await retriever.search(
-            db,
-            kb_id,
-            "深度学习与机器学习的关系",
-            top_k=3,
-            graph_mode="linear",
-        )
-        assert sources
-        assert sources[0].get("graph_mode") == "linear"
-        assert paths
+            retriever = GraphRetriever()
+            sources, paths = await retriever.search(
+                db,
+                kb_id,
+                "深度学习与机器学习的关系",
+                top_k=3,
+                graph_mode="linear",
+            )
+            assert sources
+            assert sources[0].get("graph_mode") == "linear"
+            assert paths
+    finally:
+        await _cleanup_test_kb(kb_id)

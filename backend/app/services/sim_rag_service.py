@@ -54,7 +54,9 @@ def should_use_sim_rag(route: QueryRoute, query: str) -> bool:
     返回:
         是否走 SIM-RAG 路径
     """
-    if not getattr(settings, "SIM_RAG_ENABLED", True):
+    from ..core import chat_runtime as rt
+
+    if not rt.get_bool("SIM_RAG_ENABLED", True):
         return False
     if route == "chitchat":
         return False

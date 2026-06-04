@@ -130,7 +130,9 @@ def apply_retrieval_abstention(
     min_anchor_matches = int(getattr(settings, "RETRIEVAL_ABSTAIN_MIN_ANCHOR_MATCHES", 2))
 
     # CE 已启用时：仅当 sources 确实经过 CE 打分时才应用 CE 规则
-    ce_enabled = getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False)
+    from ..core import chat_runtime as rt
+
+    ce_enabled = rt.get_bool("CROSS_ENCODER_RERANK_ENABLED", False)
     ce_threshold = ce_min_score if ce_min_score is not None else 0.35
     ce_top_score = None
     has_ce_scores = False

@@ -53,7 +53,9 @@ class GraphRetriever:
         返回:
             (sources, graph_paths)
         """
-        if not getattr(settings, "GRAPH_ENABLED", True):
+        from ..core import chat_runtime as rt
+
+        if not rt.get_bool("GRAPH_ENABLED", True):
             return [], []
 
         mode = normalize_graph_mode(graph_mode)

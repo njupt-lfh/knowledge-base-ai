@@ -13,7 +13,11 @@ class ChatRequest(BaseModel):
     """发送聊天消息请求体。"""
 
     message: str = Field(..., min_length=1)
-    knowledge_base_id: str = Field(...)
+    knowledge_base_id: str = Field(default="")
+    fast_mode: bool = Field(
+        default=False,
+        description="快速模式：关闭 CE/质检/一致性/图谱等以提速，仅影响本次请求",
+    )
 
 
 class ConversationResponse(BaseModel):

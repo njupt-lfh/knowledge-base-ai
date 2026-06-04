@@ -351,7 +351,7 @@ class GovernanceService:
                     GovernanceSuggestion.status == "pending",
                 )
             )
-            if existing.scalar_one_or_none():
+            if existing.first():
                 continue
             row = GovernanceSuggestion(
                 kb_id=kb_id,

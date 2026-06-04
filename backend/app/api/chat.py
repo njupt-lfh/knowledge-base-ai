@@ -98,7 +98,7 @@ async def send_message(
     """
     service = ChatService(db)
     return StreamingResponse(
-        service.chat_stream(conv_id, data.message),
+        service.chat_stream(conv_id, data.message, fast_mode=data.fast_mode),
         media_type="text/event-stream;charset=utf-8",
         headers={
             "Cache-Control": "no-cache",

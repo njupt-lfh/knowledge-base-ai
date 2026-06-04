@@ -43,7 +43,9 @@ def apply_post_retrieval_filter(
     if not candidates:
         return []
 
-    ce_enabled = getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False)
+    from ..core import chat_runtime as rt
+
+    ce_enabled = rt.get_bool("CROSS_ENCODER_RERANK_ENABLED", False)
     has_ce_scores = any(c.get("cross_encoder_score") is not None for c in candidates)
     apply_threshold = (
         use_cross_encoder_threshold

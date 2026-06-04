@@ -46,7 +46,9 @@ def _get_cross_encoder():
         return None
     if _cross_encoder is not None:
         return _cross_encoder
-    if not getattr(settings, "CROSS_ENCODER_RERANK_ENABLED", False):
+    from ..core import chat_runtime as rt
+
+    if not rt.get_bool("CROSS_ENCODER_RERANK_ENABLED", False):
         return None
     try:
         from sentence_transformers import CrossEncoder
