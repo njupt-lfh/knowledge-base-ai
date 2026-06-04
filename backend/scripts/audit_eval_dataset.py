@@ -37,7 +37,7 @@ def export_review_sample(
 
     rng = random.Random(seed)
     picked: list[dict] = []
-    for q_type, rows in sorted(by_type.items()):
+    for _q_type, rows in sorted(by_type.items()):
         n = max(1, int(round(len(rows) * fraction)))
         picked.extend(rng.sample(rows, min(n, len(rows))))
 

@@ -1,15 +1,13 @@
 """Phase 1 P1：near_domain gate、aggregate 分项、compare_eval_runs 单测。"""
 
-from unittest.mock import patch
-
-import pytest
-
-from app.eval.aggregate import aggregate_by_negative_subtype
-from app.services.retrieval_gate import apply_retrieval_abstention
-
 # compare_eval_runs 在 scripts/ 下，按 run_rag_eval 同款路径导入
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from app.eval.aggregate import aggregate_by_negative_subtype
+from app.services.retrieval_gate import apply_retrieval_abstention
 
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))

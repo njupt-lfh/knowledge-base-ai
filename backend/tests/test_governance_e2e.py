@@ -42,8 +42,8 @@ def test_suggestion_statuses_defined():
 
 def test_models_registered_in_init():
     """ORM 模型已在 __init__.py 注册。"""
-    from app.models import GovernanceSuggestion as GS
     from app.models import GovernanceAuditLog as GAL
+    from app.models import GovernanceSuggestion as GS
 
     assert GS.__tablename__ == "governance_suggestions"
     assert GAL.__tablename__ == "governance_audit_log"

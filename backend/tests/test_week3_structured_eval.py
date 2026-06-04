@@ -1,14 +1,12 @@
 """Week 3 结构感知分块与 eval_run 服务测试。"""
 
-import json
 
 import pytest
 from app.services.chunking_service import (
     StructuredTextChunker,
     build_content_chunks,
-    build_document_chunks,
 )
-from app.services.eval_run_service import persist_eval_report, metric_trend, TREND_METRICS
+from app.services.eval_run_service import TREND_METRICS, metric_trend, persist_eval_report
 
 
 def test_split_markdown_by_headings():

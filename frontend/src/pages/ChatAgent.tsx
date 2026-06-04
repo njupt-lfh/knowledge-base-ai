@@ -284,148 +284,155 @@ export default function ChatAgent() {
 
   return (
     <div className="chat-page chat-page--agent">
-    <HudPanel className="chat-page__panel">
-      <div className="kb-detail__header">
-        <div>
-          <h2 className="page-title">AI 专家对话</h2>
-          <p className="page-subtitle">基于知识库的智能问答终端</p>
-        </div>
-        <Space className="chat-page__toolbar" wrap>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleNewChat}>
-            新建对话
-          </Button>
-          <Button
-            icon={<HistoryOutlined />}
-            onClick={() => {
-              setShowHistory(!showHistory)
-              loadConvList()
-            }}
-          >
-            历史
-          </Button>
-          <Button icon={<BulbOutlined />} onClick={handleExtract} loading={extracting}>
-            提炼知识
-          </Button>
-          <Button icon={<ShareAltOutlined />} onClick={handleShare}>
-            分享
-          </Button>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/knowledge-bases/${kbId}`)}>
-            返回详情
-          </Button>
-        </Space>
-      </div>
-
-      {showHistory && (
-        <div className="chat-history-panel">
-          <div className="chat-history-panel__header">
-            <span className="chat-history-panel__title">对话历史</span>
-            <Button size="small" type="link" onClick={() => setShowHistory(false)}>
-              关闭
+      <HudPanel className="chat-page__panel">
+        <div className="kb-detail__header">
+          <div>
+            <h2 className="page-title">AI 专家对话</h2>
+            <p className="page-subtitle">基于知识库的智能问答终端</p>
+          </div>
+          <Space className="chat-page__toolbar" wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleNewChat}>
+              新建对话
             </Button>
-          </div>
-          <div className="chat-history-panel__list">
-            {convList.map((c) => (
-              <div
-                key={c.id}
-                className={`chat-history-item ${c.id === conversation?.id ? 'chat-history-item--active' : ''}`}
-                onClick={() => switchConversation(c)}
-                onKeyDown={(e) => e.key === 'Enter' && switchConversation(c)}
-                role="button"
-                tabIndex={0}
-              >
-                <span className="chat-history-item__title">{c.title || '新对话'}</span>
-                <span className="chat-history-item__date">
-                  {new Date(c.created_at).toLocaleDateString('zh-CN')}
-                </span>
-                <Popconfirm
-                  title="确定删除该对话？"
-                  onConfirm={(e) => handleDeleteConv(c.id, e as unknown as React.MouseEvent)}
-                  onCancel={(e) => e?.stopPropagation()}
-                >
-                  <Button
-                    size="small"
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ marginLeft: 'auto', flexShrink: 0 }}
-                  />
-                </Popconfirm>
-              </div>
-            ))}
-            {convList.length === 0 && (
-              <Typography.Text type="secondary">暂无历史对话</Typography.Text>
-            )}
-            {convHasMore && (
-              <Button
-                size="small"
-                block
-                type="link"
-                onClick={async () => {
-                  if (!kbId) return
-                  const more = (
-                    await chatApi.listConversations(kbId, CONV_LIST_PAGE_SIZE, convList.length)
-                  ).data
-                  setConvList((prev) => [...prev, ...more])
-                  setConvHasMore(more.length >= CONV_LIST_PAGE_SIZE)
-                }}
-              >
-                加载更多
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="chat-page__body">
-        <ChatWindow
-          messages={messages}
-          input={input}
-          sending={sending}
-          kbId={kbId}
-          onInputChange={setInput}
-          onSend={handleSend}
-          onFeedback={handleFeedback}
-        />
-      </div>
-
-      <Modal
-        title="提炼为知识"
-        open={extractModal}
-        onOk={confirmExtract}
-        onCancel={() => {
-          setExtractModal(false)
-          setExtractData(null)
-        }}
-        okText="确认录入"
-        cancelText="取消"
-      >
-        {extractData && (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Typography.Text strong>标题：{extractData.title}</Typography.Text>
-            {extractData.source_ref && (
-              <Typography.Text type="secondary">来源引用：{extractData.source_ref}</Typography.Text>
-            )}
-            {extractData.manual_required ? (
-              <Typography.Text type="warning">知识缺失类缺口，请到补全任务人工添加</Typography.Text>
-            ) : (
-              <Typography.Paragraph
-                ellipsis={{ rows: 6, expandable: true }}
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  background: 'var(--bg-void)',
-                  padding: 12,
-                  borderRadius: 8,
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                {extractData.content}
-              </Typography.Paragraph>
-            )}
+            <Button
+              icon={<HistoryOutlined />}
+              onClick={() => {
+                setShowHistory(!showHistory)
+                loadConvList()
+              }}
+            >
+              历史
+            </Button>
+            <Button icon={<BulbOutlined />} onClick={handleExtract} loading={extracting}>
+              提炼知识
+            </Button>
+            <Button icon={<ShareAltOutlined />} onClick={handleShare}>
+              分享
+            </Button>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate(`/knowledge-bases/${kbId}`)}
+            >
+              返回详情
+            </Button>
           </Space>
+        </div>
+
+        {showHistory && (
+          <div className="chat-history-panel">
+            <div className="chat-history-panel__header">
+              <span className="chat-history-panel__title">对话历史</span>
+              <Button size="small" type="link" onClick={() => setShowHistory(false)}>
+                关闭
+              </Button>
+            </div>
+            <div className="chat-history-panel__list">
+              {convList.map((c) => (
+                <div
+                  key={c.id}
+                  className={`chat-history-item ${c.id === conversation?.id ? 'chat-history-item--active' : ''}`}
+                  onClick={() => switchConversation(c)}
+                  onKeyDown={(e) => e.key === 'Enter' && switchConversation(c)}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <span className="chat-history-item__title">{c.title || '新对话'}</span>
+                  <span className="chat-history-item__date">
+                    {new Date(c.created_at).toLocaleDateString('zh-CN')}
+                  </span>
+                  <Popconfirm
+                    title="确定删除该对话？"
+                    onConfirm={(e) => handleDeleteConv(c.id, e as unknown as React.MouseEvent)}
+                    onCancel={(e) => e?.stopPropagation()}
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ marginLeft: 'auto', flexShrink: 0 }}
+                    />
+                  </Popconfirm>
+                </div>
+              ))}
+              {convList.length === 0 && (
+                <Typography.Text type="secondary">暂无历史对话</Typography.Text>
+              )}
+              {convHasMore && (
+                <Button
+                  size="small"
+                  block
+                  type="link"
+                  onClick={async () => {
+                    if (!kbId) return
+                    const more = (
+                      await chatApi.listConversations(kbId, CONV_LIST_PAGE_SIZE, convList.length)
+                    ).data
+                    setConvList((prev) => [...prev, ...more])
+                    setConvHasMore(more.length >= CONV_LIST_PAGE_SIZE)
+                  }}
+                >
+                  加载更多
+                </Button>
+              )}
+            </div>
+          </div>
         )}
-      </Modal>
-    </HudPanel>
+
+        <div className="chat-page__body">
+          <ChatWindow
+            messages={messages}
+            input={input}
+            sending={sending}
+            kbId={kbId}
+            onInputChange={setInput}
+            onSend={handleSend}
+            onFeedback={handleFeedback}
+          />
+        </div>
+
+        <Modal
+          title="提炼为知识"
+          open={extractModal}
+          onOk={confirmExtract}
+          onCancel={() => {
+            setExtractModal(false)
+            setExtractData(null)
+          }}
+          okText="确认录入"
+          cancelText="取消"
+        >
+          {extractData && (
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Typography.Text strong>标题：{extractData.title}</Typography.Text>
+              {extractData.source_ref && (
+                <Typography.Text type="secondary">
+                  来源引用：{extractData.source_ref}
+                </Typography.Text>
+              )}
+              {extractData.manual_required ? (
+                <Typography.Text type="warning">
+                  知识缺失类缺口，请到补全任务人工添加
+                </Typography.Text>
+              ) : (
+                <Typography.Paragraph
+                  ellipsis={{ rows: 6, expandable: true }}
+                  style={{
+                    whiteSpace: 'pre-wrap',
+                    background: 'var(--bg-void)',
+                    padding: 12,
+                    borderRadius: 8,
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  {extractData.content}
+                </Typography.Paragraph>
+              )}
+            </Space>
+          )}
+        </Modal>
+      </HudPanel>
     </div>
   )
 }

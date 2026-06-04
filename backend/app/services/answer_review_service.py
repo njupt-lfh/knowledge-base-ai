@@ -1,4 +1,4 @@
-"""答案一致性审核队列服务（Phase 2 · 导师建议 #3）。"""
+"""答案一致性审核队列服务（Phase 2）。"""
 
 from __future__ import annotations
 

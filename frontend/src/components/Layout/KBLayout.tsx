@@ -5,7 +5,8 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useParams, useLocation, useNavigate } from 'react-router-dom'
 import { knowledgeApi } from '../../api/knowledge'
-import KBSidebar, { kbSidebarItems } from './KBSidebar'
+import KBSidebar from './KBSidebar'
+import { kbSidebarItems } from './kbSidebarConfig'
 import './KBLayout.css'
 
 export default function KBLayout() {
@@ -33,16 +34,12 @@ export default function KBLayout() {
     }
   }, [kbId])
 
-  // 从 pathname 推断当前选中的 sidebar key
   const pathname = location.pathname
-  let activeKey = 'documents'
-  if (pathname.endsWith('/chat')) activeKey = 'chat'
-  else if (pathname.endsWith('/gaps')) activeKey = 'gaps'
-  else {
-    // KB detail 页面可能有 query param 指定 tab
-    const params = new URLSearchParams(location.search)
-    activeKey = params.get('tab') || 'documents'
-  }
+  const activeKey = pathname.endsWith('/chat')
+    ? 'chat'
+    : pathname.endsWith('/gaps')
+      ? 'gaps'
+      : new URLSearchParams(location.search).get('tab') || 'documents'
 
   const handleSelect = (key: string) => {
     if (key === 'chat') {

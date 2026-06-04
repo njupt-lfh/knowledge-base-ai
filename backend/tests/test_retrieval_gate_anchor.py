@@ -1,6 +1,6 @@
 """锚点 abstention 单元测试（Week 0 Q0-2）。"""
 
-from app.services.crag_evaluator import _anchor_terms_from_query, _anchor_match_count
+from app.services.crag_evaluator import _anchor_match_count, _anchor_terms_from_query
 from app.services.retrieval_gate import apply_retrieval_abstention
 
 

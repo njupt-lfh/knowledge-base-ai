@@ -81,8 +81,7 @@ export interface EvalRunSummary {
 
 export const evalApi = {
   getBaseline: () => request.get<EvalBaselineReport>('/api/eval/baseline'),
-  getRuns: (limit = 20) =>
-    request.get<{ runs: EvalRunSummary[] }>(`/api/eval/runs?limit=${limit}`),
+  getRuns: (limit = 20) => request.get<{ runs: EvalRunSummary[] }>(`/api/eval/runs?limit=${limit}`),
   getTrend: (metric: string, dataset?: string, limit = 50) => {
     const params = new URLSearchParams({ limit: String(limit) })
     if (dataset) params.set('dataset', dataset)

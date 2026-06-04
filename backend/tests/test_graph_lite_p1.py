@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import networkx as nx
-
 from app.services.graph_store_service import expand_graph_paths
 from app.services.query_router import decompose_multi_hop_query
 

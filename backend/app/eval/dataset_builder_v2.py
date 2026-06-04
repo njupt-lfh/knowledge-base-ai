@@ -271,7 +271,7 @@ async def build_v2_samples_for_kb(
 
     # 6 concept
     concept_i = 0
-    for ci, c in enumerate(active[16:], start=16):
+    for _ci, c in enumerate(active[16:], start=16):
         if concept_i >= 6:
             break
         term = _extract_term(c.content)

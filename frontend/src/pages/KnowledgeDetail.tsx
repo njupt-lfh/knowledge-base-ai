@@ -432,7 +432,10 @@ export default function KnowledgeDetail() {
   return (
     <div className={`kb-detail${activeTab === 'graph' ? ' kb-detail--graph' : ''}`}>
       <div className="kb-detail__header">
-        <h2 className="page-title kb-detail__headline" title={`${kb?.name || '知识库详情'}（${kb?.description?.trim() || '文档管理与检索测试'}）`}>
+        <h2
+          className="page-title kb-detail__headline"
+          title={`${kb?.name || '知识库详情'}（${kb?.description?.trim() || '文档管理与检索测试'}）`}
+        >
           <span className="kb-detail__name">{kb?.name || '知识库详情'}</span>
           <span className="kb-detail__desc">
             （{kb?.description?.trim() || '文档管理与检索测试'}）

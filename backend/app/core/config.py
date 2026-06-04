@@ -156,7 +156,7 @@ class Settings:
         os.getenv("POST_HOC_ANSWER_GUARD_ENABLED", "true").lower() == "true"
     )
 
-    # Phase 2：双路径答案一致性守卫（导师建议 #3）
+    # Phase 2：双路径答案一致性守卫
     ANSWER_CONSISTENCY_ENABLED: bool = (
         os.getenv("ANSWER_CONSISTENCY_ENABLED", "true").lower() == "true"
     )

@@ -8,7 +8,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.services.answer_consistency_service import (
     check_consistency,
     should_enable_consistency,

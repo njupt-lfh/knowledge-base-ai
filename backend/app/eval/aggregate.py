@@ -5,8 +5,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from statistics import mean
-from typing import Any, Callable
+from typing import Any
 
 
 def _avg(samples: list[dict], key: str) -> float | None:

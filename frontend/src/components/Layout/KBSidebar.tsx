@@ -4,27 +4,9 @@
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ArrowLeftOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  FileTextOutlined,
-  WarningOutlined,
-  SafetyCertificateOutlined,
-  ApartmentOutlined,
-  SyncOutlined,
-  SearchOutlined,
-  MessageOutlined,
-  UnorderedListOutlined,
-} from '@ant-design/icons'
+import { ArrowLeftOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { kbNavGroups, type KBSidebarItem } from './kbSidebarConfig'
 import './KBSidebar.css'
-
-export interface KBSidebarItem {
-  key: string
-  label: string
-  icon: React.ReactNode
-  badge?: number
-}
 
 interface KBSidebarProps {
   items: KBSidebarItem[]
@@ -32,22 +14,6 @@ interface KBSidebarProps {
   onSelect: (key: string) => void
   kbName?: string
 }
-
-export const kbSidebarItems: KBSidebarItem[] = [
-  { key: 'documents', label: '文档管理', icon: <FileTextOutlined /> },
-  { key: 'conflicts', label: '入库冲突', icon: <WarningOutlined /> },
-  { key: 'governance', label: '治理建议', icon: <SafetyCertificateOutlined /> },
-  { key: 'graph', label: '知识图谱', icon: <ApartmentOutlined /> },
-  { key: 'sync', label: '文件夹同步', icon: <SyncOutlined /> },
-  { key: 'search', label: '检索测试', icon: <SearchOutlined /> },
-  { key: 'chat', label: 'AI 对话', icon: <MessageOutlined /> },
-  { key: 'gaps', label: '补全任务', icon: <UnorderedListOutlined /> },
-]
-
-const navGroups: { label: string; keys: string[] }[] = [
-  { label: '内容管理', keys: ['documents', 'conflicts', 'governance', 'graph', 'sync', 'search'] },
-  { label: '智能应用', keys: ['chat', 'gaps'] },
-]
 
 function kbInitial(name: string): string {
   const trimmed = name.trim()
@@ -61,7 +27,10 @@ export default function KBSidebar({ items, activeKey, onSelect, kbName }: KBSide
   const itemMap = new Map(items.map((item) => [item.key, item]))
 
   return (
-    <nav className={`kb-sidebar ${collapsed ? 'kb-sidebar--collapsed' : ''}`} aria-label="知识库导航">
+    <nav
+      className={`kb-sidebar ${collapsed ? 'kb-sidebar--collapsed' : ''}`}
+      aria-label="知识库导航"
+    >
       <div className="kb-sidebar__header">
         <button
           type="button"
@@ -96,7 +65,7 @@ export default function KBSidebar({ items, activeKey, onSelect, kbName }: KBSide
       )}
 
       <div className="kb-sidebar__body">
-        {navGroups.map((group) => {
+        {kbNavGroups.map((group) => {
           const groupItems = group.keys
             .map((key) => itemMap.get(key))
             .filter((item): item is KBSidebarItem => Boolean(item))
@@ -117,10 +86,10 @@ export default function KBSidebar({ items, activeKey, onSelect, kbName }: KBSide
                     >
                       <span className="kb-sidebar__item-icon">{item.icon}</span>
                       <span className="kb-sidebar__item-label">{item.label}</span>
-                      {item.badge ? (
-                        <span className="kb-sidebar__badge">{item.badge}</span>
-                      ) : null}
-                      {activeKey === item.key && <span className="kb-sidebar__indicator" aria-hidden />}
+                      {item.badge ? <span className="kb-sidebar__badge">{item.badge}</span> : null}
+                      {activeKey === item.key && (
+                        <span className="kb-sidebar__indicator" aria-hidden />
+                      )}
                     </button>
                   </li>
                 ))}

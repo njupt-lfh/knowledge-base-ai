@@ -38,7 +38,9 @@
   font-family: var(--font-body);
   font-size: 13px;
   cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .kb-sidebar__back:hover {

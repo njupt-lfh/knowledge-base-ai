@@ -156,7 +156,7 @@ def main():
 
         best = search_best_chunks(question, kb_id, conn, top_n=2)
         if not best or best[0][3] < 0.15:
-            print(f"  FAIL: no good match found")
+            print("  FAIL: no good match found")
             failed_count += 1
             continue
 

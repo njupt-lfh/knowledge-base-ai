@@ -27,7 +27,18 @@ ROOT = BACKEND_DIR.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
 DATA_FILE = ROOT / "data" / "eval_qa_dataset.json"
+DATA_FILE_V1 = DATA_FILE
+DATA_FILE_V2 = ROOT / "data" / "eval_qa_dataset_v2.json"
 REPORT_FILE = ROOT / "data" / "eval_baseline_report.json"
+REPORT_FILE_V1 = ROOT / "data" / "eval_baseline_report_v1.json"
+REPORT_FILE_V2 = ROOT / "data" / "eval_baseline_report_v2.json"
+
+
+def _versioned_report_path(dataset_version: str) -> Path:
+    """按 dataset 版本返回分文件存档路径。"""
+    if dataset_version == "v2":
+        return REPORT_FILE_V2
+    return REPORT_FILE_V1
 
 from app.eval.deepeval_runner import check_knowledge_retention, run_deepeval  # noqa: E402
 from app.eval.ragas_runner import llm_judge_faithfulness, run_ragas_eval  # noqa: E402

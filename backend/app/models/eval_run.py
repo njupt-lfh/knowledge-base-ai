@@ -27,7 +27,7 @@ class EvalRun(Base):
     report_json: Mapped[str] = mapped_column(Text, nullable=False)
     aggregate_json: Mapped[str] = mapped_column(Text, nullable=False)
 
-    samples: Mapped[list["EvalSampleResult"]] = relationship(
+    samples: Mapped[list[EvalSampleResult]] = relationship(
         "EvalSampleResult", back_populates="run", cascade="all, delete-orphan"
     )
 

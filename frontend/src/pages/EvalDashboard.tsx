@@ -28,7 +28,12 @@ import {
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
-import { evalApi, getReportSampleCount, type EvalBaselineReport, type EvalTrendPoint } from '../api/eval'
+import {
+  evalApi,
+  getReportSampleCount,
+  type EvalBaselineReport,
+  type EvalTrendPoint,
+} from '../api/eval'
 import request from '../api/request'
 import HudPanel from '../components/common/HudPanel'
 import { formatDateTime } from '../utils/format'
@@ -199,7 +204,9 @@ function DimensionMetricsTable({
 
 function trendPointTime(p: EvalTrendPoint): number {
   if (!p.created_at) return 0
-  const t = new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(p.created_at) ? p.created_at : `${p.created_at}Z`).getTime()
+  const t = new Date(
+    /[zZ]|[+-]\d{2}:\d{2}$/.test(p.created_at) ? p.created_at : `${p.created_at}Z`,
+  ).getTime()
   return Number.isNaN(t) ? 0 : t
 }
 
@@ -209,13 +216,7 @@ function sortTrendPoints(points: EvalTrendPoint[]): EvalTrendPoint[] {
 }
 
 /** 评测历史趋势折线图（DB eval_runs） */
-function EvalTrendChart({
-  points,
-  title,
-}: {
-  points: EvalTrendPoint[]
-  title: string
-}) {
+function EvalTrendChart({ points, title }: { points: EvalTrendPoint[]; title: string }) {
   if (!points.length) {
     return (
       <Typography.Text type="secondary">
@@ -488,8 +489,12 @@ export default function EvalDashboard() {
 
             <HudPanel>
               <h3 className="chart-panel__title">历史趋势（CP-chunk）</h3>
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-                数据来自 eval_runs（与上方 KPI 同数据集 {datasetVer}）；运行 run_rag_eval.py 后自动写入，时间为 UTC 转本地显示。
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: 12, display: 'block', marginBottom: 8 }}
+              >
+                数据来自 eval_runs（与上方 KPI 同数据集 {datasetVer}）；运行 run_rag_eval.py
+                后自动写入，时间为 UTC 转本地显示。
               </Typography.Text>
               <EvalTrendChart points={cpTrend} title="context_precision_chunk 历次运行" />
             </HudPanel>
