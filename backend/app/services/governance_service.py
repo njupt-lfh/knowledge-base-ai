@@ -371,33 +371,64 @@ class GovernanceService:
             await self.db.commit()
         return count
 
+    def _suggestion_filters(
+        self,
+        kb_id: str,
+        *,
+        status: str | None = None,
+        suggestion_type: str | None = None,
+    ) -> list:
+        filters = [GovernanceSuggestion.kb_id == kb_id]
+        if status:
+            filters.append(GovernanceSuggestion.status == status)
+        if suggestion_type:
+            filters.append(GovernanceSuggestion.suggestion_type == suggestion_type)
+        return filters
+
     async def list_suggestions(
         self,
         kb_id: str,
         *,
         status: str | None = None,
         suggestion_type: str | None = None,
+        offset: int = 0,
         limit: int = 50,
-    ) -> list[GovernanceSuggestion]:
-        """列出治理建议。
+    ) -> dict[str, Any]:
+        """列出治理建议（分页 + 总数）。
 
         参数:
             kb_id: 知识库 ID
             status: 状态过滤
             suggestion_type: 类型过滤
-            limit: 最大条数
+            offset: 偏移量
+            limit: 每页条数
 
         返回:
-            GovernanceSuggestion 列表
+            {"items": GovernanceSuggestion 列表, "total": 符合条件的总数}
         """
-        q = select(GovernanceSuggestion).where(GovernanceSuggestion.kb_id == kb_id)
-        if status:
-            q = q.where(GovernanceSuggestion.status == status)
-        if suggestion_type:
-            q = q.where(GovernanceSuggestion.suggestion_type == suggestion_type)
-        q = q.order_by(GovernanceSuggestion.created_at.desc()).limit(limit)
+        filters = self._suggestion_filters(kb_id, status=status, suggestion_type=suggestion_type)
+        total = await self.db.scalar(select(func.count(GovernanceSuggestion.id)).where(*filters))
+        q = (
+            select(GovernanceSuggestion)
+            .where(*filters)
+            .order_by(GovernanceSuggestion.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
         result = await self.db.execute(q)
-        return list(result.scalars().all())
+        return {"items": list(result.scalars().all()), "total": int(total or 0)}
+
+    async def suggestion_status_counts(self, kb_id: str) -> dict[str, int]:
+        """按状态统计治理建议数量（用于 Tab 角标，不受分页 limit 影响）。"""
+        result = await self.db.execute(
+            select(GovernanceSuggestion.status, func.count(GovernanceSuggestion.id))
+            .where(GovernanceSuggestion.kb_id == kb_id)
+            .group_by(GovernanceSuggestion.status)
+        )
+        counts = dict.fromkeys(("pending", "approved", "dismissed", "executed", "verified"), 0)
+        for status, n in result.all():
+            counts[str(status)] = int(n)
+        return counts
 
     async def _write_audit(
         self,

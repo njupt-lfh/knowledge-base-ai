@@ -3,8 +3,9 @@
  * 扫描并持久化建议，走 pending → approved → executed → verified 状态机
  * 主要导出：默认 GovernancePanel 组件
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ColumnsType } from 'antd/es/table'
+import type { TablePaginationConfig } from 'antd/es/table/interface'
 import {
   Button,
   Card,
@@ -30,6 +31,7 @@ import {
   governanceApi,
   type AuditLogEntry,
   type GovernanceHealth,
+  type GovernanceStatusCounts,
   type PersistedSuggestion,
 } from '../../api/governance'
 import type { ColdKnowledgeStats } from '../../api/stats'
@@ -78,6 +80,9 @@ const ACTION_LABELS: Record<string, string> = {
   merge: '合并',
 }
 
+const PENDING_PAGE_SIZE = 10
+const WORKFLOW_FETCH_LIMIT = 200
+
 const AUDIT_ACTION_LABELS: Record<string, string> = {
   approved: '批准',
   dismissed: '驳回',
@@ -108,13 +113,51 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
   const [activeTab, setActiveTab] = useState('pending')
   const [health, setHealth] = useState<GovernanceHealth | null>(null)
   const [pendingRows, setPendingRows] = useState<PersistedSuggestion[]>([])
+  const [pendingPage, setPendingPage] = useState(1)
   const [workflowRows, setWorkflowRows] = useState<PersistedSuggestion[]>([])
+  const [statusCounts, setStatusCounts] = useState<GovernanceStatusCounts>({})
   const [auditRows, setAuditRows] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [actingId, setActingId] = useState<string | null>(null)
   const [auditFilter, setAuditFilter] = useState<string | undefined>(undefined)
   const tableWrapRef = useRef<HTMLDivElement>(null)
   const [tableScrollY, setTableScrollY] = useState(280)
+
+  const pendingTotal = statusCounts.pending ?? 0
+  const workflowTotal =
+    (statusCounts.approved ?? 0) + (statusCounts.executed ?? 0) + (statusCounts.verified ?? 0)
+
+  const fetchCounts = useCallback(async () => {
+    try {
+      const res = await governanceApi.statusCounts(kbId)
+      setStatusCounts(res.data)
+      return
+    } catch {
+      /* counts 接口不可用时，分页累加（需后端支持 offset） */
+    }
+    const statuses = ['pending', 'approved', 'dismissed', 'executed', 'verified'] as const
+    const counts: GovernanceStatusCounts = Object.fromEntries(statuses.map((k) => [k, 0]))
+    for (const status of statuses) {
+      let offset = 0
+      const limit = 200
+      let seenFirstId: string | undefined
+      for (let page = 0; page < 200; page++) {
+        const res = await governanceApi.listPersisted(kbId, { status, limit, offset })
+        const batch = res.data.items
+        if (batch.length === 0) break
+        if (page > 0 && batch[0]?.id === seenFirstId) break
+        seenFirstId ??= batch[0]?.id
+        counts[status] = (counts[status] ?? 0) + batch.length
+        if (res.data.total > 0 && (counts[status] ?? 0) >= res.data.total) {
+          counts[status] = res.data.total
+          break
+        }
+        if (batch.length < limit) break
+        offset += limit
+      }
+    }
+    setStatusCounts(counts)
+  }, [kbId])
 
   const measureTableScroll = useCallback(() => {
     const wrap = tableWrapRef.current
@@ -132,40 +175,45 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
     const ro = new ResizeObserver(() => measureTableScroll())
     ro.observe(wrap)
     return () => ro.disconnect()
-  }, [
-    activeTab,
-    loading,
-    measureTableScroll,
-    pendingRows.length,
-    workflowRows.length,
-    auditRows.length,
-  ])
+  }, [activeTab, loading, measureTableScroll, pendingTotal, workflowTotal, auditRows.length])
 
   useEffect(() => {
     if (loading) return
     const id = window.requestAnimationFrame(() => measureTableScroll())
     return () => window.cancelAnimationFrame(id)
-  }, [
-    loading,
-    activeTab,
-    measureTableScroll,
-    pendingRows.length,
-    workflowRows.length,
-    auditRows.length,
-  ])
+  }, [loading, activeTab, measureTableScroll, pendingTotal, workflowTotal, auditRows.length])
 
-  const fetchPending = useCallback(async () => {
-    const res = await governanceApi.listPersisted(kbId, { status: 'pending' })
-    setPendingRows(res.data)
-  }, [kbId])
+  const fetchPending = useCallback(
+    async (page = 1) => {
+      const loadPage = (targetPage: number) =>
+        governanceApi.listPersisted(kbId, {
+          status: 'pending',
+          limit: PENDING_PAGE_SIZE,
+          offset: (targetPage - 1) * PENDING_PAGE_SIZE,
+        })
+
+      let res = await loadPage(page)
+      let targetPage = page
+      if (res.data.total > 0) {
+        const maxPage = Math.max(1, Math.ceil(res.data.total / PENDING_PAGE_SIZE))
+        targetPage = Math.min(page, maxPage)
+        if (targetPage !== page) {
+          res = await loadPage(targetPage)
+        }
+      }
+      setPendingPage(targetPage)
+      setPendingRows(res.data.items)
+    },
+    [kbId],
+  )
 
   const fetchWorkflow = useCallback(async () => {
     const [approved, executed, verified] = await Promise.all([
-      governanceApi.listPersisted(kbId, { status: 'approved' }),
-      governanceApi.listPersisted(kbId, { status: 'executed' }),
-      governanceApi.listPersisted(kbId, { status: 'verified' }),
+      governanceApi.listPersisted(kbId, { status: 'approved', limit: WORKFLOW_FETCH_LIMIT }),
+      governanceApi.listPersisted(kbId, { status: 'executed', limit: WORKFLOW_FETCH_LIMIT }),
+      governanceApi.listPersisted(kbId, { status: 'verified', limit: WORKFLOW_FETCH_LIMIT }),
     ])
-    setWorkflowRows([...approved.data, ...executed.data, ...verified.data])
+    setWorkflowRows([...approved.data.items, ...executed.data.items, ...verified.data.items])
   }, [kbId])
 
   const fetchAudit = useCallback(async () => {
@@ -179,12 +227,12 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
   const refreshAll = useCallback(async () => {
     setLoading(true)
     try {
-      await Promise.all([fetchPending(), fetchWorkflow(), fetchAudit()])
+      await Promise.all([fetchCounts(), fetchPending(pendingPage), fetchWorkflow(), fetchAudit()])
     } catch {
       message.error('加载治理数据失败')
     }
     setLoading(false)
-  }, [fetchPending, fetchWorkflow, fetchAudit])
+  }, [fetchCounts, fetchPending, fetchWorkflow, fetchAudit, pendingPage])
 
   useEffect(() => {
     refreshAll()
@@ -196,7 +244,7 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       const res = await governanceApi.scanAndPersist(kbId, false)
       setHealth(res.data.health)
       message.success(`扫描完成，新增 ${res.data.new_suggestions} 条待审核建议`)
-      await fetchPending()
+      await Promise.all([fetchCounts(), fetchPending(1)])
       onApplied?.()
     } catch {
       message.error('扫描并入库失败')
@@ -211,11 +259,55 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       const from = STATUS_LABELS[res.data.prev_status] || res.data.prev_status
       const to = STATUS_LABELS[res.data.status] || res.data.status
       message.success(`已回退: ${from} → ${to}`)
-      await Promise.all([fetchPending(), fetchWorkflow(), fetchAudit()])
+      await Promise.all([fetchCounts(), fetchPending(pendingPage), fetchWorkflow(), fetchAudit()])
     } catch {
       message.error('回退失败（仅已批准/已执行状态可回退）')
     }
     setActingId(null)
+  }
+
+  const patchListsAfterAction = (
+    suggestionId: string,
+    action: 'approve' | 'dismiss' | 'execute' | 'verify',
+  ) => {
+    const pending = pendingRows.find((r) => r.id === suggestionId)
+    const workflow = workflowRows.find((r) => r.id === suggestionId)
+    const now = new Date().toISOString()
+
+    if (action === 'approve' && pending) {
+      setPendingRows((prev) => prev.filter((r) => r.id !== suggestionId))
+      setStatusCounts((c) => ({
+        ...c,
+        pending: Math.max(0, (c.pending ?? 0) - 1),
+        approved: (c.approved ?? 0) + 1,
+      }))
+      setWorkflowRows((prev) => [...prev, { ...pending, status: 'approved', approved_at: now }])
+      return
+    }
+    if (action === 'dismiss' && pending) {
+      setPendingRows((prev) => prev.filter((r) => r.id !== suggestionId))
+      setStatusCounts((c) => ({
+        ...c,
+        pending: Math.max(0, (c.pending ?? 0) - 1),
+        dismissed: (c.dismissed ?? 0) + 1,
+      }))
+      return
+    }
+    if (action === 'execute' && workflow) {
+      setWorkflowRows((prev) =>
+        prev.map((r) =>
+          r.id === suggestionId ? { ...r, status: 'executed', executed_at: now } : r,
+        ),
+      )
+      return
+    }
+    if (action === 'verify' && workflow) {
+      setWorkflowRows((prev) =>
+        prev.map((r) =>
+          r.id === suggestionId ? { ...r, status: 'verified', verified_at: now } : r,
+        ),
+      )
+    }
   }
 
   const runAction = async (
@@ -229,9 +321,10 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       else if (action === 'dismiss') await governanceApi.dismiss(kbId, suggestionId)
       else if (action === 'execute') await governanceApi.execute(kbId, suggestionId)
       else await governanceApi.verify(kbId, suggestionId)
+      patchListsAfterAction(suggestionId, action)
       message.success(successMsg)
       onApplied?.()
-      await Promise.all([fetchPending(), fetchWorkflow(), fetchAudit()])
+      await Promise.all([fetchCounts(), fetchPending(pendingPage), fetchWorkflow(), fetchAudit()])
     } catch {
       message.error('操作失败')
     }
@@ -441,12 +534,12 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
     emptyHint: string | null,
     columns: ColumnsType<T>,
     dataSource: T[],
-    pageSize: number,
+    pagination: TablePaginationConfig | false,
     toolbar?: ReactNode,
   ) => (
     <div className="governance-panel__tab-body">
       {toolbar}
-      {emptyHint && dataSource.length === 0 && !loading && (
+      {emptyHint && (dataSource?.length ?? 0) === 0 && !loading && (
         <Typography.Text type="secondary" className="governance-panel__empty">
           {emptyHint}
         </Typography.Text>
@@ -459,13 +552,84 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
           rowKey="id"
           loading={loading}
           columns={columns}
-          dataSource={dataSource}
-          pagination={{ pageSize, showSizeChanger: false }}
+          dataSource={dataSource ?? []}
+          pagination={pagination === false ? false : { showSizeChanger: false, ...pagination }}
           size="small"
           scroll={tableScroll}
         />
       </div>
     </div>
+  )
+
+  const tabItems = useMemo(
+    () => [
+      {
+        key: 'pending',
+        label: `待审核 (${pendingTotal})`,
+        children: renderTablePane(
+          'pending',
+          '暂无待审核建议，点击「扫描并入库」生成工单',
+          pendingColumns,
+          pendingRows,
+          {
+            current: pendingPage,
+            pageSize: PENDING_PAGE_SIZE,
+            total: pendingTotal,
+            onChange: (page) => {
+              void fetchPending(page)
+            },
+          },
+        ),
+      },
+      {
+        key: 'workflow',
+        label: `执行流转 (${workflowTotal})`,
+        children: renderTablePane('workflow', '暂无流转中的建议', workflowColumns, workflowRows, {
+          pageSize: 10,
+          total: workflowRows?.length ?? 0,
+        }),
+      },
+      {
+        key: 'audit',
+        label: '审计日志',
+        children: renderTablePane(
+          'audit',
+          null,
+          auditColumns,
+          auditRows,
+          { pageSize: 15 },
+          <Space className="governance-panel__audit-filter" wrap>
+            <Typography.Text type="secondary">筛选动作：</Typography.Text>
+            <Select
+              allowClear
+              placeholder="全部"
+              style={{ width: 120 }}
+              value={auditFilter}
+              onChange={(v) => setAuditFilter(v)}
+              options={Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => ({
+                value: k,
+                label: v,
+              }))}
+            />
+          </Space>,
+        ),
+      },
+    ],
+    [
+      pendingTotal,
+      workflowTotal,
+      pendingPage,
+      pendingRows,
+      workflowRows,
+      auditRows,
+      auditFilter,
+      loading,
+      activeTab,
+      fetchPending,
+      pendingColumns,
+      workflowColumns,
+      auditColumns,
+    ],
   )
 
   return (
@@ -482,7 +646,7 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
           )}
           <Card size="small" className="governance-panel__stat">
             <Typography.Text type="secondary">待审核 </Typography.Text>
-            <Typography.Text strong>{pendingRows.length}</Typography.Text>
+            <Typography.Text strong>{pendingTotal}</Typography.Text>
           </Card>
           <Button
             type="primary"
@@ -499,59 +663,12 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       </div>
 
       <Tabs
+        key={`gov-tabs-${pendingTotal}-${workflowTotal}`}
         className="governance-panel__tabs"
         activeKey={activeTab}
         onChange={setActiveTab}
         destroyOnHidden={false}
-        items={[
-          {
-            key: 'pending',
-            label: `待审核 (${pendingRows.length})`,
-            children: renderTablePane(
-              'pending',
-              '暂无待审核建议，点击「扫描并入库」生成工单',
-              pendingColumns,
-              pendingRows,
-              10,
-            ),
-          },
-          {
-            key: 'workflow',
-            label: `执行流转 (${workflowRows.length})`,
-            children: renderTablePane(
-              'workflow',
-              '暂无流转中的建议',
-              workflowColumns,
-              workflowRows,
-              10,
-            ),
-          },
-          {
-            key: 'audit',
-            label: '审计日志',
-            children: renderTablePane(
-              'audit',
-              null,
-              auditColumns,
-              auditRows,
-              15,
-              <Space className="governance-panel__audit-filter" wrap>
-                <Typography.Text type="secondary">筛选动作：</Typography.Text>
-                <Select
-                  allowClear
-                  placeholder="全部"
-                  style={{ width: 120 }}
-                  value={auditFilter}
-                  onChange={(v) => setAuditFilter(v)}
-                  options={Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => ({
-                    value: k,
-                    label: v,
-                  }))}
-                />
-              </Space>,
-            ),
-          },
-        ]}
+        items={tabItems}
       />
     </div>
   )

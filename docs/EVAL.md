@@ -22,7 +22,7 @@
 
 | 文件 | 版本 | 样本量 | 用途 |
 |------|------|--------|------|
-| `data/eval_qa_dataset.json` | v1 | 100（5 库×20） | 回归基线、Phase 3 v1 门禁、答辩主展示 |
+| `data/eval_qa_dataset.json` | v1 | 100（5 库×20） | 回归基线、Phase 3 v1 门禁、看板主展示 |
 | `data/eval_qa_dataset_v2.json` | v2 | 168+ | 多 relevant、近域负例、自然问法 |
 
 **题型占比（v1）**：fact 50% · concept 20% · multi_hop 20% · negative 10%。
@@ -56,7 +56,7 @@
 
 均在 **`backend/`** 目录执行。
 
-### 4.1 全量基线（答辩 Dashboard 数据源）
+### 4.1 全量基线（看板 Dashboard 数据源）
 
 ```bash
 # 仅检索（快，约 30–40 分钟 / 100 条）
@@ -110,7 +110,7 @@ python scripts/check_eval_ci_gates.py --report ../data/eval_baseline_report.json
 
 **开发端口**：Vite 默认 **5173**（`frontend/vite.config.ts`），后端 CORS 已允许 5173。
 
-刷新答辩数据：**强刷** `/eval`（Ctrl+F5），确保后端 8080 已启动。
+刷新看板数据：**强刷** `/eval`（Ctrl+F5），确保后端 8080 已启动。
 
 ---
 
@@ -119,9 +119,22 @@ python scripts/check_eval_ci_gates.py --report ../data/eval_baseline_report.json
 | 路径 | 用途 | 特点 |
 |------|------|------|
 | `AgentOrchestrator.retrieve_for_eval` | 评测检索 | multi_hop 分路、SIM-RAG、abstention；**不走 CRAG 拒答** |
-| `RAGService.generate` → `generate_stream` | 评测生成 / 线上对话 | CRAG、一致性双路、Post-hoc Guard |
+| `RAGService.generate` → `generate_stream` | 评测生成 / 线上对话（**默认完整链路**） | CRAG、一致性双路、Post-hoc Guard |
+| 线上对话 + `fast_mode=true` | 仅用户对话请求 | 见下「快速模式」 |
 
-因此：**检索指标**与**生成指标**可能脱节（召回高但 AR 低），改善见 [RAG_IMPROVEMENT_ROADMAP.md §Week 3–4](RAG_IMPROVEMENT_ROADMAP.md#week-34--分块与生成质量包答辩后优先)。
+### 快速模式（与评测无关）
+
+AI 对话页开关 → 请求体 `fast_mode` → `chat_runtime.fast_mode_context`（**单次 SSE 请求内** ContextVar，不改 `.env`、不影响评测脚本）。
+
+| 快速模式 | 完整模式（评测 / 关开关） |
+|----------|---------------------------|
+| 关闭 Cross-Encoder、Post-hoc、答案一致性 | 按 `.env` 启用上述链路 |
+| `AGENT_MAX_ROUNDS=1` | 默认 2 轮 |
+| 保留 SIM-RAG、图谱 multi_hop、CRAG | 同上 |
+
+**说明**：对外报 KPI 以 `eval_baseline_report.json` 为准；展示完整质量链路时关闭快速模式；需要更快响应并保留 SIM-RAG / 图谱标签时可开启。
+
+因此：**检索指标**与**生成指标**可能脱节（召回高但 AR 低），改善见 [RAG_IMPROVEMENT_ROADMAP.md §Week 3–4](RAG_IMPROVEMENT_ROADMAP.md#week-34--分块与生成质量包后续优先)。
 
 ---
 
@@ -140,10 +153,10 @@ python scripts/check_eval_ci_gates.py --report ../data/eval_baseline_report.json
 ## 8. 常见问题
 
 **Q：CP-chunk 25% 和 RAGAS precision 72% 为何差很多？**  
-A：计算方式不同；答辩用 §3 表格解释，以 CP-chunk 反映 top-k 噪声。
+A：计算方式不同；参见 §3 表格解释，以 CP-chunk 反映 top-k 噪声。
 
 **Q：重跑评测后 Dashboard 数字变了？**  
-A: 正常；`eval_baseline_report.json` 被覆盖。答辩前固定一份报告并备份 JSON。
+A: 正常；`eval_baseline_report.json` 被覆盖。发布前固定一份报告并备份 JSON。
 
-**Q：v1 与 v2 哪个用于答辩？**  
+**Q：v1 与 v2 哪个用于对外 KPI？**  
 A：主展示 **v1**（召回/命中/NRR 更稳）；v2 multi_hop 进步单独说明即可。

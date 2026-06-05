@@ -40,18 +40,33 @@ async def scan_and_persist_suggestions(
     return {"scan_id": scan_id, "new_suggestions": count, **result}
 
 
+@router.get("/suggestions/persisted/counts", name="persisted_suggestion_counts")
+async def persisted_suggestion_counts(
+    kb_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """各状态治理建议数量（Tab 角标用，一次查询不受分页影响）。"""
+    svc = GovernanceService(db)
+    return await svc.suggestion_status_counts(kb_id)
+
+
 @router.get("/suggestions/persisted")
 async def list_persisted_suggestions(
     kb_id: str,
     status: str | None = Query(None),
     suggestion_type: str | None = Query(None, alias="type"),
+    offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出已持久化的治理建议（支持状态/类型过滤）。"""
+    """列出已持久化的治理建议（支持状态/类型过滤、分页与总数）。"""
     svc = GovernanceService(db)
     return await svc.list_suggestions(
-        kb_id, status=status, suggestion_type=suggestion_type, limit=limit
+        kb_id,
+        status=status,
+        suggestion_type=suggestion_type,
+        offset=offset,
+        limit=limit,
     )
 
 

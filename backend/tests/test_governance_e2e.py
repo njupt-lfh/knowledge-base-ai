@@ -216,10 +216,11 @@ async def test_governance_workflow_scan_to_verify(kb_with_chunk):
                 )
                 assert pending_res.status_code == 200
                 pending = pending_res.json()
-                assert len(pending) >= 1
-                suggestion_id = pending[0]["id"]
-                assert pending[0]["status"] == "pending"
-                assert json.loads(pending[0]["chunk_ids"]) == [chunk_id]
+                assert pending["total"] >= 1
+                assert len(pending["items"]) >= 1
+                suggestion_id = pending["items"][0]["id"]
+                assert pending["items"][0]["status"] == "pending"
+                assert json.loads(pending["items"][0]["chunk_ids"]) == [chunk_id]
 
                 approve_res = await client.post(
                     f"/api/knowledge-bases/{kb_id}/governance/suggestions/{suggestion_id}/approve",

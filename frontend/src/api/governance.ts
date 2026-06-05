@@ -53,6 +53,26 @@ export interface PersistedSuggestion {
   content_preview: string | null
 }
 
+/** 持久化治理建议列表（分页） */
+export interface PersistedSuggestionList {
+  items: PersistedSuggestion[]
+  total: number
+}
+
+/** 兼容旧版直接返回数组的接口（数组时 total 不可信，请用 statusCounts） */
+export function normalizePersistedList(
+  data: PersistedSuggestionList | PersistedSuggestion[] | null | undefined,
+): PersistedSuggestionList {
+  if (!data) return { items: [], total: 0 }
+  if (Array.isArray(data)) return { items: data, total: 0 }
+  return {
+    items: data.items ?? [],
+    total: data.total ?? 0,
+  }
+}
+
+export type GovernanceStatusCounts = Record<string, number>
+
 /** 审计日志 */
 export interface AuditLogEntry {
   id: string
@@ -79,12 +99,23 @@ export const governanceApi = {
       { params: { scan_duplicates: scanDuplicates } },
     ),
 
-  /** 列出已持久化的治理建议 */
-  listPersisted: (kbId: string, params?: { status?: string; type?: string }) =>
-    request.get<PersistedSuggestion[]>(
+  /** 各状态建议数量（Tab 角标） */
+  statusCounts: (kbId: string) =>
+    request.get<GovernanceStatusCounts>(
+      `/api/knowledge-bases/${kbId}/governance/suggestions/persisted/counts`,
+    ),
+
+  /** 列出已持久化的治理建议（含 total，默认每页 50 条） */
+  listPersisted: async (
+    kbId: string,
+    params?: { status?: string; type?: string; limit?: number; offset?: number },
+  ) => {
+    const res = await request.get<PersistedSuggestionList | PersistedSuggestion[]>(
       `/api/knowledge-bases/${kbId}/governance/suggestions/persisted`,
       { params },
-    ),
+    )
+    return { ...res, data: normalizePersistedList(res.data) }
+  },
 
   /** 批准建议 */
   approve: (kbId: string, suggestionId: string) =>

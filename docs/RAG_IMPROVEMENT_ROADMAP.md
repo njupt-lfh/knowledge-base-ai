@@ -32,7 +32,7 @@
 
 ---
 
-## 2. 指标口径（答辩必讲）
+## 2. 指标口径（对外说明要点）
 
 | 简称 | 含义 | 计算位置 |
 |------|------|----------|
@@ -42,7 +42,7 @@
 | **NRR** | 负例拒答率 | 负例样本空检索比例 |
 | **MRR / NDCG@5** | 排序质量 | 仅正例；见 `retrieval_metrics.py` |
 
-> **chunk 级 CP（~0.25–0.52）≠ RAGAS CP（~0.72–0.78）**。答辩必须说明双轨口径，避免被质疑「数字矛盾」。
+> **chunk 级 CP（~0.25–0.52）≠ RAGAS CP（~0.72–0.78）**。对外说明须区分双轨口径，避免被误解为「数字矛盾」。
 
 ---
 
@@ -57,16 +57,16 @@
 | **Week 3–4** | 结构分块 re-index + Prompt 分层 + 证据抽取 | 📋 待做 | 见 §5 |
 | **Week 5+** | CRAG 早停 + HNSW + CI RAGAS 抽检 | 📋 待做 | 见 §6 |
 
-**近期 v1 全量评测快照**（`eval_baseline_report.json`，答辩展示以该文件为准）：
+**近期 v1 全量评测快照**（`eval_baseline_report.json`，看板展示以该文件为准）：
 
 | 指标 | 约值 |
 |------|------|
 | CR-chunk | 0.87 |
 | 检索命中率 | 0.90 |
-| CP-chunk | 0.51–0.67（随 Cross-Encoder / 报告版本） |
+| CP-chunk | ≈ 0.67 |
 | NRR | 1.0 |
-| FA（RAGAS） | 0.71–0.84 |
-| AR（RAGAS） | 受误拒答影响，需 Week 3–4 Prompt/路由优化 |
+| FA（RAGAS） | ≈ 0.84 |
+| AR（RAGAS） | ≈ 0.61（`answer_relevancy_mean`） |
 
 ---
 
@@ -107,7 +107,7 @@ python scripts/run_phase3_exit.py --report-only
 
 ---
 
-### Week 3–4 — 分块与生成质量包（答辩后优先）
+### Week 3–4 — 分块与生成质量包（后续优先）
 
 > **主线**：在不动召回的前提下，抬 **AR ≥ 0.55**、**FA ≥ 0.80**。
 
@@ -154,7 +154,7 @@ python scripts/run_rag_eval.py --dataset v1 --limit 0 --ragas
 
 ---
 
-## 6. 答辩话术参考
+## 6. 对外说明参考
 
 ### 「精确率为什么不高？」
 
