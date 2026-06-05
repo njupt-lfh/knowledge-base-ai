@@ -108,7 +108,7 @@ python scripts/check_eval_ci_gates.py --report ../data/eval_baseline_report.json
 | `/eval` | 评测看板：当前报告 KPI + RAGAS 子块 + 题型/知识库 Tab |
 | 静态对比 | `frontend/src/data/evalPhaseComparison.ts`（Phase 0–3 历史快照，需手动更新） |
 
-**开发端口**：Vite 默认 **5174**（`frontend/vite.config.ts`），后端 CORS 已允许 5173/5174。
+**开发端口**：Vite 默认 **5173**（`frontend/vite.config.ts`），后端 CORS 已允许 5173。
 
 刷新答辩数据：**强刷** `/eval`（Ctrl+F5），确保后端 8080 已启动。
 

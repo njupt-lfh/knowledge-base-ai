@@ -292,6 +292,16 @@ export default function ChatAgent() {
 
   return (
     <div className="chat-page chat-page--agent">
+      <div className="chat-page__top-nav">
+        <Button
+          type="link"
+          className="chat-page__nav-back"
+          icon={<ArrowLeftOutlined />}
+          onClick={() => navigate(`/knowledge-bases/${kbId}`)}
+        >
+          返回详情
+        </Button>
+      </div>
       <HudPanel className="chat-page__panel">
         <div className="kb-detail__header">
           <div>
@@ -299,7 +309,7 @@ export default function ChatAgent() {
             <p className="page-subtitle">基于知识库的智能问答终端</p>
           </div>
           <Space className="chat-page__toolbar" wrap>
-            <Tooltip title="关闭 Cross-Encoder、生成后质检、图谱与双路径一致性，优先响应速度（仅影响后续提问）">
+            <Tooltip title="关闭 Cross-Encoder 重排、生成后质检与双路径一致性，保留 SIM-RAG/图谱多跳；检索仅 1 轮 CRAG">
               <label className="chat-fast-mode-switch">
                 <ThunderboltOutlined className="chat-fast-mode-switch__icon" />
                 <span className="chat-fast-mode-switch__label">快速模式</span>
@@ -331,12 +341,6 @@ export default function ChatAgent() {
             </Button>
             <Button icon={<ShareAltOutlined />} onClick={handleShare}>
               分享
-            </Button>
-            <Button
-              icon={<ArrowLeftOutlined />}
-              onClick={() => navigate(`/knowledge-bases/${kbId}`)}
-            >
-              返回详情
             </Button>
           </Space>
         </div>

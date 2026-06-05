@@ -14,15 +14,11 @@ from .config import settings
 
 _fast_mode: ContextVar[bool] = ContextVar("chat_fast_mode", default=False)
 
-# 快速模式：单次对话内生效的布尔/整数覆盖（相对 .env 更激进地提速）
+# 快速模式：仅关闭最耗时的链路；保留 SIM-RAG / 图谱 / 多跳以便演示 agent_meta 标签
 _FAST_BOOL: dict[str, bool] = {
     "CROSS_ENCODER_RERANK_ENABLED": False,
     "POST_HOC_ANSWER_GUARD_ENABLED": False,
     "ANSWER_CONSISTENCY_ENABLED": False,
-    "EVAL_SIM_RAG_ENABLED": False,
-    "SIM_RAG_ENABLED": False,
-    "GRAPH_ENABLED": False,
-    "MULTI_HOP_SPLIT_ENABLED": False,
 }
 
 _FAST_INT: dict[str, int] = {

@@ -3,7 +3,8 @@
  * 扫描并持久化建议，走 pending → approved → executed → verified 状态机
  * 主要导出：默认 GovernancePanel 组件
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { ColumnsType } from 'antd/es/table'
 import {
   Button,
   Card,
@@ -112,6 +113,39 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
   const [loading, setLoading] = useState(false)
   const [actingId, setActingId] = useState<string | null>(null)
   const [auditFilter, setAuditFilter] = useState<string | undefined>(undefined)
+  const tableWrapRef = useRef<HTMLDivElement>(null)
+  const [tableScrollY, setTableScrollY] = useState(280)
+
+  const measureTableScroll = useCallback(() => {
+    const wrap = tableWrapRef.current
+    if (!wrap) return
+    const pagination = wrap.querySelector<HTMLElement>('.ant-table-pagination')
+    const thead = wrap.querySelector<HTMLElement>('.ant-table-thead')
+    const reserved = (pagination?.offsetHeight ?? 52) + (thead?.offsetHeight ?? 39) + 12
+    setTableScrollY(Math.max(120, wrap.clientHeight - reserved))
+  }, [])
+
+  useEffect(() => {
+    measureTableScroll()
+    const wrap = tableWrapRef.current
+    if (!wrap) return
+    const ro = new ResizeObserver(() => measureTableScroll())
+    ro.observe(wrap)
+    return () => ro.disconnect()
+  }, [
+    activeTab,
+    loading,
+    measureTableScroll,
+    pendingRows.length,
+    workflowRows.length,
+    auditRows.length,
+  ])
+
+  useEffect(() => {
+    if (loading) return
+    const id = window.requestAnimationFrame(() => measureTableScroll())
+    return () => window.cancelAnimationFrame(id)
+  }, [loading, activeTab, measureTableScroll, pendingRows.length, workflowRows.length, auditRows.length])
 
   const fetchPending = useCallback(async () => {
     const res = await governanceApi.listPersisted(kbId, { status: 'pending' })
@@ -393,40 +427,72 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       }
     : null
 
-  return (
-    <Space
-      direction="vertical"
-      style={{ width: '100%' }}
-      size="middle"
-      className="governance-panel"
-    >
-      <Space wrap align="center" className="governance-panel__toolbar">
-        <ColdKnowledgeBadge data={coldBadge} />
-        {health && (
-          <Card size="small" className="governance-panel__stat">
-            <Typography.Text type="secondary">活跃块 </Typography.Text>
-            <Typography.Text strong>{health.active_chunks}</Typography.Text>
-            <Typography.Text type="secondary"> / {health.total_chunks}</Typography.Text>
-          </Card>
-        )}
-        <Card size="small" className="governance-panel__stat">
-          <Typography.Text type="secondary">待审核 </Typography.Text>
-          <Typography.Text strong>{pendingRows.length}</Typography.Text>
-        </Card>
-        <Button
-          type="primary"
-          icon={<ScanOutlined />}
-          onClick={handleScanAndPersist}
+  const tableScroll = { y: tableScrollY }
+
+  const renderTablePane = <T extends { id: string }>(
+    tabKey: string,
+    emptyHint: string | null,
+    columns: ColumnsType<T>,
+    dataSource: T[],
+    pageSize: number,
+    toolbar?: ReactNode,
+  ) => (
+    <div className="governance-panel__tab-body">
+      {toolbar}
+      {emptyHint && dataSource.length === 0 && !loading && (
+        <Typography.Text type="secondary" className="governance-panel__empty">
+          {emptyHint}
+        </Typography.Text>
+      )}
+      <div
+        ref={tabKey === activeTab ? tableWrapRef : undefined}
+        className="governance-panel__table-wrap"
+      >
+        <Table<T>
+          rowKey="id"
           loading={loading}
-        >
-          扫描并入库
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={refreshAll} loading={loading}>
-          刷新
-        </Button>
-      </Space>
+          columns={columns}
+          dataSource={dataSource}
+          pagination={{ pageSize, showSizeChanger: false }}
+          size="small"
+          scroll={tableScroll}
+        />
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="governance-panel">
+      <div className="governance-panel__head">
+        <Space wrap align="center" className="governance-panel__toolbar">
+          <ColdKnowledgeBadge data={coldBadge} />
+          {health && (
+            <Card size="small" className="governance-panel__stat">
+              <Typography.Text type="secondary">活跃块 </Typography.Text>
+              <Typography.Text strong>{health.active_chunks}</Typography.Text>
+              <Typography.Text type="secondary"> / {health.total_chunks}</Typography.Text>
+            </Card>
+          )}
+          <Card size="small" className="governance-panel__stat">
+            <Typography.Text type="secondary">待审核 </Typography.Text>
+            <Typography.Text strong>{pendingRows.length}</Typography.Text>
+          </Card>
+          <Button
+            type="primary"
+            icon={<ScanOutlined />}
+            onClick={handleScanAndPersist}
+            loading={loading}
+          >
+            扫描并入库
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={refreshAll} loading={loading}>
+            刷新
+          </Button>
+        </Space>
+      </div>
 
       <Tabs
+        className="governance-panel__tabs"
         activeKey={activeTab}
         onChange={setActiveTab}
         destroyOnHidden={false}
@@ -434,75 +500,52 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
           {
             key: 'pending',
             label: `待审核 (${pendingRows.length})`,
-            children: (
-              <>
-                {pendingRows.length === 0 && !loading && (
-                  <Typography.Text type="secondary">
-                    暂无待审核建议，点击「扫描并入库」生成工单
-                  </Typography.Text>
-                )}
-                <Table
-                  rowKey="id"
-                  loading={loading}
-                  columns={pendingColumns}
-                  dataSource={pendingRows}
-                  pagination={{ pageSize: 10 }}
-                  size="small"
-                />
-              </>
+            children: renderTablePane(
+              'pending',
+              '暂无待审核建议，点击「扫描并入库」生成工单',
+              pendingColumns,
+              pendingRows,
+              10,
             ),
           },
           {
             key: 'workflow',
             label: `执行流转 (${workflowRows.length})`,
-            children: (
-              <>
-                {workflowRows.length === 0 && !loading && (
-                  <Typography.Text type="secondary">暂无流转中的建议</Typography.Text>
-                )}
-                <Table
-                  rowKey="id"
-                  loading={loading}
-                  columns={workflowColumns}
-                  dataSource={workflowRows}
-                  pagination={{ pageSize: 10 }}
-                  size="small"
-                />
-              </>
+            children: renderTablePane(
+              'workflow',
+              '暂无流转中的建议',
+              workflowColumns,
+              workflowRows,
+              10,
             ),
           },
           {
             key: 'audit',
             label: '审计日志',
-            children: (
-              <>
-                <Space style={{ marginBottom: 12 }}>
-                  <Typography.Text type="secondary">筛选动作：</Typography.Text>
-                  <Select
-                    allowClear
-                    placeholder="全部"
-                    style={{ width: 120 }}
-                    value={auditFilter}
-                    onChange={(v) => setAuditFilter(v)}
-                    options={Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => ({
-                      value: k,
-                      label: v,
-                    }))}
-                  />
-                </Space>
-                <Table
-                  rowKey="id"
-                  loading={loading}
-                  columns={auditColumns}
-                  dataSource={auditRows}
-                  pagination={{ pageSize: 15 }}
-                  size="small"
+            children: renderTablePane(
+              'audit',
+              null,
+              auditColumns,
+              auditRows,
+              15,
+              <Space className="governance-panel__audit-filter" wrap>
+                <Typography.Text type="secondary">筛选动作：</Typography.Text>
+                <Select
+                  allowClear
+                  placeholder="全部"
+                  style={{ width: 120 }}
+                  value={auditFilter}
+                  onChange={(v) => setAuditFilter(v)}
+                  options={Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => ({
+                    value: k,
+                    label: v,
+                  }))}
                 />
-              </>
+              </Space>,
             ),
           },
         ]}
       />
-    </Space>
+    </div>
   )
 }

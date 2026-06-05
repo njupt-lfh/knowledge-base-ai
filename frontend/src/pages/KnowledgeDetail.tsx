@@ -430,7 +430,9 @@ export default function KnowledgeDetail() {
   ]
 
   return (
-    <div className={`kb-detail${activeTab === 'graph' ? ' kb-detail--graph' : ''}`}>
+    <div
+      className={`kb-detail${activeTab === 'graph' ? ' kb-detail--graph' : ''}${activeTab === 'governance' ? ' kb-detail--governance' : ''}`}
+    >
       <div className="kb-detail__header">
         <h2
           className="page-title kb-detail__headline"

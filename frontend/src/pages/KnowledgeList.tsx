@@ -21,6 +21,7 @@ export default function KnowledgeList() {
   const [editingKb, setEditingKb] = useState<KnowledgeBase | null>(null)
   const [form] = Form.useForm()
   const [searchText, setSearchText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -54,15 +55,36 @@ export default function KnowledgeList() {
   }, [fetchData])
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  const normalizeKbForm = (values: Record<string, unknown>) => ({
+    name: String(values.name ?? '').trim(),
+    description: (values.description as string) || undefined,
+    chunk_size: Number(values.chunk_size ?? 500),
+    chunk_overlap: Number(values.chunk_overlap ?? 50),
+  })
+
   const handleCreate = async (values: Record<string, unknown>) => {
+    const payload = normalizeKbForm(values)
+    if (!payload.name) {
+      message.warning('请输入知识库名称')
+      return
+    }
     try {
-      await knowledgeApi.create(values as { name: string })
+      await knowledgeApi.create(payload)
       message.success('创建成功')
       setModalOpen(false)
       form.resetFields()
       fetchData()
-    } catch {
-      message.error('创建失败')
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string | { msg?: string }[] } } })?.response?.data
+          ?.detail
+      const text =
+        typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d) => d.msg).join('; ')
+            : ''
+      message.error(text ? `创建失败：${text}` : '创建失败，请确认后端已启动且网络正常')
     }
   }
 
@@ -78,15 +100,30 @@ export default function KnowledgeList() {
 
   const handleEdit = async (values: Record<string, unknown>) => {
     if (!editingKb) return
+    const payload = normalizeKbForm(values)
     try {
-      await knowledgeApi.update(editingKb.id, values as Partial<KnowledgeBase>)
+      await knowledgeApi.update(editingKb.id, payload)
       message.success('更新成功')
       setModalOpen(false)
       setEditingKb(null)
       form.resetFields()
       fetchData()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      message.error(typeof detail === 'string' ? `更新失败：${detail}` : '更新失败')
+    }
+  }
+
+  const handleModalOk = async () => {
+    try {
+      setSubmitting(true)
+      const values = await form.validateFields()
+      if (editingKb) await handleEdit(values)
+      else await handleCreate(values)
     } catch {
-      message.error('更新失败')
+      /* 表单校验未通过时不关闭弹窗 */
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -139,21 +176,31 @@ export default function KnowledgeList() {
           setEditingKb(null)
           form.resetFields()
         }}
-        onOk={() => form.submit()}
+        onOk={handleModalOk}
+        confirmLoading={submitting}
         okText="确认"
         cancelText="取消"
+        destroyOnHidden
       >
-        <Form form={form} layout="vertical" onFinish={editingKb ? handleEdit : handleCreate}>
+        <Form form={form} layout="vertical" initialValues={{ chunk_size: 500, chunk_overlap: 50 }}>
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
             <Input placeholder="例如：技术文档库" />
           </Form.Item>
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={3} placeholder="知识库描述（可选）" />
           </Form.Item>
-          <Form.Item name="chunk_size" label="分块大小" initialValue={500}>
+          <Form.Item
+            name="chunk_size"
+            label="分块大小"
+            rules={[{ required: true, message: '请输入分块大小' }]}
+          >
             <InputNumber min={100} max={2000} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="chunk_overlap" label="分块重叠" initialValue={50}>
+          <Form.Item
+            name="chunk_overlap"
+            label="分块重叠"
+            rules={[{ required: true, message: '请输入分块重叠' }]}
+          >
             <InputNumber min={0} max={500} style={{ width: '100%' }} />
           </Form.Item>
         </Form>

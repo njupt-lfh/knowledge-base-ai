@@ -10,7 +10,7 @@
 │                    前端 (React 18 + Ant Design)               │
 │  KnowledgeList / KnowledgeDetail / ChatAgent / GapTasks      │
 │  Stats（数据驾驶舱）/ EvalDashboard / ShareChat               │
-│  端口: 5174 (Vite dev，strictPort)  →  API: http://localhost:8080 │
+│  端口: 5173 (Vite dev，strictPort)  →  API: http://localhost:8080 │
 └────────────────────────────┬─────────────────────────────────┘
                              │ HTTP REST + SSE Stream
 ┌────────────────────────────▼─────────────────────────────────┐
@@ -140,10 +140,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080
 cd frontend
 npm install
 npm run dev
-# → http://localhost:5174
+# → http://localhost:5173
 ```
 
-**CORS**：后端允许 `localhost:5173`、`localhost:5174` 来源。
+**CORS**：后端允许 `localhost:5173` 来源。
 
 **交付含数据时**：连同 `data/knowledge_base.db`、`backend/chroma_data/`、`backend/uploads/` 打包；不要泄露 `.env` 中的 API Key。
 

@@ -37,6 +37,41 @@
 }
 
 /* 知识图谱：纵向撑满可视区域，图表贴近窗口底部 */
+/* 治理建议：固定工具栏与 Tab 栏，仅表格数据区滚动 */
+.kb-detail--governance {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--topbar-height) - 2 * var(--space-lg));
+  min-height: 0;
+  overflow: hidden;
+}
+
+.kb-detail--governance .kb-detail__header {
+  flex-shrink: 0;
+}
+
+.kb-detail--governance .kb-detail__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.kb-detail--governance .kb-detail__tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.kb-detail--governance .governance-panel {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
 .kb-detail--graph {
   display: flex;
   flex-direction: column;

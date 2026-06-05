@@ -112,7 +112,9 @@ def get_multi_hop_anchors(query: str) -> list[str]:
 
 def should_use_multi_hop_split(route: QueryRoute, query: str) -> bool:
     """relational/comprehensive 且能拆出 ≥2 anchor 时启用双路检索。"""
-    if not getattr(settings, "MULTI_HOP_SPLIT_ENABLED", True):
+    from ..core import chat_runtime as rt
+
+    if not rt.get_bool("MULTI_HOP_SPLIT_ENABLED", True):
         return False
     if route not in ("relational", "comprehensive"):
         return False

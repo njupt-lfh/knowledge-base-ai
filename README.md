@@ -114,7 +114,7 @@ uvicorn app.main:app --reload --port 8080
 cd frontend
 npm install
 npm run dev
-# 访问: http://localhost:5174  （vite.config.ts 默认端口）
+# 访问: http://localhost:5173  （vite.config.ts 默认端口）
 ```
 
 ## 评测与答辩（常用命令）
@@ -162,7 +162,7 @@ python -c "import sqlite3; c=sqlite3.connect('data/knowledge_base.db'); c.execut
 
 ```
 knowledge-base-ai/
-├── frontend/                 # React 前端（dev 端口 5174）
+├── frontend/                 # React 前端（dev 端口 5173）
 │   ├── .env.example
 │   └── src/
 │       ├── api/              # API 调用层
