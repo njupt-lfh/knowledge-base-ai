@@ -145,7 +145,14 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
     if (loading) return
     const id = window.requestAnimationFrame(() => measureTableScroll())
     return () => window.cancelAnimationFrame(id)
-  }, [loading, activeTab, measureTableScroll, pendingRows.length, workflowRows.length, auditRows.length])
+  }, [
+    loading,
+    activeTab,
+    measureTableScroll,
+    pendingRows.length,
+    workflowRows.length,
+    auditRows.length,
+  ])
 
   const fetchPending = useCallback(async () => {
     const res = await governanceApi.listPersisted(kbId, { status: 'pending' })

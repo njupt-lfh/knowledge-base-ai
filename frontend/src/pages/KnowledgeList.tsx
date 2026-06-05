@@ -75,9 +75,8 @@ export default function KnowledgeList() {
       form.resetFields()
       fetchData()
     } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string | { msg?: string }[] } } })?.response?.data
-          ?.detail
+      const detail = (err as { response?: { data?: { detail?: string | { msg?: string }[] } } })
+        ?.response?.data?.detail
       const text =
         typeof detail === 'string'
           ? detail
