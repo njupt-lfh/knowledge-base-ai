@@ -95,8 +95,8 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
 interface GovernancePanelProps {
   kbId: string
   onApplied?: () => void
-  /** 在文档知识块抽屉中定位到指定块 */
-  onLocateChunk?: (documentId: string, chunkId: string) => void
+  /** 在文档知识块抽屉中定位到指定块；chunkId 省略时仅打开来源文档 */
+  onLocateChunk?: (documentId: string, chunkId?: string) => void
 }
 
 function formatChunkLabel(ref: GovernanceChunkRef): string {
@@ -108,7 +108,7 @@ function SuggestionChunkSources({
   onLocateChunk,
 }: {
   row: PersistedSuggestion
-  onLocateChunk?: (documentId: string, chunkId: string) => void
+  onLocateChunk?: (documentId: string, chunkId?: string) => void
 }) {
   if (row.chunk_refs?.length) {
     return (

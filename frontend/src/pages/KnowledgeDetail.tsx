@@ -280,7 +280,7 @@ export default function KnowledgeDetail() {
     }
   }
 
-  const locateGovernanceChunk = async (documentId: string, chunkId: string) => {
+  const locateGovernanceChunk = async (documentId: string, chunkId?: string) => {
     let doc = docs.find((d) => d.id === documentId)
     if (!doc && kbId) {
       try {
@@ -615,7 +615,9 @@ export default function KnowledgeDetail() {
               </Modal>
             </Space>
           )}
-          {activeTab === 'conflicts' && kbId && <ConflictsPanel kbId={kbId} />}
+          {activeTab === 'conflicts' && kbId && (
+            <ConflictsPanel kbId={kbId} onLocateChunk={locateGovernanceChunk} />
+          )}
           {activeTab === 'governance' && kbId && (
             <GovernancePanel
               kbId={kbId}

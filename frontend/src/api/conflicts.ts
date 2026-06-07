@@ -4,12 +4,14 @@
  * 主要导出：KnowledgeConflict、IngestPrecheckResult、conflictsApi
  */
 import request from './request'
+import type { GovernanceChunkRef } from './governance'
 
 /** 待裁决的知识冲突记录 */
 export interface KnowledgeConflict {
   id: string
   kb_id: string
   existing_chunk_id: string
+  existing_chunk_ref?: GovernanceChunkRef | null
   existing_preview: string
   new_content: string
   new_preview: string
@@ -17,6 +19,7 @@ export interface KnowledgeConflict {
   status: string
   llm_reason: string | null
   source_document_id: string | null
+  source_document_name?: string | null
   resolved_chunk_id: string | null
   created_at: string | null
   resolved_at: string | null

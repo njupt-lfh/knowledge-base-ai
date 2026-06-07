@@ -2,6 +2,22 @@
   max-width: 560px;
 }
 
+.conflicts-panel__source-label {
+  font-size: 12px;
+}
+
+.conflicts-panel__locate {
+  padding: 0;
+  height: auto;
+  font-size: 12px;
+}
+
+.conflicts-panel__preview {
+  margin-bottom: 0 !important;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
 .conflicts-panel__reason {
   font-size: 12px;
 }
