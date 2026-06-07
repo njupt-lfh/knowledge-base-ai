@@ -116,22 +116,19 @@ class GovernanceService:
         """
         cutoff = datetime.utcnow() - timedelta(days=COLD_DAYS)
         rows = (
-            (
-                await self.db.execute(
-                    select(Chunk, Document.filename)
-                    .join(Document, Chunk.document_id == Document.id)
-                    .where(
-                        Chunk.knowledge_base_id == kb_id,
-                        Chunk.is_active.is_(True),
-                        Chunk.hit_count == 0,
-                        Chunk.created_at <= cutoff,
-                    )
-                    .order_by(Chunk.created_at)
-                    .limit(50)
+            await self.db.execute(
+                select(Chunk, Document.filename)
+                .join(Document, Chunk.document_id == Document.id)
+                .where(
+                    Chunk.knowledge_base_id == kb_id,
+                    Chunk.is_active.is_(True),
+                    Chunk.hit_count == 0,
+                    Chunk.created_at <= cutoff,
                 )
+                .order_by(Chunk.created_at)
+                .limit(50)
             )
-            .all()
-        )
+        ).all()
 
         out: list[dict] = []
         for chunk, filename in rows:
@@ -443,9 +440,7 @@ class GovernanceService:
         except (json.JSONDecodeError, TypeError):
             return []
 
-    async def resolve_chunk_refs(
-        self, kb_id: str, chunk_ids: list[str]
-    ) -> list[dict[str, Any]]:
+    async def resolve_chunk_refs(self, kb_id: str, chunk_ids: list[str]) -> list[dict[str, Any]]:
         """按 chunk ID 批量解析文档来源（供列表 enrichment 或前端兜底）。"""
         refs_map = await self._load_chunk_refs_map(chunk_ids, kb_id=kb_id)
         return [refs_map[cid] for cid in chunk_ids if cid in refs_map]

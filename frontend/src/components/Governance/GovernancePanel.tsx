@@ -205,7 +205,7 @@ function workflowActivityTime(row: PersistedSuggestion): number {
       ? row.verified_at
       : row.status === 'executed'
         ? row.executed_at
-        : row.approved_at ?? row.created_at
+        : (row.approved_at ?? row.created_at)
   if (!ts) return 0
   const ms = Date.parse(ts)
   return Number.isNaN(ms) ? 0 : ms
@@ -371,9 +371,7 @@ export default function GovernancePanel({ kbId, onApplied, onLocateChunk }: Gove
       enrichSuggestionChunkRefs(kbId, verified.data.items),
     ])
     if (seq !== workflowFetchSeqRef.current) return
-    setWorkflowRows((prev) =>
-      mergeWorkflowRows(prev, approvedItems, executedItems, verifiedItems),
-    )
+    setWorkflowRows((prev) => mergeWorkflowRows(prev, approvedItems, executedItems, verifiedItems))
   }, [kbId])
 
   const fetchAudit = useCallback(async () => {

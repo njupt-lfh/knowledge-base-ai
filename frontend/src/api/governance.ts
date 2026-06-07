@@ -112,10 +112,9 @@ export const governanceApi = {
 
   /** 批量解析 chunk 所属文档与段落（列表缺 chunk_refs 时兜底） */
   resolveChunkRefs: (kbId: string, chunkIds: string[]) =>
-    request.get<GovernanceChunkRef[]>(
-      `/api/knowledge-bases/${kbId}/governance/chunk-refs`,
-      { params: { ids: chunkIds.join(',') } },
-    ),
+    request.get<GovernanceChunkRef[]>(`/api/knowledge-bases/${kbId}/governance/chunk-refs`, {
+      params: { ids: chunkIds.join(',') },
+    }),
 
   /** 各状态建议数量（Tab 角标） */
   statusCounts: (kbId: string) =>
