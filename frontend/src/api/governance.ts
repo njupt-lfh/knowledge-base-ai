@@ -35,6 +35,16 @@ export interface GovernanceScanResult {
   suggestions: GovernanceSuggestion[]
 }
 
+/** 治理建议关联的知识块定位信息 */
+export interface GovernanceChunkRef {
+  chunk_id: string
+  document_id: string
+  document_name: string
+  chunk_index: number
+  is_active: boolean
+  preview?: string
+}
+
 /** 持久化治理建议 */
 export interface PersistedSuggestion {
   id: string
@@ -43,6 +53,7 @@ export interface PersistedSuggestion {
   title: string
   description: string
   chunk_ids: string // JSON array string
+  chunk_refs?: GovernanceChunkRef[]
   recommended_action: string
   severity: string
   status: string
@@ -97,6 +108,13 @@ export const governanceApi = {
       `/api/knowledge-bases/${kbId}/governance/suggestions/scan`,
       null,
       { params: { scan_duplicates: scanDuplicates } },
+    ),
+
+  /** 批量解析 chunk 所属文档与段落（列表缺 chunk_refs 时兜底） */
+  resolveChunkRefs: (kbId: string, chunkIds: string[]) =>
+    request.get<GovernanceChunkRef[]>(
+      `/api/knowledge-bases/${kbId}/governance/chunk-refs`,
+      { params: { ids: chunkIds.join(',') } },
     ),
 
   /** 各状态建议数量（Tab 角标） */

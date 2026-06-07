@@ -20,12 +20,13 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.chroma_client import get_collection
 from ..models.chunk import Chunk
 from ..models.chunk_quality import ChunkQuality
+from ..models.document import Document
 from ..models.governance_suggestion import (
     GovernanceAuditLog,
     GovernanceSuggestion,
@@ -117,7 +118,8 @@ class GovernanceService:
         rows = (
             (
                 await self.db.execute(
-                    select(Chunk)
+                    select(Chunk, Document.filename)
+                    .join(Document, Chunk.document_id == Document.id)
                     .where(
                         Chunk.knowledge_base_id == kb_id,
                         Chunk.is_active.is_(True),
@@ -128,21 +130,23 @@ class GovernanceService:
                     .limit(50)
                 )
             )
-            .scalars()
             .all()
         )
 
         out: list[dict] = []
-        for c in rows:
+        for chunk, filename in rows:
             out.append(
                 _suggestion(
                     stype="cold_stale",
-                    title=f"冷知识块 #{c.chunk_index}",
-                    description=f"创建超过 {COLD_DAYS} 天且从未被命中，建议复审或归档。",
-                    chunk_ids=[c.id],
+                    title=f"{filename} · 第 {chunk.chunk_index} 段",
+                    description=(
+                        f"文档《{filename}》第 {chunk.chunk_index} 段，"
+                        f"创建超过 {COLD_DAYS} 天且从未被命中，建议复审或归档。"
+                    ),
+                    chunk_ids=[chunk.id],
                     action=ACTION_ARCHIVE,
                     severity="warning",
-                    preview=c.content[:120],
+                    preview=chunk.content[:120],
                 )
             )
         return out
@@ -159,19 +163,21 @@ class GovernanceService:
         out: list[dict] = []
         q_rows = (
             await self.db.execute(
-                select(ChunkQuality, Chunk)
+                select(ChunkQuality, Chunk, Document.filename)
                 .join(Chunk, Chunk.id == ChunkQuality.chunk_id)
+                .join(Document, Chunk.document_id == Document.id)
                 .where(Chunk.knowledge_base_id == kb_id, Chunk.is_active.is_(True))
             )
         ).all()
 
-        for q, chunk in q_rows:
+        for q, chunk, filename in q_rows:
+            loc = f"《{filename}》第 {chunk.chunk_index} 段"
             if q.needs_review and (chunk.hit_count or 0) > 0:
                 out.append(
                     _suggestion(
                         stype="low_quality",
-                        title=f"低质量待复审 #{chunk.chunk_index}",
-                        description=f"质量分 {q.quality_score}，点踩 {q.dislike_count} 次。",
+                        title=f"{filename} · 第 {chunk.chunk_index} 段（低质量）",
+                        description=f"{loc}，质量分 {q.quality_score}，点踩 {q.dislike_count} 次。",
                         chunk_ids=[chunk.id],
                         action=ACTION_DEACTIVATE,
                         severity="error",
@@ -182,8 +188,8 @@ class GovernanceService:
                 out.append(
                     _suggestion(
                         stype="high_quality_zero_hit",
-                        title=f"高质量零命中 #{chunk.chunk_index}",
-                        description="内容质量较好但从未被检索命中，可生成 FAQ 摘要提升曝光。",
+                        title=f"{filename} · 第 {chunk.chunk_index} 段（零命中）",
+                        description=f"{loc}内容质量较好但从未被检索命中，可生成 FAQ 摘要提升曝光。",
                         chunk_ids=[chunk.id],
                         action=ACTION_BOOST_FAQ,
                         severity="info",
@@ -194,8 +200,8 @@ class GovernanceService:
                 out.append(
                     _suggestion(
                         stype="archive_candidate",
-                        title=f"建议归档 #{chunk.chunk_index}",
-                        description="低质量且零命中，可能为无用内容。",
+                        title=f"{filename} · 第 {chunk.chunk_index} 段（归档候选）",
+                        description=f"{loc}低质量且零命中，可能为无用内容。",
                         chunk_ids=[chunk.id],
                         action=ACTION_ARCHIVE,
                         severity="warning",
@@ -260,11 +266,14 @@ class GovernanceService:
                 seen_pairs.add(pair)
                 other_doc = results["documents"][0][i][:80] if results.get("documents") else ""
                 sim = round(max(0.0, 1.0 - dist), 4)
+                refs_map = await self._load_chunk_refs_map({chunk.id, other_id})
+                src_label = self._format_chunk_label(refs_map.get(chunk.id))
+                other_label = self._format_chunk_label(refs_map.get(other_id))
                 out.append(
                     _suggestion(
                         stype="duplicate",
-                        title="疑似重复知识块",
-                        description=f"与块 {other_id[:8]}… 高度相似（距离 {dist:.3f}，约 {sim}）。建议合并。",
+                        title=f"{src_label} 与 {other_label} 疑似重复",
+                        description=f"两段内容高度相似（约 {sim}），建议合并后保留一份。",
                         chunk_ids=[chunk.id, other_id],
                         action="merge",
                         severity="warning",
@@ -416,7 +425,87 @@ class GovernanceService:
             .limit(limit)
         )
         result = await self.db.execute(q)
-        return {"items": list(result.scalars().all()), "total": int(total or 0)}
+        items = list(result.scalars().all())
+        all_chunk_ids: set[str] = set()
+        for row in items:
+            all_chunk_ids.update(self._parse_stored_chunk_ids(row.chunk_ids))
+        refs_map = await self._load_chunk_refs_map(all_chunk_ids, kb_id=kb_id)
+        return {
+            "items": [self._serialize_suggestion(row, refs_map) for row in items],
+            "total": int(total or 0),
+        }
+
+    @staticmethod
+    def _parse_stored_chunk_ids(raw: str) -> list[str]:
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    async def resolve_chunk_refs(
+        self, kb_id: str, chunk_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """按 chunk ID 批量解析文档来源（供列表 enrichment 或前端兜底）。"""
+        refs_map = await self._load_chunk_refs_map(chunk_ids, kb_id=kb_id)
+        return [refs_map[cid] for cid in chunk_ids if cid in refs_map]
+
+    async def _load_chunk_refs_map(
+        self, chunk_ids: set[str] | list[str], *, kb_id: str | None = None
+    ) -> dict[str, dict[str, Any]]:
+        ids = [cid for cid in chunk_ids if cid]
+        if not ids:
+            return {}
+        filters = [Chunk.id.in_(ids)]
+        if kb_id:
+            filters.append(Chunk.knowledge_base_id == kb_id)
+        rows = await self.db.execute(
+            select(Chunk, Document.filename)
+            .join(Document, Chunk.document_id == Document.id)
+            .where(*filters)
+        )
+        out: dict[str, dict[str, Any]] = {}
+        for chunk, filename in rows.all():
+            out[chunk.id] = {
+                "chunk_id": chunk.id,
+                "document_id": chunk.document_id,
+                "document_name": filename,
+                "chunk_index": chunk.chunk_index,
+                "is_active": chunk.is_active,
+                "preview": (chunk.content or "")[:80],
+            }
+        return out
+
+    @staticmethod
+    def _format_chunk_label(ref: dict[str, Any] | None) -> str:
+        if not ref:
+            return "未知知识块"
+        return f"《{ref['document_name']}》第 {ref['chunk_index']} 段"
+
+    def _serialize_suggestion(
+        self,
+        row: GovernanceSuggestion,
+        refs_map: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        chunk_ids = self._parse_stored_chunk_ids(row.chunk_ids)
+        chunk_refs = [refs_map[cid] for cid in chunk_ids if cid in refs_map]
+        return {
+            "id": row.id,
+            "kb_id": row.kb_id,
+            "suggestion_type": row.suggestion_type,
+            "title": row.title,
+            "description": row.description,
+            "chunk_ids": row.chunk_ids,
+            "chunk_refs": chunk_refs,
+            "recommended_action": row.recommended_action,
+            "severity": row.severity,
+            "status": row.status,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "approved_at": row.approved_at.isoformat() if row.approved_at else None,
+            "executed_at": row.executed_at.isoformat() if row.executed_at else None,
+            "verified_at": row.verified_at.isoformat() if row.verified_at else None,
+            "content_preview": row.content_preview,
+        }
 
     async def suggestion_status_counts(self, kb_id: str) -> dict[str, int]:
         """按状态统计治理建议数量（用于 Tab 角标，不受分页 limit 影响）。"""
@@ -528,9 +617,19 @@ class GovernanceService:
         if action in ("archive", "deactivate"):
             await self._sync_chunks_removal(row.kb_id, chunk_ids)
 
-        row.status = "executed"
-        row.executed_by = operator or None
-        row.executed_at = datetime.utcnow()
+        # apply_action / toggle_status 内部会 commit；用条件 UPDATE 避免 ORM 过期导致状态未落库
+        now = datetime.utcnow()
+        upd = await self.db.execute(
+            update(GovernanceSuggestion)
+            .where(
+                GovernanceSuggestion.id == suggestion_id,
+                GovernanceSuggestion.status == "approved",
+            )
+            .values(status="executed", executed_by=operator or None, executed_at=now)
+        )
+        if upd.rowcount != 1:
+            await self.db.rollback()
+            return None
         await self.db.commit()
         await self._write_audit(
             row.kb_id,

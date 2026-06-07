@@ -30,6 +30,7 @@ import ColdKnowledgeBadge from '../Charts/ColdKnowledgeBadge'
 import {
   governanceApi,
   type AuditLogEntry,
+  type GovernanceChunkRef,
   type GovernanceHealth,
   type GovernanceStatusCounts,
   type PersistedSuggestion,
@@ -94,6 +95,61 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
 interface GovernancePanelProps {
   kbId: string
   onApplied?: () => void
+  /** 在文档知识块抽屉中定位到指定块 */
+  onLocateChunk?: (documentId: string, chunkId: string) => void
+}
+
+function formatChunkLabel(ref: GovernanceChunkRef): string {
+  return `${ref.document_name} · 第 ${ref.chunk_index} 段`
+}
+
+function SuggestionChunkSources({
+  row,
+  onLocateChunk,
+}: {
+  row: PersistedSuggestion
+  onLocateChunk?: (documentId: string, chunkId: string) => void
+}) {
+  if (row.chunk_refs?.length) {
+    return (
+      <div className="gov-chunk-sources">
+        {row.chunk_refs.map((ref, idx) => (
+          <div key={ref.chunk_id} className="gov-chunk-source">
+            <Typography.Text type="secondary">
+              {row.chunk_refs!.length > 1 ? `${idx === 0 ? '主块' : '对比'}：` : '来源：'}
+              {formatChunkLabel(ref)}
+              {!ref.is_active && (
+                <Tag color="default" style={{ marginLeft: 6 }}>
+                  已禁用
+                </Tag>
+              )}
+            </Typography.Text>
+            {onLocateChunk && (
+              <Button
+                type="link"
+                size="small"
+                className="gov-chunk-locate"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onLocateChunk(ref.document_id, ref.chunk_id)
+                }}
+              >
+                查看知识块
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const ids = parseChunkIds(row.chunk_ids)
+  if (ids.length === 0) return null
+  return (
+    <Typography.Text type="secondary" className="gov-chunk-ids">
+      关联 {ids.length} 个知识块（请重新扫描以显示文档来源）
+    </Typography.Text>
+  )
 }
 
 function parseChunkIds(raw: string): string[] {
@@ -105,11 +161,97 @@ function parseChunkIds(raw: string): string[] {
   }
 }
 
+/** 列表接口未带 chunk_refs 时（旧后端）批量补全文档来源 */
+async function enrichSuggestionChunkRefs(
+  kbId: string,
+  items: PersistedSuggestion[],
+): Promise<PersistedSuggestion[]> {
+  const needsRefs = items.some(
+    (item) => !item.chunk_refs?.length && parseChunkIds(item.chunk_ids).length > 0,
+  )
+  if (!needsRefs) return items
+
+  const idSet = new Set<string>()
+  for (const item of items) {
+    if (item.chunk_refs?.length) continue
+    for (const id of parseChunkIds(item.chunk_ids)) idSet.add(id)
+  }
+  if (idSet.size === 0) return items
+
+  try {
+    const res = await governanceApi.resolveChunkRefs(kbId, [...idSet])
+    const byChunkId = new Map(res.data.map((ref) => [ref.chunk_id, ref]))
+    return items.map((item) => {
+      if (item.chunk_refs?.length) return item
+      const refs = parseChunkIds(item.chunk_ids)
+        .map((id) => byChunkId.get(id))
+        .filter((ref): ref is GovernanceChunkRef => !!ref)
+      return refs.length ? { ...item, chunk_refs: refs } : item
+    })
+  } catch {
+    return items
+  }
+}
+
+const WORKFLOW_STATUS_RANK: Record<string, number> = {
+  approved: 1,
+  executed: 2,
+  verified: 3,
+}
+
+function workflowActivityTime(row: PersistedSuggestion): number {
+  const ts =
+    row.status === 'verified'
+      ? row.verified_at
+      : row.status === 'executed'
+        ? row.executed_at
+        : row.approved_at ?? row.created_at
+  if (!ts) return 0
+  const ms = Date.parse(ts)
+  return Number.isNaN(ms) ? 0 : ms
+}
+
+function sortWorkflowRows(rows: PersistedSuggestion[]): PersistedSuggestion[] {
+  return [...rows].sort((a, b) => workflowActivityTime(b) - workflowActivityTime(a))
+}
+
+/** 合并三态列表并去重；刷新时尽量保持当前行序，避免执行后条目跳到列表底部 */
+function mergeWorkflowRows(
+  prev: PersistedSuggestion[],
+  approved: PersistedSuggestion[],
+  executed: PersistedSuggestion[],
+  verified: PersistedSuggestion[],
+): PersistedSuggestion[] {
+  const byId = new Map<string, PersistedSuggestion>()
+  for (const batch of [approved, executed, verified]) {
+    for (const row of batch) {
+      const existing = byId.get(row.id)
+      const rank = WORKFLOW_STATUS_RANK[row.status] ?? 0
+      const prevRank = existing ? (WORKFLOW_STATUS_RANK[existing.status] ?? 0) : 0
+      if (!existing || rank >= prevRank) byId.set(row.id, row)
+    }
+  }
+  const merged = Array.from(byId.values())
+  if (prev.length === 0) return sortWorkflowRows(merged)
+
+  const ordered: PersistedSuggestion[] = []
+  const seen = new Set<string>()
+  for (const row of prev) {
+    const updated = byId.get(row.id)
+    if (updated) {
+      ordered.push(updated)
+      seen.add(row.id)
+    }
+  }
+  const newcomers = merged.filter((r) => !seen.has(r.id))
+  return [...ordered, ...sortWorkflowRows(newcomers)]
+}
+
 /**
  * 知识库详情「治理建议」Tab 内容
  * @param onApplied 治理动作成功后通知父组件刷新健康度/冷知识统计
  */
-export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProps) {
+export default function GovernancePanel({ kbId, onApplied, onLocateChunk }: GovernancePanelProps) {
   const [activeTab, setActiveTab] = useState('pending')
   const [health, setHealth] = useState<GovernanceHealth | null>(null)
   const [pendingRows, setPendingRows] = useState<PersistedSuggestion[]>([])
@@ -121,7 +263,15 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
   const [actingId, setActingId] = useState<string | null>(null)
   const [auditFilter, setAuditFilter] = useState<string | undefined>(undefined)
   const tableWrapRef = useRef<HTMLDivElement>(null)
+  /** 递增后使进行中的 fetchWorkflow 响应失效，避免慢请求覆盖刚执行的状态 */
+  const workflowFetchSeqRef = useRef(0)
   const [tableScrollY, setTableScrollY] = useState(280)
+
+  useEffect(() => {
+    setWorkflowRows([])
+    setPendingRows([])
+    setPendingPage(1)
+  }, [kbId])
 
   const pendingTotal = statusCounts.pending ?? 0
   const workflowTotal =
@@ -201,19 +351,29 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
           res = await loadPage(targetPage)
         }
       }
-      setPendingPage(targetPage)
-      setPendingRows(res.data.items)
+      setPendingPage((prev) => (prev === targetPage ? prev : targetPage))
+      setPendingRows(await enrichSuggestionChunkRefs(kbId, res.data.items))
     },
     [kbId],
   )
 
   const fetchWorkflow = useCallback(async () => {
+    const seq = ++workflowFetchSeqRef.current
     const [approved, executed, verified] = await Promise.all([
       governanceApi.listPersisted(kbId, { status: 'approved', limit: WORKFLOW_FETCH_LIMIT }),
       governanceApi.listPersisted(kbId, { status: 'executed', limit: WORKFLOW_FETCH_LIMIT }),
       governanceApi.listPersisted(kbId, { status: 'verified', limit: WORKFLOW_FETCH_LIMIT }),
     ])
-    setWorkflowRows([...approved.data.items, ...executed.data.items, ...verified.data.items])
+    if (seq !== workflowFetchSeqRef.current) return
+    const [approvedItems, executedItems, verifiedItems] = await Promise.all([
+      enrichSuggestionChunkRefs(kbId, approved.data.items),
+      enrichSuggestionChunkRefs(kbId, executed.data.items),
+      enrichSuggestionChunkRefs(kbId, verified.data.items),
+    ])
+    if (seq !== workflowFetchSeqRef.current) return
+    setWorkflowRows((prev) =>
+      mergeWorkflowRows(prev, approvedItems, executedItems, verifiedItems),
+    )
   }, [kbId])
 
   const fetchAudit = useCallback(async () => {
@@ -254,6 +414,7 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
 
   const handleRollback = async (suggestionId: string) => {
     setActingId(suggestionId)
+    workflowFetchSeqRef.current += 1
     try {
       const res = await governanceApi.rollback(kbId, suggestionId)
       const from = STATUS_LABELS[res.data.prev_status] || res.data.prev_status
@@ -271,7 +432,6 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
     action: 'approve' | 'dismiss' | 'execute' | 'verify',
   ) => {
     const pending = pendingRows.find((r) => r.id === suggestionId)
-    const workflow = workflowRows.find((r) => r.id === suggestionId)
     const now = new Date().toISOString()
 
     if (action === 'approve' && pending) {
@@ -293,22 +453,45 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
       }))
       return
     }
-    if (action === 'execute' && workflow) {
-      setWorkflowRows((prev) =>
-        prev.map((r) =>
+    if (action === 'execute') {
+      setWorkflowRows((prev) => {
+        if (!prev.some((r) => r.id === suggestionId)) return prev
+        return prev.map((r) =>
           r.id === suggestionId ? { ...r, status: 'executed', executed_at: now } : r,
-        ),
-      )
+        )
+      })
+      setStatusCounts((c) => ({
+        ...c,
+        approved: Math.max(0, (c.approved ?? 0) - 1),
+        executed: (c.executed ?? 0) + 1,
+      }))
       return
     }
-    if (action === 'verify' && workflow) {
-      setWorkflowRows((prev) =>
-        prev.map((r) =>
+    if (action === 'verify') {
+      setWorkflowRows((prev) => {
+        if (!prev.some((r) => r.id === suggestionId)) return prev
+        return prev.map((r) =>
           r.id === suggestionId ? { ...r, status: 'verified', verified_at: now } : r,
-        ),
-      )
+        )
+      })
+      setStatusCounts((c) => ({
+        ...c,
+        executed: Math.max(0, (c.executed ?? 0) - 1),
+        verified: (c.verified ?? 0) + 1,
+      }))
     }
   }
+
+  const refreshAfterMutation = useCallback(
+    async (scope: 'full' | 'workflow' = 'full') => {
+      if (scope === 'workflow') {
+        await Promise.all([fetchCounts(), fetchWorkflow(), fetchAudit()])
+        return
+      }
+      await Promise.all([fetchCounts(), fetchPending(pendingPage), fetchWorkflow(), fetchAudit()])
+    },
+    [fetchCounts, fetchPending, fetchWorkflow, fetchAudit, pendingPage],
+  )
 
   const runAction = async (
     suggestionId: string,
@@ -316,17 +499,27 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
     successMsg: string,
   ) => {
     setActingId(suggestionId)
+    workflowFetchSeqRef.current += 1
     try {
       if (action === 'approve') await governanceApi.approve(kbId, suggestionId)
       else if (action === 'dismiss') await governanceApi.dismiss(kbId, suggestionId)
       else if (action === 'execute') await governanceApi.execute(kbId, suggestionId)
       else await governanceApi.verify(kbId, suggestionId)
-      patchListsAfterAction(suggestionId, action)
-      message.success(successMsg)
-      onApplied?.()
-      await Promise.all([fetchCounts(), fetchPending(pendingPage), fetchWorkflow(), fetchAudit()])
     } catch {
       message.error('操作失败')
+      setActingId(null)
+      return
+    }
+
+    patchListsAfterAction(suggestionId, action)
+    message.success(successMsg)
+    onApplied?.()
+
+    try {
+      const scope = action === 'execute' || action === 'verify' ? 'workflow' : 'full'
+      await refreshAfterMutation(scope)
+    } catch {
+      message.warning('操作已成功，列表刷新失败，请点击刷新')
     }
     setActingId(null)
   }
@@ -350,9 +543,7 @@ export default function GovernancePanel({ kbId, onApplied }: GovernancePanelProp
               {row.content_preview}
             </Typography.Text>
           )}
-          <Typography.Text type="secondary" className="gov-chunk-ids">
-            块 ID：{parseChunkIds(row.chunk_ids).join(', ') || '—'}
-          </Typography.Text>
+          <SuggestionChunkSources row={row} onLocateChunk={onLocateChunk} />
         </Space>
       ),
     },

@@ -50,6 +50,18 @@ async def persisted_suggestion_counts(
     return await svc.suggestion_status_counts(kb_id)
 
 
+@router.get("/chunk-refs")
+async def resolve_governance_chunk_refs(
+    kb_id: str,
+    ids: str = Query("", description="逗号分隔的 chunk ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量解析治理建议关联 chunk 的文档名与段落序号。"""
+    chunk_ids = [x.strip() for x in ids.split(",") if x.strip()]
+    svc = GovernanceService(db)
+    return await svc.resolve_chunk_refs(kb_id, chunk_ids)
+
+
 @router.get("/suggestions/persisted")
 async def list_persisted_suggestions(
     kb_id: str,

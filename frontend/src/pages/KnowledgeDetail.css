@@ -242,3 +242,9 @@
 .doc-row-processing td {
   background: rgba(245, 158, 11, 0.04) !important;
 }
+
+.kb-chunk-item--focus {
+  background: rgba(0, 180, 255, 0.08);
+  border-radius: 6px;
+  outline: 1px solid rgba(0, 180, 255, 0.35);
+}

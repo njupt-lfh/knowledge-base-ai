@@ -221,6 +221,11 @@ async def test_governance_workflow_scan_to_verify(kb_with_chunk):
                 suggestion_id = pending["items"][0]["id"]
                 assert pending["items"][0]["status"] == "pending"
                 assert json.loads(pending["items"][0]["chunk_ids"]) == [chunk_id]
+                refs = pending["items"][0].get("chunk_refs") or []
+                assert len(refs) == 1
+                assert refs[0]["document_name"] == "t.txt"
+                assert refs[0]["chunk_index"] == 0
+                assert refs[0]["chunk_id"] == chunk_id
 
                 approve_res = await client.post(
                     f"/api/knowledge-bases/{kb_id}/governance/suggestions/{suggestion_id}/approve",

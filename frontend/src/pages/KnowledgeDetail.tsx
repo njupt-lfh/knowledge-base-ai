@@ -3,7 +3,7 @@
  * 文档管理、冲突/治理/图谱/同步/检索测试等多 Tab
  * 主要导出：默认 KnowledgeDetail 页面组件
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -64,6 +64,8 @@ export default function KnowledgeDetail() {
   const [chunksDrawer, setChunksDrawer] = useState(false)
   const [chunks, setChunks] = useState<Chunk[]>([])
   const [chunksDocName, setChunksDocName] = useState('')
+  const [focusChunkId, setFocusChunkId] = useState<string | null>(null)
+  const chunksListRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([])
   const [searching, setSearching] = useState(false)
@@ -267,8 +269,9 @@ export default function KnowledgeDetail() {
     }
   }
 
-  const showChunks = async (doc: Document) => {
+  const showChunks = async (doc: Document, highlightChunkId?: string) => {
     setChunksDocName(doc.filename)
+    setFocusChunkId(highlightChunkId ?? null)
     setChunksDrawer(true)
     try {
       setChunks((await request.get(`/api/documents/${doc.id}/chunks`)).data)
@@ -276,6 +279,32 @@ export default function KnowledgeDetail() {
       message.error('获取知识块失败')
     }
   }
+
+  const locateGovernanceChunk = async (documentId: string, chunkId: string) => {
+    let doc = docs.find((d) => d.id === documentId)
+    if (!doc && kbId) {
+      try {
+        doc = (await documentApi.getById(kbId, documentId)).data
+      } catch {
+        message.warning('未找到来源文档，可能已被删除')
+        return
+      }
+    }
+    if (!doc) {
+      message.warning('未找到来源文档，可能已被删除')
+      return
+    }
+    await showChunks(doc, chunkId)
+  }
+
+  useEffect(() => {
+    if (!chunksDrawer || !focusChunkId || chunks.length === 0) return
+    const timer = window.setTimeout(() => {
+      const el = chunksListRef.current?.querySelector(`[data-chunk-id="${focusChunkId}"]`)
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [chunksDrawer, focusChunkId, chunks])
 
   const handleChunkToggle = async (chunk: Chunk) => {
     try {
@@ -584,101 +613,13 @@ export default function KnowledgeDetail() {
                   </Space.Compact>
                 </Space>
               </Modal>
-
-              <Drawer
-                title={`知识块: ${chunksDocName}`}
-                open={chunksDrawer}
-                onClose={() => setChunksDrawer(false)}
-                width={700}
-              >
-                <List
-                  dataSource={chunks}
-                  renderItem={(chunk) => (
-                    <List.Item
-                      actions={[
-                        <Switch
-                          size="small"
-                          checked={chunk.is_active}
-                          onChange={() => handleChunkToggle(chunk)}
-                        />,
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setEditingChunk(chunk)
-                            setEditChunkContent(chunk.content)
-                          }}
-                        >
-                          编辑
-                        </Button>,
-                      ]}
-                    >
-                      <List.Item.Meta
-                        title={
-                          <Space>
-                            <Tag color="blue">#{chunk.chunk_index}</Tag>
-                            <Typography.Text type="secondary">
-                              {chunk.char_count} 字符 | 命中 {chunk.hit_count} 次
-                            </Typography.Text>
-                          </Space>
-                        }
-                        description={
-                          editingChunk?.id === chunk.id ? (
-                            <Space direction="vertical" style={{ width: '100%' }}>
-                              <Input.TextArea
-                                rows={4}
-                                value={editChunkContent}
-                                onChange={(e) => setEditChunkContent(e.target.value)}
-                              />
-                              <Space>
-                                <Button
-                                  size="small"
-                                  type="primary"
-                                  onClick={async () => {
-                                    await request.put(`/api/chunks/${chunk.id}`, {
-                                      content: editChunkContent,
-                                    })
-                                    setChunks((prev) =>
-                                      prev.map((c) =>
-                                        c.id === chunk.id
-                                          ? {
-                                              ...c,
-                                              content: editChunkContent,
-                                              char_count: editChunkContent.length,
-                                            }
-                                          : c,
-                                      ),
-                                    )
-                                    setEditingChunk(null)
-                                    message.success('已更新')
-                                  }}
-                                >
-                                  保存
-                                </Button>
-                                <Button size="small" onClick={() => setEditingChunk(null)}>
-                                  取消
-                                </Button>
-                              </Space>
-                            </Space>
-                          ) : (
-                            <Typography.Paragraph
-                              ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
-                              style={{ whiteSpace: 'pre-wrap' }}
-                            >
-                              {chunk.content}
-                            </Typography.Paragraph>
-                          )
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
-              </Drawer>
             </Space>
           )}
           {activeTab === 'conflicts' && kbId && <ConflictsPanel kbId={kbId} />}
           {activeTab === 'governance' && kbId && (
             <GovernancePanel
               kbId={kbId}
+              onLocateChunk={locateGovernanceChunk}
               onApplied={() => {
                 fetchColdStats()
                 setHealthTick((t) => t + 1)
@@ -763,6 +704,103 @@ export default function KnowledgeDetail() {
           )}
         </div>
       </HudPanel>
+
+      <Drawer
+        title={`知识块: ${chunksDocName}`}
+        open={chunksDrawer}
+        onClose={() => {
+          setChunksDrawer(false)
+          setFocusChunkId(null)
+          setEditingChunk(null)
+        }}
+        width={700}
+      >
+        <div ref={chunksListRef}>
+          <List
+            dataSource={chunks}
+            renderItem={(chunk) => (
+              <List.Item
+                data-chunk-id={chunk.id}
+                className={focusChunkId === chunk.id ? 'kb-chunk-item--focus' : undefined}
+                actions={[
+                  <Switch
+                    size="small"
+                    checked={chunk.is_active}
+                    onChange={() => handleChunkToggle(chunk)}
+                  />,
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setEditingChunk(chunk)
+                      setEditChunkContent(chunk.content)
+                    }}
+                  >
+                    编辑
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={
+                    <Space>
+                      <Tag color="blue">#{chunk.chunk_index}</Tag>
+                      <Typography.Text type="secondary">
+                        {chunk.char_count} 字符 | 命中 {chunk.hit_count} 次
+                      </Typography.Text>
+                    </Space>
+                  }
+                  description={
+                    editingChunk?.id === chunk.id ? (
+                      <Space direction="vertical" style={{ width: '100%' }}>
+                        <Input.TextArea
+                          rows={4}
+                          value={editChunkContent}
+                          onChange={(e) => setEditChunkContent(e.target.value)}
+                        />
+                        <Space>
+                          <Button
+                            size="small"
+                            type="primary"
+                            onClick={async () => {
+                              await request.put(`/api/chunks/${chunk.id}`, {
+                                content: editChunkContent,
+                              })
+                              setChunks((prev) =>
+                                prev.map((c) =>
+                                  c.id === chunk.id
+                                    ? {
+                                        ...c,
+                                        content: editChunkContent,
+                                        char_count: editChunkContent.length,
+                                      }
+                                    : c,
+                                ),
+                              )
+                              setEditingChunk(null)
+                              message.success('已更新')
+                            }}
+                          >
+                            保存
+                          </Button>
+                          <Button size="small" onClick={() => setEditingChunk(null)}>
+                            取消
+                          </Button>
+                        </Space>
+                      </Space>
+                    ) : (
+                      <Typography.Paragraph
+                        ellipsis={{ rows: 3, expandable: true, symbol: '展开' }}
+                        style={{ whiteSpace: 'pre-wrap' }}
+                      >
+                        {chunk.content}
+                      </Typography.Paragraph>
+                    )
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </div>
+      </Drawer>
     </div>
   )
 }
