@@ -41,11 +41,11 @@
 
 - Hybrid 检索（向量 + BM25 FTS）+ RRF 融合 + Cross-Encoder 精排（可选）
 - Agentic-lite 专家对话（CRAG、SIM-RAG、图谱 multi_hop、SSE 流式、来源引用）
-- **快速模式**（AI 对话页开关，按知识库持久化）：请求体 `fast_mode=true` 时关闭 Cross-Encoder 精排、Post-hoc Guard、答案一致性，并将 `AGENT_MAX_ROUNDS` 设为 1；**保留** SIM-RAG、图谱 multi_hop 等以便演示 `agent_meta` 标签。SSE 会回传 `fast_mode`，消息条显示金色「快速模式」标签。实现见 `backend/app/core/chat_runtime.py`、`.env.example` 注释。
+- **快速模式**（AI 对话页开关，按知识库持久化）：请求体 `fast_mode=true` 时关闭 Cross-Encoder 精排、Post-hoc Guard、答案一致性，并将 `AGENT_MAX_ROUNDS` 设为 1；仍保留 SIM-RAG、图谱 multi_hop 及 `agent_meta` 回传。SSE 会回传 `fast_mode`，消息条显示金色「快速模式」标签。实现见 `backend/app/core/chat_runtime.py`、`.env.example` 注释。
 - 多轮对话历史、消息反馈、答案一致性校验（完整质量链路；快速模式时部分关闭）
 - 一键生成分享链接（无需登录访问）
 
-> **评测口径**：`/eval` 看板与 `run_rag_eval.py` 基线走**完整 RAG 链路**，不以对话页「快速模式」为准。需展示完整质量链路时请**关闭**快速模式；需要更快响应并保留 SIM-RAG / 图谱标签时可**开启**。
+> **评测口径**：`/eval` 看板与 `run_rag_eval.py` 基线走**完整 RAG 链路**，不以对话页「快速模式」为准。需要完整质量链路时**关闭**快速模式；需要更快响应并保留 SIM-RAG / 图谱标签时可**开启**。
 
 ### 运营与分析
 
@@ -59,7 +59,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [**docs/RAG_IMPROVEMENT_ROADMAP.md**](docs/RAG_IMPROVEMENT_ROADMAP.md) | 根因分析、Week 0–5+ 实施路线、对外说明要点、里程碑表 |
+| [**docs/RAG_IMPROVEMENT_ROADMAP.md**](docs/RAG_IMPROVEMENT_ROADMAP.md) | 根因分析、Week 0–5+ 实施路线、指标口径说明、里程碑表 |
 | [**docs/EVAL.md**](docs/EVAL.md) | 数据集 v1/v2、双轨指标、脚本命令、Dashboard 说明 |
 | [**docs/ARCHITECTURE.md**](docs/ARCHITECTURE.md) | 系统架构与 RAG 流水线 |
 | [**docs/adr/**](docs/adr/) | 各阶段 ADR（Hybrid、Agent、图谱、评测等） |

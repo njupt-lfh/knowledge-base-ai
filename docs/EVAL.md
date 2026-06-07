@@ -132,7 +132,7 @@ AI 对话页开关 → 请求体 `fast_mode` → `chat_runtime.fast_mode_context
 | `AGENT_MAX_ROUNDS=1` | 默认 2 轮 |
 | 保留 SIM-RAG、图谱 multi_hop、CRAG | 同上 |
 
-**说明**：对外报 KPI 以 `eval_baseline_report.json` 为准；展示完整质量链路时关闭快速模式；需要更快响应并保留 SIM-RAG / 图谱标签时可开启。
+**说明**：基线 KPI 以 `eval_baseline_report.json` 为准；需要完整质量链路时关闭快速模式；需要更快响应并保留 SIM-RAG / 图谱标签时可开启。
 
 因此：**检索指标**与**生成指标**可能脱节（召回高但 AR 低），改善见 [RAG_IMPROVEMENT_ROADMAP.md §Week 3–4](RAG_IMPROVEMENT_ROADMAP.md#week-34--分块与生成质量包后续优先)。
 
@@ -158,5 +158,5 @@ A：计算方式不同；参见 §3 表格解释，以 CP-chunk 反映 top-k 噪
 **Q：重跑评测后 Dashboard 数字变了？**  
 A: 正常；`eval_baseline_report.json` 被覆盖。发布前固定一份报告并备份 JSON。
 
-**Q：v1 与 v2 哪个用于对外 KPI？**  
-A：主展示 **v1**（召回/命中/NRR 更稳）；v2 multi_hop 进步单独说明即可。
+**Q：v1 与 v2 哪个用于基线 KPI？**  
+A：默认以 **v1** 为准（召回/命中/NRR 更稳）；v2 用于 multi_hop 等专项诊断与改进跟踪。
