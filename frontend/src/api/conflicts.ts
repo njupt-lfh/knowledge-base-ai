@@ -21,9 +21,17 @@ export interface KnowledgeConflict {
   source_document_id: string | null
   source_document_name?: string | null
   resolved_chunk_id: string | null
+  resolved_chunk_ref?: GovernanceChunkRef | null
   created_at: string | null
   resolved_at: string | null
 }
+
+export type ConflictListStatus =
+  | 'pending'
+  | 'history'
+  | 'resolved_keep_new'
+  | 'resolved_keep_old'
+  | 'dismissed'
 
 /** 手动录入前的门禁预检结果 */
 export interface IngestPrecheckResult {
@@ -35,15 +43,20 @@ export interface IngestPrecheckResult {
 }
 
 export const conflictsApi = {
-  list: (kbId: string, status = 'pending') =>
+  list: (kbId: string, status: ConflictListStatus = 'pending', limit = 50) =>
     request.get<KnowledgeConflict[]>(`/api/knowledge-bases/${kbId}/conflicts`, {
-      params: { status },
+      params: { status, limit },
     }),
 
   resolve: (kbId: string, conflictId: string, resolution: string) =>
     request.post<KnowledgeConflict>(
       `/api/knowledge-bases/${kbId}/conflicts/${conflictId}/resolve`,
       { resolution },
+    ),
+
+  rollback: (kbId: string, conflictId: string) =>
+    request.post<KnowledgeConflict & { prev_status?: string }>(
+      `/api/knowledge-bases/${kbId}/conflicts/${conflictId}/rollback`,
     ),
 
   precheck: (kbId: string, content: string) =>

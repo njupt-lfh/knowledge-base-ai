@@ -1,6 +1,7 @@
 """ConflictService 单元测试：冲突列表应返回知识块来源信息。"""
 
 import uuid
+from unittest.mock import patch
 
 import pytest
 from app.core.database import async_session, init_db
@@ -105,3 +106,82 @@ async def test_list_pending_includes_chunk_refs(kb_with_conflict):
     assert row["existing_chunk_ref"]["chunk_id"] == data["chunk_id"]
     assert row["source_document_name"] == "incoming.md"
     assert "已有知识块" in row["existing_preview"]
+
+
+@pytest.mark.asyncio
+async def test_list_history_excludes_pending(kb_with_conflict):
+    """history 状态应只返回已裁决记录。"""
+    data = kb_with_conflict
+    async with async_session() as db:
+        row = await db.get(KnowledgeConflict, data["conflict_id"])
+        row.status = "resolved_keep_old"
+        row.resolved_at = row.created_at
+        await db.commit()
+
+    async with async_session() as db:
+        svc = ConflictService(db)
+        pending = await svc.list_conflicts(data["kb_id"], status="pending")
+        history = await svc.list_conflicts(data["kb_id"], status="history")
+
+    assert pending == []
+    assert len(history) == 1
+    assert history[0]["status"] == "resolved_keep_old"
+    assert history[0]["resolved_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_rollback_restores_pending(kb_with_conflict):
+    """回退已裁决冲突应恢复为 pending。"""
+    data = kb_with_conflict
+    async with async_session() as db:
+        row = await db.get(KnowledgeConflict, data["conflict_id"])
+        row.status = "dismissed"
+        row.resolved_at = row.created_at
+        await db.commit()
+
+    async with async_session() as db:
+        svc = ConflictService(db)
+        result = await svc.rollback(data["kb_id"], data["conflict_id"])
+
+    assert result["status"] == "pending"
+    assert result["prev_status"] == "dismissed"
+    assert result["resolved_at"] is None
+
+    async with async_session() as db:
+        svc = ConflictService(db)
+        pending = await svc.list_conflicts(data["kb_id"], status="pending")
+    assert len(pending) == 1
+
+
+@pytest.mark.asyncio
+async def test_rollback_keep_new_removes_created_chunk(kb_with_conflict):
+    """回退「保留新内容」应删除误写入的 chunk。"""
+    data = kb_with_conflict
+    new_chunk_id = f"chunk-new-{uuid.uuid4().hex[:8]}"
+    async with async_session() as db:
+        db.add(
+            Chunk(
+                id=new_chunk_id,
+                document_id=data["doc_id"],
+                knowledge_base_id=data["kb_id"],
+                content="误入库内容",
+                chunk_index=99,
+                char_count=5,
+            )
+        )
+        row = await db.get(KnowledgeConflict, data["conflict_id"])
+        row.status = "resolved_keep_new"
+        row.resolved_chunk_id = new_chunk_id
+        row.resolved_at = row.created_at
+        await db.commit()
+
+    async with async_session() as db:
+        svc = ConflictService(db)
+        mock_collection = type("C", (), {"delete": lambda self, ids: None})()
+        with patch("app.services.conflict_service.get_collection", return_value=mock_collection):
+            result = await svc.rollback(data["kb_id"], data["conflict_id"])
+
+    assert result["status"] == "pending"
+    assert result["prev_status"] == "resolved_keep_new"
+    async with async_session() as db:
+        assert await db.get(Chunk, new_chunk_id) is None

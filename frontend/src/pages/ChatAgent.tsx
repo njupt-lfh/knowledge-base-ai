@@ -92,6 +92,15 @@ export default function ChatAgent() {
     }
   }
 
+  const handleFastModeChange = useCallback(
+    (checked: boolean) => {
+      setFastMode(checked)
+      saveChatFastMode(kbId, checked)
+      message.info(checked ? '已开启快速模式' : '已关闭快速模式，将使用完整质量链路')
+    },
+    [kbId],
+  )
+
   useEffect(() => {
     setFastMode(loadChatFastMode(kbId))
   }, [kbId])
@@ -310,19 +319,29 @@ export default function ChatAgent() {
           </div>
           <Space className="chat-page__toolbar" wrap>
             <Tooltip title="关闭 Cross-Encoder 重排、生成后质检与双路径一致性，保留 SIM-RAG/图谱多跳；检索仅 1 轮 CRAG">
-              <label className="chat-fast-mode-switch">
+              <div
+                className="chat-fast-mode-switch"
+                role="button"
+                tabIndex={0}
+                aria-pressed={fastMode}
+                aria-label="快速模式"
+                onClick={() => handleFastModeChange(!fastMode)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleFastModeChange(!fastMode)
+                  }
+                }}
+              >
                 <ThunderboltOutlined className="chat-fast-mode-switch__icon" />
                 <span className="chat-fast-mode-switch__label">快速模式</span>
                 <Switch
                   size="small"
                   checked={fastMode}
-                  onChange={(checked) => {
-                    setFastMode(checked)
-                    saveChatFastMode(kbId, checked)
-                    message.info(checked ? '已开启快速模式' : '已关闭快速模式，将使用完整质量链路')
-                  }}
+                  onChange={handleFastModeChange}
+                  onClick={(_checked, e) => e.stopPropagation()}
                 />
-              </label>
+              </div>
             </Tooltip>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleNewChat}>
               新建对话

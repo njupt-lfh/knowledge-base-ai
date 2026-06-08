@@ -17,21 +17,23 @@ router = APIRouter(prefix="/api/knowledge-bases/{kb_id}/conflicts", tags=["confl
 @router.get("")
 async def list_conflicts(
     kb_id: str,
-    status: str | None = Query("pending"),
+    status: str = Query("pending", description="pending | history | 具体裁决状态"),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出知识库内指定状态的冲突记录。
+    """列出知识库内冲突记录（待裁决或裁决历史）。
 
     参数:
         kb_id: 知识库 ID。
-        status: 冲突状态过滤，默认 pending。
+        status: pending 待裁决；history 全部已裁决记录。
+        limit: 返回条数上限。
         db: 数据库会话。
 
     返回:
         冲突列表（由 ConflictService 序列化）。
     """
     svc = ConflictService(db)
-    return await svc.list_pending(kb_id, status=status)
+    return await svc.list_conflicts(kb_id, status=status, limit=limit)
 
 
 @router.post("/{conflict_id}/resolve")
@@ -55,5 +57,19 @@ async def resolve_conflict(
     svc = ConflictService(db)
     try:
         return await svc.resolve(kb_id, conflict_id, body.resolution)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/{conflict_id}/rollback")
+async def rollback_conflict(
+    kb_id: str,
+    conflict_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """回退已裁决冲突到待裁决队列。"""
+    svc = ConflictService(db)
+    try:
+        return await svc.rollback(kb_id, conflict_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

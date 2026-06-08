@@ -1,3 +1,18 @@
+.conflicts-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: var(--space-sm, 8px);
+}
+
+.conflicts-panel__head {
+  flex-shrink: 0;
+}
+
+.conflicts-panel__history-filter {
+  margin-bottom: var(--space-sm, 8px);
+}
+
 .conflicts-panel__compare {
   max-width: 560px;
 }
