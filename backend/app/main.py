@@ -339,11 +339,27 @@ async def stats_overview(db: AsyncSession = Depends(get_db)):
     from .models.chunk import Chunk
     from .models.document import Document
     from .models.knowledge_base import KnowledgeBase
+    from .utils.test_kb import production_kb_clause
 
-    kb_count = (await db.execute(select(func.count(KnowledgeBase.id)))).scalar() or 0
-    doc_count = (await db.execute(select(func.count(Document.id)))).scalar() or 0
-    chunk_count = (await db.execute(select(func.count(Chunk.id)))).scalar() or 0
-    total_hits = (await db.execute(select(func.sum(Chunk.hit_count)))).scalar() or 0
+    prod_kb = production_kb_clause(KnowledgeBase)
+    prod_kb_ids = select(KnowledgeBase.id).where(prod_kb)
+
+    kb_count = (await db.execute(select(func.count(KnowledgeBase.id)).where(prod_kb))).scalar() or 0
+    doc_count = (
+        await db.execute(
+            select(func.count(Document.id)).where(Document.knowledge_base_id.in_(prod_kb_ids))
+        )
+    ).scalar() or 0
+    chunk_count = (
+        await db.execute(
+            select(func.count(Chunk.id)).where(Chunk.knowledge_base_id.in_(prod_kb_ids))
+        )
+    ).scalar() or 0
+    total_hits = (
+        await db.execute(
+            select(func.sum(Chunk.hit_count)).where(Chunk.knowledge_base_id.in_(prod_kb_ids))
+        )
+    ).scalar() or 0
 
     top = (
         await db.execute(
@@ -363,6 +379,7 @@ async def stats_overview(db: AsyncSession = Depends(get_db)):
             )
             .outerjoin(Document, Document.knowledge_base_id == KnowledgeBase.id)
             .outerjoin(Chunk, Chunk.knowledge_base_id == KnowledgeBase.id)
+            .where(prod_kb)
             .group_by(KnowledgeBase.id, KnowledgeBase.name)
             .order_by(desc(func.count(Document.id.distinct())))
             .limit(8)

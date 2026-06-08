@@ -11,8 +11,13 @@
 """
 
 import os
+from pathlib import Path
 
 import pytest
+
+# pytest 使用独立 SQLite，避免写入开发库 data/knowledge_base.db 污染前端列表
+_test_db = Path(__file__).resolve().parents[1] / "data" / "test_knowledge_base.db"
+os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_test_db.as_posix()}"
 
 # 默认开启 LLM 模拟模式，避免单元/集成测试消耗真实 API 额度
 os.environ.setdefault("LLM_MOCK_MODE", "true")

@@ -30,6 +30,8 @@ backend/uploads/*
 # Data
 data/*
 !data/.gitkeep
+backend/data/test_knowledge_base.db
+backend/data/test_knowledge_base.db-*
 chroma_data/*
 !chroma_data/.gitkeep
 backend/chroma_data/*

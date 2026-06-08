@@ -23,6 +23,7 @@ from ..schemas.knowledge import (
     KnowledgeBaseResponse,
     KnowledgeBaseUpdate,
 )
+from ..utils.test_kb import production_kb_clause
 
 
 class KnowledgeService:
@@ -44,8 +45,9 @@ class KnowledgeService:
         返回:
             (知识库列表, 总数)
         """
-        query = select(KnowledgeBase)
-        count_query = select(func.count(KnowledgeBase.id))
+        prod = production_kb_clause(KnowledgeBase)
+        query = select(KnowledgeBase).where(prod)
+        count_query = select(func.count(KnowledgeBase.id)).where(prod)
 
         if search:
             query = query.where(KnowledgeBase.name.contains(search))
