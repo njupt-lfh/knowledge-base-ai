@@ -29,3 +29,4 @@ async def test_init_db_creates_all_orm_tables():
     assert "answer_review_queue" in expected
     assert "governance_suggestions" in expected
     assert "governance_audit_log" in expected
+    assert "gap_audit_log" in expected

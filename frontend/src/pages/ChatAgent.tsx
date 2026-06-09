@@ -4,7 +4,7 @@
  * 主要导出：默认 ChatAgent 页面组件
  */
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, Space, Typography, message, Modal, Popconfirm, Switch, Tooltip } from 'antd'
 import {
   ArrowLeftOutlined,
@@ -31,6 +31,8 @@ const CONV_LIST_PAGE_SIZE = 50
 export default function ChatAgent() {
   const { kbId } = useParams<{ kbId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const convFromUrl = searchParams.get('conv')
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<ChatMessageData[]>([])
   const [input, setInput] = useState('')
@@ -109,6 +111,14 @@ export default function ChatAgent() {
   useEffect(() => {
     if (!kbId) return
     loadConvList().then((list) => {
+      if (convFromUrl) {
+        const target = list.find((c) => c.id === convFromUrl)
+        if (target) {
+          switchConversation(target)
+          setInitialized(true)
+          return
+        }
+      }
       if (list.length > 0) {
         const latest = [...list].sort(
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -120,7 +130,7 @@ export default function ChatAgent() {
       }
       setInitialized(true)
     })
-  }, [kbId, loadConvList, switchConversation])
+  }, [kbId, loadConvList, switchConversation, convFromUrl])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleSend = async () => {

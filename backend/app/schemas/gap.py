@@ -22,6 +22,30 @@ class GapResponse(BaseModel):
     suggested_content: str | None
     source_ref: str | None
     confidence: float | None
+    document_id: str | None = None
+    parent_gap_id: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+    resolved_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class GapFollowUpRequest(BaseModel):
+    """基于已完成任务创建续补工单。"""
+
+    correction_text: str = Field(..., min_length=1, description="补充/修正正文")
+    source_ref: str | None = Field(None, description="可选来源说明")
+
+
+class GapAuditLogResponse(BaseModel):
+    """Gap 处理记录条目。"""
+
+    id: str
+    kb_id: str
+    gap_id: str
+    action: str
+    detail: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -49,3 +73,9 @@ class GapIngestRequest(BaseModel):
         None, description="KNOWLEDGE_ABSENT 必填；其他类型可覆盖建议内容"
     )
     manual_title: str | None = None
+
+
+class GapBatchDeleteRequest(BaseModel):
+    """批量删除缺口工单。"""
+
+    gap_ids: list[str] = Field(..., min_length=1)

@@ -19,13 +19,21 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.chroma_client import get_collection
 from ..core.database import async_session
-from ..models.knowledge_gap import GAP_STATUSES, GAP_TYPES, KnowledgeGap
+from ..models.knowledge_gap import (
+    GAP_COMPLETED_STATUSES,
+    GAP_PENDING_STATUSES,
+    GAP_STATUSES,
+    GAP_TYPES,
+    GapAuditLog,
+    KnowledgeGap,
+)
 from ..utils.kb_id import KbIdResolver
 from .conversation_extract_service import AUTO_INGEST_GAP_TYPES, ConversationExtractService
 from .document_service import DocumentService
@@ -83,6 +91,33 @@ class GapService:
         legacy = KbIdResolver.legacy_prefix(canonical)
         ids = [canonical] if legacy == canonical else [canonical, legacy]
         return KnowledgeGap.kb_id.in_(ids)
+
+    @staticmethod
+    def _touch_gap(gap: KnowledgeGap, *, resolved: bool = False) -> None:
+        """更新工单时间戳；完成态写入 resolved_at。"""
+        now = datetime.utcnow()
+        gap.updated_at = now
+        if resolved:
+            gap.resolved_at = now
+
+    async def _write_audit(
+        self,
+        kb_id: str,
+        gap_id: str,
+        action: str,
+        *,
+        detail: str = "",
+    ) -> None:
+        """写入 Gap 处理记录。"""
+        self.db.add(
+            GapAuditLog(
+                kb_id=kb_id,
+                gap_id=gap_id,
+                action=action,
+                detail=detail or None,
+            )
+        )
+        await self.db.commit()
 
     def classify_gap(
         self,
@@ -214,6 +249,7 @@ class GapService:
         suggested_content: str | None = None,
         retrieval_result: list[dict] | None = None,
         confidence: float | None = None,
+        parent_gap_id: str | None = None,
     ) -> KnowledgeGap:
         """创建 Gap 记录。
 
@@ -262,10 +298,18 @@ class GapService:
             suggested_content=suggested_content,
             source_ref=ref,
             confidence=confidence,
+            parent_gap_id=parent_gap_id,
+            updated_at=datetime.utcnow(),
         )
         self.db.add(gap)
         await self.db.commit()
         await self.db.refresh(gap)
+        await self._write_audit(
+            kb_id,
+            gap.id,
+            "created",
+            detail=f"gap_type={gap_type}, status={status}",
+        )
         return gap
 
     async def _find_open_gap(self, kb_id: str, query: str) -> KnowledgeGap | None:
@@ -449,8 +493,15 @@ class GapService:
         # 先置为 processing 并提交，后台异步执行耗时的入库操作
         gap.status = "processing"
         gap.source_ref = source_ref
+        self._touch_gap(gap)
         await self.db.commit()
         await self.db.refresh(gap)
+        await self._write_audit(
+            canonical,
+            gap.id,
+            "ingest_started",
+            detail=f"title={title[:80]}",
+        )
 
         asyncio.create_task(
             _process_gap_ingest(
@@ -477,6 +528,7 @@ class GapService:
         *,
         gap_type: str | None = None,
         status: str | None = None,
+        queue: str | None = None,
         limit: int = 50,
     ) -> list[KnowledgeGap]:
         """列出 Gap 队列。
@@ -484,7 +536,8 @@ class GapService:
         参数:
             kb_id: 知识库 ID
             gap_type: 类型过滤
-            status: 状态过滤
+            status: 状态过滤（与 queue 同时使用时取交集）
+            queue: pending | completed | all，待办/已完成视图
             limit: 最大条数
 
         返回:
@@ -492,11 +545,22 @@ class GapService:
         """
         canonical = await self._canonical_kb_id(kb_id)
         q = select(KnowledgeGap).where(self._gap_kb_clause(canonical))
+        effective_queue = queue or "pending"
+        if effective_queue == "pending":
+            q = q.where(KnowledgeGap.status.in_(GAP_PENDING_STATUSES))
+        elif effective_queue == "completed":
+            q = q.where(KnowledgeGap.status.in_(GAP_COMPLETED_STATUSES))
+        elif effective_queue != "all":
+            raise ValueError(f"invalid queue: {effective_queue}")
         if gap_type:
             q = q.where(KnowledgeGap.gap_type == gap_type)
         if status:
             q = q.where(KnowledgeGap.status == status)
-        q = q.order_by(KnowledgeGap.created_at.desc()).limit(limit)
+        if effective_queue == "completed":
+            q = q.order_by(KnowledgeGap.resolved_at.desc(), KnowledgeGap.created_at.desc())
+        else:
+            q = q.order_by(KnowledgeGap.created_at.desc())
+        q = q.limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all())
 
@@ -518,9 +582,17 @@ class GapService:
         gap = await self.db.get(KnowledgeGap, gap_id)
         if not gap:
             return None
+        old_status = gap.status
         gap.status = status
+        self._touch_gap(gap, resolved=status in ("approved", "rejected"))
         await self.db.commit()
         await self.db.refresh(gap)
+        await self._write_audit(
+            gap.kb_id,
+            gap.id,
+            "status_changed",
+            detail=f"{old_status} -> {status}",
+        )
         return gap
 
     async def delete_gap(self, gap_id: str) -> bool:
@@ -535,9 +607,100 @@ class GapService:
         gap = await self.db.get(KnowledgeGap, gap_id)
         if not gap:
             return False
+        if gap.status == "processing":
+            raise ValueError("processing gap cannot be deleted")
+        kb_id = gap.kb_id
+        await self._write_audit(kb_id, gap_id, "deleted", detail=f"status={gap.status}")
         await self.db.delete(gap)
         await self.db.commit()
         return True
+
+    async def delete_gaps_batch(self, kb_id: str, gap_ids: list[str]) -> dict:
+        """批量删除 Gap 工单（跳过 processing 及不属于该库的条目）。"""
+        canonical = await self._canonical_kb_id(kb_id)
+        deleted = 0
+        skipped = 0
+        for gap_id in gap_ids:
+            gap = await self.db.get(KnowledgeGap, gap_id)
+            if not gap or not self._kb_resolver.gap_kb_matches(gap.kb_id, canonical):
+                skipped += 1
+                continue
+            if gap.status == "processing":
+                skipped += 1
+                continue
+            if await self.delete_gap(gap_id):
+                deleted += 1
+            else:
+                skipped += 1
+        return {"ok": True, "deleted": deleted, "skipped": skipped}
+
+    async def create_follow_up(
+        self,
+        kb_id: str,
+        gap_id: str,
+        *,
+        correction_text: str,
+        source_ref: str | None = None,
+    ) -> KnowledgeGap:
+        """基于已入库任务创建续补工单。"""
+        canonical = await self._canonical_kb_id(kb_id)
+        parent = await self.db.get(KnowledgeGap, gap_id)
+        if not parent or not self._kb_resolver.gap_kb_matches(parent.kb_id, canonical):
+            raise ValueError("gap not found")
+        if parent.status != "approved":
+            raise ValueError("仅已入库任务可续补")
+        text = correction_text.strip()
+        if not text:
+            raise ValueError("correction_text 不能为空")
+
+        child = await self.create_gap(
+            kb_id=canonical,
+            query=parent.query,
+            gap_type="USER_CORRECTION",
+            conversation_id=parent.conversation_id,
+            message_id=parent.message_id,
+            source_ref=source_ref or text[:300],
+            suggested_content=json.dumps(
+                {"title": parent.query[:30], "content": text},
+                ensure_ascii=False,
+            ),
+            parent_gap_id=parent.id,
+        )
+        await self._write_audit(
+            canonical,
+            parent.id,
+            "follow_up_created",
+            detail=f"child_gap_id={child.id}",
+        )
+        return child
+
+    async def get_audit_log(
+        self,
+        kb_id: str,
+        gap_id: str,
+        *,
+        limit: int = 50,
+    ) -> list[GapAuditLog]:
+        """获取单条 Gap 的处理记录（Gap 已删除时仍可查历史）。"""
+        canonical = await self._canonical_kb_id(kb_id)
+        legacy = KbIdResolver.legacy_prefix(canonical)
+        kb_ids = [canonical] if legacy == canonical else [canonical, legacy]
+
+        gap = await self.db.get(KnowledgeGap, gap_id)
+        if gap and not self._kb_resolver.gap_kb_matches(gap.kb_id, canonical):
+            raise ValueError("gap not found")
+
+        q = (
+            select(GapAuditLog)
+            .where(GapAuditLog.gap_id == gap_id, GapAuditLog.kb_id.in_(kb_ids))
+            .order_by(GapAuditLog.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.db.execute(q)
+        rows = list(result.scalars().all())
+        if not rows and not gap:
+            raise ValueError("gap not found")
+        return rows
 
 
 async def _process_gap_ingest(
@@ -567,7 +730,19 @@ async def _process_gap_ingest(
             gap = await db.get(KnowledgeGap, gap_id)
             if gap:
                 gap.status = "approved"
-                gap.source_ref = content[:300] if not gap.source_ref else gap.source_ref
+                gap.document_id = doc.id
+                if not gap.source_ref:
+                    gap.source_ref = content[:300]
+                gap.updated_at = datetime.utcnow()
+                gap.resolved_at = datetime.utcnow()
+                db.add(
+                    GapAuditLog(
+                        kb_id=kb_id,
+                        gap_id=gap_id,
+                        action="ingest_completed",
+                        detail=f"document_id={doc.id}, allowed={stats.allowed}",
+                    )
+                )
                 await db.commit()
 
             logger.info(
@@ -582,6 +757,14 @@ async def _process_gap_ingest(
                 gap = await db.get(KnowledgeGap, gap_id)
                 if gap:
                     gap.status = "suggested"
+                    db.add(
+                        GapAuditLog(
+                            kb_id=kb_id,
+                            gap_id=gap_id,
+                            action="ingest_failed",
+                            detail="入库失败，已回退为 suggested",
+                        )
+                    )
                     await db.commit()
             except Exception:
                 logger.exception("failed to revert gap status gap_id=%s", gap_id)

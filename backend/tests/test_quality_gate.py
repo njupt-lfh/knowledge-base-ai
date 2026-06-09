@@ -13,14 +13,14 @@ def test_passes_normal_candidate():
 def test_blocks_low_quality():
     """低于阈值的应被过滤。"""
     c = [{"chunk_id": "a"}]
-    r = apply_quality_gate(c, quality_scores={"a": 0.2})
+    r = apply_quality_gate(c, quality_scores={"a": 0.19})
     assert len(r) == 0
 
 
 def test_passes_cold_start_baseline():
-    """零命中新分块基准分 0.25 应通过门控。"""
+    """零命中冷启动分块（~0.247）应通过门控。"""
     c = [{"chunk_id": "a"}]
-    r = apply_quality_gate(c, quality_scores={"a": 0.25})
+    r = apply_quality_gate(c, quality_scores={"a": 0.247})
     assert len(r) == 1
 
 

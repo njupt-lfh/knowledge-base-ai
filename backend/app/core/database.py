@@ -101,6 +101,10 @@ async def _apply_sqlite_migrations(conn) -> None:
     migrations = [
         ("documents", "ingest_duplicate_count", "INTEGER NOT NULL DEFAULT 0"),
         ("documents", "ingest_conflict_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("knowledge_gaps", "document_id", "VARCHAR(36)"),
+        ("knowledge_gaps", "parent_gap_id", "VARCHAR(36)"),
+        ("knowledge_gaps", "updated_at", "DATETIME"),
+        ("knowledge_gaps", "resolved_at", "DATETIME"),
     ]
     for table, column, col_def in migrations:
         result = await conn.execute(text(f"PRAGMA table_info({table})"))

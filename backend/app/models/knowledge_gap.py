@@ -30,6 +30,20 @@ GAP_STATUSES = (
     "manual_required",
 )
 
+# 补全任务队列视图（前端 Tab）
+GAP_PENDING_STATUSES = ("pending", "suggested", "processing", "manual_required")
+GAP_COMPLETED_STATUSES = ("approved", "rejected")
+
+GAP_AUDIT_ACTIONS = (
+    "created",
+    "status_changed",
+    "ingest_started",
+    "ingest_completed",
+    "ingest_failed",
+    "deleted",
+    "follow_up_created",
+)
+
 
 class KnowledgeGap(Base):
     """知识缺口工单实体。
@@ -50,4 +64,21 @@ class KnowledgeGap(Base):
     suggested_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    document_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    parent_gap_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class GapAuditLog(Base):
+    """Gap 处理记录（状态变更、入库等）。"""
+
+    __tablename__ = "gap_audit_log"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    kb_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    gap_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

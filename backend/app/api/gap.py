@@ -10,7 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
 from ..models.knowledge_gap import KnowledgeGap
-from ..schemas.gap import GapCreateRequest, GapIngestRequest, GapResponse, GapStatusUpdate
+from ..schemas.gap import (
+    GapAuditLogResponse,
+    GapBatchDeleteRequest,
+    GapCreateRequest,
+    GapFollowUpRequest,
+    GapIngestRequest,
+    GapResponse,
+    GapStatusUpdate,
+)
 from ..services.gap_service import GapService
 from ..services.rag_service import RAGService
 from ..utils.kb_id import KbIdResolver
@@ -23,24 +31,34 @@ async def list_gaps(
     kb_id: str,
     gap_type: str | None = Query(None),
     status: str | None = Query(None),
+    queue: str = Query("pending", description="pending|completed|all"),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出知识库缺口工单，可按类型与状态过滤。
+    """列出知识库缺口工单，可按类型、状态与队列视图过滤。
 
     参数:
         kb_id: 知识库 ID（支持前缀解析）。
         gap_type: 可选缺口类型过滤。
         status: 可选状态过滤。
+        queue: pending 待处理 / completed 已完成。
         limit: 最大返回条数。
         db: 数据库会话。
 
     返回:
         GapResponse 列表；知识库不存在时 404。
     """
+    if queue not in ("pending", "completed", "all"):
+        raise HTTPException(status_code=400, detail="invalid queue")
     svc = GapService(db)
     try:
-        gaps = await svc.list_gaps(kb_id, gap_type=gap_type, status=status, limit=limit)
+        gaps = await svc.list_gaps(
+            kb_id,
+            gap_type=gap_type,
+            status=status,
+            queue=queue,
+            limit=limit,
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     return [GapResponse.model_validate(g) for g in gaps]
@@ -147,6 +165,20 @@ async def update_gap_status(
     return GapResponse.model_validate(gap)
 
 
+@router.delete("/batch")
+async def batch_delete_gaps(
+    kb_id: str,
+    body: GapBatchDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """批量删除缺口工单（不删除已入库文档）。"""
+    svc = GapService(db)
+    try:
+        return await svc.delete_gaps_batch(kb_id, body.gap_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
 @router.delete("/{gap_id}", status_code=204)
 async def delete_gap(
     kb_id: str,
@@ -172,5 +204,49 @@ async def delete_gap(
     gap = await db.get(KnowledgeGap, gap_id)
     if not gap or not resolver.gap_kb_matches(gap.kb_id, canonical):
         raise HTTPException(status_code=404, detail="gap not found")
-    await svc.delete_gap(gap_id)
+    if gap.status == "processing":
+        raise HTTPException(status_code=400, detail="processing gap cannot be deleted")
+    try:
+        await svc.delete_gap(gap_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return None
+
+
+@router.get("/{gap_id}/audit-log", response_model=list[GapAuditLogResponse])
+async def get_gap_audit_log(
+    kb_id: str,
+    gap_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取单条 Gap 的处理记录。"""
+    svc = GapService(db)
+    try:
+        rows = await svc.get_audit_log(kb_id, gap_id, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return [GapAuditLogResponse.model_validate(r) for r in rows]
+
+
+@router.post("/{gap_id}/follow-up", response_model=GapResponse, status_code=201)
+async def follow_up_gap(
+    kb_id: str,
+    gap_id: str,
+    body: GapFollowUpRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """基于已入库 Gap 创建续补任务。"""
+    svc = GapService(db)
+    try:
+        gap = await svc.create_follow_up(
+            kb_id,
+            gap_id,
+            correction_text=body.correction_text,
+            source_ref=body.source_ref,
+        )
+    except ValueError as e:
+        msg = str(e)
+        code = 404 if "not found" in msg else 400
+        raise HTTPException(status_code=code, detail=msg) from e
+    return GapResponse.model_validate(gap)

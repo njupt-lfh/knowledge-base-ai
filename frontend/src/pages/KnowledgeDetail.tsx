@@ -297,6 +297,27 @@ export default function KnowledgeDetail() {
     await showChunks(doc, chunkId)
   }
 
+  const openedDocFromUrlRef = useRef<string | null>(null)
+  useEffect(() => {
+    const docId = searchParams.get('doc')
+    if (!docId || !kbId || openedDocFromUrlRef.current === docId) return
+    openedDocFromUrlRef.current = docId
+
+    const openDocChunks = async () => {
+      let doc = docs.find((d) => d.id === docId)
+      if (!doc) {
+        try {
+          doc = (await documentApi.getById(kbId, docId)).data
+        } catch {
+          message.warning('未找到来源文档，可能已被删除')
+          return
+        }
+      }
+      await showChunks(doc)
+    }
+    void openDocChunks()
+  }, [searchParams, kbId, docs])
+
   useEffect(() => {
     if (!chunksDrawer || !focusChunkId || chunks.length === 0) return
     const timer = window.setTimeout(() => {

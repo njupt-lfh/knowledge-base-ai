@@ -26,9 +26,7 @@ REVIEW_DISLIKE_THRESHOLD = 3
 RETRIEVAL_BLEND = 0.7  # retrieval_score 权重
 QUALITY_BLEND = 0.3
 # 质量门控硬过滤阈值（Phase 1）
-QUALITY_GATE_MIN_SCORE = (
-    0.25  # 低于此分的 chunk 禁止进入检索结果（与 LOW_QUALITY_THRESHOLD 对齐，放行冷启动 ~0.25）
-)
+QUALITY_GATE_MIN_SCORE = 0.2  # 低于此分的 chunk 禁止进入检索结果（放行冷启动 ~0.247+）
 QUALITY_GATE_DISLIKE_BLACKLIST = 3  # 点踩数达到此值进入黑名单
 QUALITY_GATE_NEEDS_REVIEW_DISLIKE = 2  # needs_review 且 dislike 达到此值即剔除
 

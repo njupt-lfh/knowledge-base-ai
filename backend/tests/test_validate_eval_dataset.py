@@ -10,7 +10,6 @@
 """
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,13 +20,9 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "validate_eval_datase
 
 
 def test_eval_dataset_file_exists_and_valid():
-    """调用 validate_eval_dataset.py 子进程；CI 环境跳过 chunk DB 校验。"""
+    """调用 validate_eval_dataset.py 子进程；pytest 使用空测试库，仅校验 JSON schema。"""
     assert DATA.exists()
-    # CI 空库无 chunk 数据，仅校验 JSON schema
-    skip_db = os.environ.get("CI", "") != ""
-    cmd = [sys.executable, str(SCRIPT)]
-    if skip_db:
-        cmd.append("--skip-db")
+    cmd = [sys.executable, str(SCRIPT), "--skip-db"]
     proc = subprocess.run(
         cmd,
         cwd=Path(__file__).resolve().parents[1],

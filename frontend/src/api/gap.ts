@@ -17,12 +17,28 @@ export interface KnowledgeGap {
   suggested_content: string | null
   source_ref: string | null
   confidence: number | null
+  document_id: string | null
+  parent_gap_id: string | null
+  created_at: string
+  updated_at: string | null
+  resolved_at: string | null
+}
+
+/** Gap 处理记录 */
+export interface GapAuditLogEntry {
+  id: string
+  kb_id: string
+  gap_id: string
+  action: string
+  detail: string | null
   created_at: string
 }
 
 export const gapApi = {
-  list: (kbId: string, params?: { gap_type?: string; status?: string }) =>
-    request.get<KnowledgeGap[]>(`/api/knowledge-bases/${kbId}/gaps`, { params }),
+  list: (
+    kbId: string,
+    params?: { gap_type?: string; status?: string; queue?: 'pending' | 'completed' | 'all' },
+  ) => request.get<KnowledgeGap[]>(`/api/knowledge-bases/${kbId}/gaps`, { params }),
 
   create: (kbId: string, body: { query: string; gap_type?: string; correction_text?: string }) =>
     request.post<KnowledgeGap>(`/api/knowledge-bases/${kbId}/gaps`, body),
@@ -47,4 +63,19 @@ export const gapApi = {
   /** 删除缺口工单 */
   delete: (kbId: string, gapId: string) =>
     request.delete(`/api/knowledge-bases/${kbId}/gaps/${gapId}`),
+
+  /** 批量删除缺口工单（不删除已入库文档） */
+  batchDelete: (kbId: string, gapIds: string[]) =>
+    request.delete<{ ok: boolean; deleted: number; skipped: number }>(
+      `/api/knowledge-bases/${kbId}/gaps/batch`,
+      { data: { gap_ids: gapIds } },
+    ),
+
+  /** 单条 Gap 处理记录 */
+  auditLog: (kbId: string, gapId: string) =>
+    request.get<GapAuditLogEntry[]>(`/api/knowledge-bases/${kbId}/gaps/${gapId}/audit-log`),
+
+  /** 基于已入库任务创建续补工单 */
+  followUp: (kbId: string, gapId: string, body: { correction_text: string; source_ref?: string }) =>
+    request.post<KnowledgeGap>(`/api/knowledge-bases/${kbId}/gaps/${gapId}/follow-up`, body),
 }

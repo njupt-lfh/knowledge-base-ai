@@ -19,6 +19,7 @@ from .kb_folder_watch import KbFolderWatch as KbFolderWatch  # noqa: F401
 from .kg_relation import KgRelation as KgRelation  # noqa: F401
 from .knowledge_base import KnowledgeBase as KnowledgeBase  # noqa: F401
 from .knowledge_conflict import KnowledgeConflict as KnowledgeConflict  # noqa: F401
+from .knowledge_gap import GapAuditLog as GapAuditLog  # noqa: F401
 from .knowledge_gap import KnowledgeGap as KnowledgeGap  # noqa: F401
 from .tag import DocumentTag as DocumentTag  # noqa: F401
 from .tag import Tag as Tag
