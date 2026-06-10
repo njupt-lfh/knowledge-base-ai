@@ -3,9 +3,10 @@
  * 按星期 × 小时统计消息活跃度
  * 主要导出：默认 ActivityHeatmap 组件
  */
-import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { ActivityPoint } from '../../api/stats'
+import ChartFillArea from './ChartFillArea'
+import ResponsiveChart from './ResponsiveChart'
 import HudPanel from '../common/HudPanel'
 import './StatCard.css'
 
@@ -14,10 +15,16 @@ const HOURS = Array.from({ length: 24 }, (_, i) => `${i}`)
 
 interface ActivityHeatmapProps {
   points: ActivityPoint[]
+  chartHeight?: number
+  fill?: boolean
 }
 
 /** 30 日对话活跃热力图，visualMap 映射消息条数 */
-export default function ActivityHeatmap({ points }: ActivityHeatmapProps) {
+export default function ActivityHeatmap({
+  points,
+  chartHeight = 300,
+  fill = false,
+}: ActivityHeatmapProps) {
   const data = points.map((p) => [p.hour, p.dow, p.count])
   const maxVal = Math.max(...points.map((p) => p.count), 1)
 
@@ -72,10 +79,12 @@ export default function ActivityHeatmap({ points }: ActivityHeatmapProps) {
     },
   }
 
+  const chart = (h: number) => <ResponsiveChart option={option} height={h} />
+
   return (
-    <HudPanel className="chart-panel">
+    <HudPanel className={`chart-panel${fill ? ' chart-panel--fill' : ''}`}>
       <h3 className="chart-panel__title">活跃时段热力图</h3>
-      <ReactECharts option={option} style={{ height: 300 }} opts={{ renderer: 'canvas' }} />
+      {fill ? <ChartFillArea>{chart}</ChartFillArea> : chart(chartHeight)}
     </HudPanel>
   )
 }

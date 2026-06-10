@@ -35,6 +35,15 @@
   box-sizing: border-box;
 }
 
+/* 数据驾驶舱：占满视口，Tab 内部分区滚动 */
+.app-layout__shell--stats {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 /* 知识库内页：占满剩余高度，边距由 KBLayout 负责 */
 .app-layout__viewport {
   flex: 1;

@@ -1,17 +1,16 @@
 /**
- * 知识库文档分布环形图（ECharts）
- * 按各库文档数占比展示
- * 主要导出：默认 DistributionPie 组件
+ * 单库文档类型占比环形图（ECharts）
+ * 按 PDF / Markdown / TXT 等类型展示文档数量占比
  */
 import type { EChartsOption } from 'echarts'
+import type { DocTypeItem } from '../../api/stats'
 import ChartFillArea from './ChartFillArea'
 import ResponsiveChart from './ResponsiveChart'
 import HudPanel from '../common/HudPanel'
 import './StatCard.css'
 
-interface DistributionPieProps {
-  data: { name: string; doc_count: number; chunk_count: number }[]
-  title?: string
+interface DocTypePieProps {
+  data: DocTypeItem[]
   chartHeight?: number
   fill?: boolean
 }
@@ -27,15 +26,9 @@ const COLORS = [
   '#64748b',
 ]
 
-/** 全局知识库文档数量占比饼图 */
-export default function DistributionPie({
-  data,
-  title,
-  chartHeight = 300,
-  fill = false,
-}: DistributionPieProps) {
-  const total = data.reduce((s, d) => s + d.doc_count, 0)
-  const panelTitle = title ?? `知识库文档分布（${total} 篇）`
+/** 单库文档类型数量占比饼图 */
+export default function DocTypePie({ data, chartHeight = 300, fill = false }: DocTypePieProps) {
+  const total = data.reduce((s, d) => s + d.count, 0)
 
   const option: EChartsOption = {
     backgroundColor: 'transparent',
@@ -48,8 +41,8 @@ export default function DistributionPie({
       formatter: (params: any) => {
         const item = data[params.dataIndex]
         if (!item) return ''
-        const pct = ((item.doc_count / total) * 100).toFixed(1)
-        return `<b>${item.name}</b><br/>文档 ${item.doc_count} 个（${pct}%）<br/>知识块 ${item.chunk_count} 个`
+        const pct = ((params.percent as number) ?? 0).toFixed(1)
+        return `<b>${item.name}</b><br/>${item.count} 篇（${pct}%）`
       },
     },
     legend: {
@@ -60,7 +53,7 @@ export default function DistributionPie({
       textStyle: { color: '#94a3b8', fontSize: 11 },
       formatter: (name: string) => {
         const item = data.find((d) => d.name === name)
-        return item ? `${name}（${item.doc_count}）` : name
+        return item ? `${name}（${item.count}）` : name
       },
     },
     series: [
@@ -68,7 +61,7 @@ export default function DistributionPie({
         type: 'pie',
         radius: ['45%', '75%'],
         center: ['35%', '50%'],
-        data: data.map((d) => ({ name: d.name, value: d.doc_count })),
+        data: data.map((d) => ({ name: d.name, value: d.count })),
         label: {
           show: true,
           position: 'outside',
@@ -97,8 +90,23 @@ export default function DistributionPie({
 
   return (
     <HudPanel className={`chart-panel${fill ? ' chart-panel--fill' : ''}`}>
-      <h3 className="chart-panel__title">{panelTitle}</h3>
-      {fill ? <ChartFillArea>{chart}</ChartFillArea> : chart(chartHeight)}
+      <h3 className="chart-panel__title">文档类型分布（{total} 篇）</h3>
+      {total === 0 ? (
+        <p
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: 13,
+            textAlign: 'center',
+            margin: 'auto 0',
+          }}
+        >
+          该知识库暂无文档
+        </p>
+      ) : fill ? (
+        <ChartFillArea>{chart}</ChartFillArea>
+      ) : (
+        chart(chartHeight)
+      )}
     </HudPanel>
   )
 }

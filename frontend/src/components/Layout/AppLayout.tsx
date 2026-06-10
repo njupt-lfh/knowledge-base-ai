@@ -13,9 +13,14 @@ function isKbWorkspacePath(pathname: string): boolean {
   return /^\/knowledge-bases\/[^/]+/.test(pathname)
 }
 
+function isStatsPath(pathname: string): boolean {
+  return pathname === '/stats'
+}
+
 export default function AppLayout() {
   const location = useLocation()
   const kbWorkspace = isKbWorkspacePath(location.pathname)
+  const statsPage = isStatsPath(location.pathname)
 
   return (
     <div className="app-layout">
@@ -31,7 +36,9 @@ export default function AppLayout() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
-                className="app-layout__shell"
+                className={
+                  statsPage ? 'app-layout__shell app-layout__shell--stats' : 'app-layout__shell'
+                }
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}

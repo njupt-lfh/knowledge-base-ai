@@ -11,12 +11,14 @@ import {
   type KBStats,
   type KBAdvancedStats,
   type ActivityPoint,
+  type ColdKnowledgeStats,
+  type DocTypeItem,
 } from '../api/stats'
 import { knowledgeApi } from '../api/knowledge'
 
 /**
  * 加载并管理统计页所需的全局与单库数据
- * @returns overview、trend、activity、kbs 及 loadKbStats / refresh 等方法
+ * @returns overview、trend、activity、kbs 及 selectKb / selectGlobal 等方法
  */
 export function useStats() {
   const [overview, setOverview] = useState<StatsOverview | null>(null)
@@ -25,73 +27,101 @@ export function useStats() {
   const [kbs, setKbs] = useState<{ id: string; name: string }[]>([])
   const [selectedKb, setSelectedKb] = useState<string | null>(null)
   const [kbStats, setKbStats] = useState<KBStats | null>(null)
+  const [kbCold, setKbCold] = useState<ColdKnowledgeStats | null>(null)
+  const [kbDocTypes, setKbDocTypes] = useState<DocTypeItem[]>([])
   const [kbAdvanced, setKbAdvanced] = useState<KBAdvancedStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [kbLoading, setKbLoading] = useState(false)
+  const [scopeLoading, setScopeLoading] = useState(false)
+  const [deepLoading, setDeepLoading] = useState(false)
 
-  /** 选中知识库后并行拉取基础统计、高级指标、热力图与趋势 */
-  const loadKbStatsInternal = useCallback(async (kbId: string) => {
-    setSelectedKb(kbId)
-    setKbLoading(true)
-    try {
-      const [basic, advanced, kbHeat, kbTrend] = await Promise.all([
-        statsApi.kbStats(kbId),
-        statsApi.kbAdvanced(kbId),
-        statsApi.activityHeatmap(kbId, 30),
-        statsApi.trend(7, kbId),
-      ])
-      setKbStats(basic.data)
-      setKbAdvanced(advanced)
-      setActivity(kbHeat.data.points)
-      setTrend(kbTrend.data.points)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setKbLoading(false)
-    }
-  }, [])
-
-  /** 首次加载：全局概览 + 默认选中第一个知识库 */
-  const loadOverview = useCallback(async () => {
-    const [ov, heat, kbList, tr] = await Promise.all([
+  /** 全局概览：KPI / 趋势 / 热力 / 冷知识 */
+  const loadGlobalScope = useCallback(async () => {
+    const [ov, heat, tr] = await Promise.all([
       statsApi.overview(),
       statsApi.activityHeatmap(undefined, 30),
-      knowledgeApi.list({ page: 1, page_size: 100 }),
       statsApi.trend(7),
     ])
-    const items = kbList.data.items.map((kb) => ({ id: kb.id, name: kb.name }))
     setOverview(ov.data)
     setActivity(heat.data.points)
     setTrend(tr.data.points)
-    setKbs(items)
+  }, [])
 
-    if (items.length > 0) {
-      await loadKbStatsInternal(items[0].id)
-    }
-  }, [loadKbStatsInternal])
+  /** 单库概览：KPI / 趋势 / 热力 / 冷知识（不拉深度指标） */
+  const loadKbScope = useCallback(async (kbId: string) => {
+    const [basic, kbHeat, kbTrend, cold, docTypes] = await Promise.all([
+      statsApi.kbStats(kbId),
+      statsApi.activityHeatmap(kbId, 30),
+      statsApi.trend(7, kbId),
+      statsApi.coldKnowledge(kbId),
+      statsApi.docTypes(kbId),
+    ])
+    setKbStats(basic.data)
+    setKbCold(cold.data)
+    setKbDocTypes(docTypes.data.items)
+    setActivity(kbHeat.data.points)
+    setTrend(kbTrend.data.points)
+  }, [])
 
-  const loadKbStats = useCallback(
-    (kbId: string) => loadKbStatsInternal(kbId),
-    [loadKbStatsInternal],
-  )
-
-  /** 切回全局视图：清空单库数据并恢复全局热力/趋势 */
-  const clearKbSelection = useCallback(async () => {
-    setSelectedKb(null)
-    setKbStats(null)
-    setKbAdvanced(null)
-    setKbLoading(true)
+  /** 单库深度指标（分布 / 引用 / 桑基） */
+  const loadKbDeep = useCallback(async (kbId: string) => {
+    setDeepLoading(true)
     try {
-      const [heat, tr] = await Promise.all([
-        statsApi.activityHeatmap(undefined, 30),
-        statsApi.trend(7),
+      const [advanced, basic] = await Promise.all([
+        statsApi.kbAdvanced(kbId),
+        statsApi.kbStats(kbId),
       ])
-      setActivity(heat.data.points)
-      setTrend(tr.data.points)
+      setKbAdvanced(advanced)
+      setKbStats(basic.data)
+    } catch (e) {
+      console.error(e)
     } finally {
-      setKbLoading(false)
+      setDeepLoading(false)
     }
   }, [])
+
+  /** 首次加载：全局概览与知识库列表 */
+  const loadOverview = useCallback(async () => {
+    const [, kbList] = await Promise.all([
+      loadGlobalScope(),
+      knowledgeApi.list({ page: 1, page_size: 100 }),
+    ])
+    const items = kbList.data.items.map((kb) => ({ id: kb.id, name: kb.name }))
+    setKbs(items)
+  }, [loadGlobalScope])
+
+  /** 选中「全局」：恢复全平台概览数据 */
+  const selectGlobal = useCallback(async () => {
+    setSelectedKb(null)
+    setKbStats(null)
+    setKbCold(null)
+    setKbDocTypes([])
+    setKbAdvanced(null)
+    setScopeLoading(true)
+    try {
+      await loadGlobalScope()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setScopeLoading(false)
+    }
+  }, [loadGlobalScope])
+
+  /** 选中知识库：仅切换概览维度，不跳转深度 Tab */
+  const selectKb = useCallback(
+    async (kbId: string) => {
+      setSelectedKb(kbId)
+      setKbAdvanced(null)
+      setScopeLoading(true)
+      try {
+        await loadKbScope(kbId)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setScopeLoading(false)
+      }
+    },
+    [loadKbScope],
+  )
 
   useEffect(() => {
     setLoading(true)
@@ -107,10 +137,13 @@ export function useStats() {
     kbs,
     selectedKb,
     kbStats,
+    kbCold,
+    kbDocTypes,
     kbAdvanced,
-    loading: loading || kbLoading,
-    loadKbStats,
-    clearKbSelection,
+    loading: loading || scopeLoading || deepLoading,
+    selectKb,
+    selectGlobal,
+    loadKbDeep,
     refresh: loadOverview,
   }
 }

@@ -10,19 +10,25 @@ import './StatCard.css'
 
 interface Top3CardsProps {
   items: { content: string; hits: number }[]
+  title?: string
+  fill?: boolean
 }
 
-/** 驾驶舱全局最热三条知识文本卡片 */
-export default function Top3Cards({ items }: Top3CardsProps) {
+/** 驾驶舱最热三条知识文本卡片 */
+export default function Top3Cards({
+  items,
+  title = '全局 TOP 3 热知识',
+  fill = false,
+}: Top3CardsProps) {
   const top3 = items.slice(0, 3)
 
   return (
-    <HudPanel hot className="chart-panel">
+    <HudPanel hot className={`chart-panel${fill ? ' chart-panel--fill' : ''}`}>
       <h3 className="chart-panel__title">
         <FireOutlined style={{ color: 'var(--accent-hot)', marginRight: 8 }} />
-        全局 TOP 3 热知识
+        {title}
       </h3>
-      <div className="top3-grid">
+      <div className={`top3-grid${fill ? ' top3-grid--fill' : ''}`}>
         {top3.length === 0 && (
           <p style={{ color: 'var(--text-muted)', fontSize: 13, gridColumn: '1 / -1' }}>
             暂无命中数据，请先使用检索或对话功能

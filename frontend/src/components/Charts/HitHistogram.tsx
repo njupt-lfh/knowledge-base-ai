@@ -3,18 +3,20 @@
  * 按命中次数区间统计 chunk 数量
  * 主要导出：默认 HitHistogram 组件
  */
-import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { HitBucket } from '../../api/stats'
+import ChartFillArea from './ChartFillArea'
+import ResponsiveChart from './ResponsiveChart'
 import HudPanel from '../common/HudPanel'
 import './StatCard.css'
 
 interface HitHistogramProps {
   buckets: HitBucket[]
+  fill?: boolean
 }
 
 /** 单库 chunk 命中次数分桶柱状图 */
-export default function HitHistogram({ buckets }: HitHistogramProps) {
+export default function HitHistogram({ buckets, fill = false }: HitHistogramProps) {
   const option: EChartsOption = {
     backgroundColor: 'transparent',
     grid: { left: 8, right: 16, top: 24, bottom: 8, containLabel: true },
@@ -55,10 +57,12 @@ export default function HitHistogram({ buckets }: HitHistogramProps) {
     },
   }
 
+  const chart = (h: number) => <ResponsiveChart option={option} height={h} />
+
   return (
-    <HudPanel className="chart-panel">
+    <HudPanel className={`chart-panel${fill ? ' chart-panel--fill' : ''}`}>
       <h3 className="chart-panel__title">热度分布直方图</h3>
-      <ReactECharts option={option} style={{ height: 260 }} opts={{ renderer: 'canvas' }} />
+      {fill ? <ChartFillArea>{chart}</ChartFillArea> : chart(260)}
     </HudPanel>
   )
 }

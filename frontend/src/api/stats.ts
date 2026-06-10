@@ -62,6 +62,12 @@ export interface ActivityPoint {
   count: number
 }
 
+export interface DocTypeItem {
+  type: string
+  name: string
+  count: number
+}
+
 export interface ColdKnowledgeStats {
   cold_count_90d: number
   cold_count_total: number
@@ -83,6 +89,8 @@ export const statsApi = {
       params: { days, kb_id: kbId },
     }),
   kbStats: (kbId: string) => request.get<KBStats>(`/api/knowledge-bases/${kbId}/stats`),
+  docTypes: (kbId: string) =>
+    request.get<{ items: DocTypeItem[] }>(`/api/knowledge-bases/${kbId}/stats/doc-types`),
   hitDistribution: (kbId: string) =>
     request.get<{ buckets: HitBucket[] }>(`/api/knowledge-bases/${kbId}/stats/distribution`),
   citeVsHit: (kbId: string, limit = 10) =>

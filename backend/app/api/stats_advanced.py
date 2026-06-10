@@ -13,6 +13,21 @@ from ..services import stats_service
 router = APIRouter(tags=["stats-advanced"])
 
 
+@router.get("/api/knowledge-bases/{kb_id}/stats/doc-types")
+async def kb_doc_type_distribution(kb_id: str, db: AsyncSession = Depends(get_db)):
+    """单库文档类型占比（PDF / Markdown / TXT 等）。
+
+    参数:
+        kb_id: 知识库 ID。
+        db: 数据库会话。
+
+    返回:
+        含 items 的类型分布列表。
+    """
+    items = await stats_service.doc_type_distribution(db, kb_id)
+    return {"items": items}
+
+
 @router.get("/api/knowledge-bases/{kb_id}/stats/distribution")
 async def kb_hit_distribution(kb_id: str, db: AsyncSession = Depends(get_db)):
     """知识库 chunk 命中次数分布直方图数据。

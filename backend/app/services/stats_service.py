@@ -21,6 +21,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.chunk import Chunk
 from ..models.conversation import Conversation, Message
+from ..models.document import Document
+
+_DOC_TYPE_LABELS = {
+    "pdf": "PDF",
+    "md": "Markdown",
+    "txt": "纯文本",
+    "manual": "手动录入",
+    "image": "图片",
+}
 
 
 def _parse_sources(raw) -> list[dict]:
@@ -298,6 +307,35 @@ async def cold_knowledge_count(db: AsyncSession, kb_id: str | None = None, days:
         "cold_count_total": int(cold_all),
         "threshold_days": days,
     }
+
+
+async def doc_type_distribution(db: AsyncSession, kb_id: str) -> list[dict]:
+    """单库文档类型占比（按 file_type 分组计数）。
+
+    参数:
+        db: 数据库会话
+        kb_id: 知识库 ID
+
+    返回:
+        [{type, name, count}, ...] 按 count 降序
+    """
+    rows = (
+        await db.execute(
+            select(Document.file_type, func.count(Document.id).label("count"))
+            .where(Document.knowledge_base_id == kb_id)
+            .group_by(Document.file_type)
+            .order_by(desc(func.count(Document.id)))
+        )
+    ).all()
+
+    return [
+        {
+            "type": r.file_type,
+            "name": _DOC_TYPE_LABELS.get(r.file_type, r.file_type.upper()),
+            "count": int(r.count),
+        }
+        for r in rows
+    ]
 
 
 async def hit_trend(db: AsyncSession, kb_id: str | None = None, days: int = 7) -> list[dict]:
